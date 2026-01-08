@@ -305,8 +305,6 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--rows", type=int, default=1_000_000)
     ap.add_argument("--dist", default="zipf")
-    ap.add_argument("--bins", type=int, default=100) # Fallback if FD fails or manual
-    ap.add_argument("--fd", action="store_true", help="Use Freedman-Diaconis binning")
     ap.add_argument("--eval-n", type=int, default=500)
     ap.add_argument("--out-dir", default="artifacts_fd_cdf")
     ap.add_argument("--input-csv", help="Use input csv")
@@ -329,10 +327,10 @@ def main():
     
     # 2. Binning (Histogram "Training")
     t0_hist = time.perf_counter()
-    n_bins = args.bins
-    if args.fd:
-        n_bins = freedman_diaconis_bins(sample, mn, mx, N, 1000)
-        print(f"FD Suggested Bins: {n_bins}")
+    
+    # Always use FD
+    n_bins = freedman_diaconis_bins(sample, mn, mx, N, 1000)
+    print(f"FD Suggested Bins: {n_bins}")
         
     buckets = make_equiwidth_buckets(mn, mx, n_bins, freq)
     t_hist_build = time.perf_counter() - t0_hist
