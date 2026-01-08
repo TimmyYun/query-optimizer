@@ -438,6 +438,7 @@ def main():
     ap.add_argument("--samples-per-bucket", type=int, default=3)
     ap.add_argument("--eval-n", type=int, default=200)
     ap.add_argument("--out-root", default="artifacts_range_only")
+    ap.add_argument("--input-csv", default=None, help="Path to input CSV (1 col int) to use instead of generating.")
     args = ap.parse_args()
 
     rng = np.random.default_rng(args.seed)
@@ -445,11 +446,19 @@ def main():
     out_root.mkdir(parents=True, exist_ok=True)
 
     # 1) dataset
-    ds_name = f"salary_{args.dist}_{args.rows}.csv"
-    ds_path = out_root / "data" / ds_name
-    print(f"[1/7] dataset -> {ds_path}")
-    values = gen_values(rng, args.dist, args.rows, args.vmin, args.vmax)
-    save_csv_column(values, ds_path)
+    if args.input_csv:
+        ds_path = Path(args.input_csv)
+        ds_name = ds_path.name
+        print(f"[1/7] using input dataset -> {ds_path}")
+        # When using input CSV, we assume it's already there, so we skip generation
+        # We also need to set N, vmin, vmax from the file later if not consistent, 
+        # but the next step (scan_min_max_count) handles vmin/vmax detection.
+    else:
+        ds_name = f"salary_{args.dist}_{args.rows}.csv"
+        ds_path = out_root / "data" / ds_name
+        print(f"[1/7] dataset -> {ds_path}")
+        values = gen_values(rng, args.dist, args.rows, args.vmin, args.vmax)
+        save_csv_column(values, ds_path)
 
     # 2) histogram
     print("[2/7] histogram & freq")

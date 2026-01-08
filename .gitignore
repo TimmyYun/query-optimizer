@@ -205,3 +205,17 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project specific ignores
+*.csv
+artifacts_*/
+Data10Gb.zip
+report.html
+.idea/misc.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/query-optimizer.iml
+.idea/vcs.xml
+.idea/inspectionProfiles/profiles_settings.xml
+.idea/inspectionProfiles/Project_Default.xml
+.idea/misc.xml
