@@ -53,16 +53,19 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
             v.append(cluster_vals)
         v = np.concatenate(v)
         # Ensure we match N exactly if needed, but this is approx
+    elif dist == "anti_zipf":
+        # Destructive distribution: Uniform injected into the heavy-hitter region of Zipf
+        # Zipf(a=2) has massive mass at low values.
+        # We inject Uniform [0, 20000] (10% domain) to linearize the CDF in that region.
+        # This conflicts with the "convex" shape of Zipf CDF.
+        v = rng.integers(0, 20000, size=n)
     else:
         v = rng.integers(lo, hi + 1, size=n)
-
-    # We generally want to keep values within a global domain for histogram simplicity,
-    # but "Drift" might mean values going out of range. 
-    # For this demo, let's clamp strict global bounds or allow expansion?
-    # Let's clamp to global [0, 200_000] for simplicity of fixed buckets, 
-    # or better: we'll see if they fall into existing buckets.
+        
     v = np.vectorize(lambda x: clamp_int(x, 0, 200_000))(v)
     return v.astype(np.int64)
+
+
 
 def save_csv_column(values: np.ndarray, path: Path, mode='w'):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -194,8 +197,60 @@ def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bi
     total_width = mx - mn
     if bin_width <= 0: return 10
     
-    bins = int(total_width / bin_width)
-    return max(1, min(bins, bins_max))
+# -------------------------
+# EquiHist (Self-Tuning) Baseline
+# -------------------------
+
+class EquiHistLearner:
+    """
+    Implements a self-tuning histogram baseline (conceptually based on König & Weikum).
+    Starts with a set of buckets (e.g. initial equi-width) and updates bucket counts 
+    based on query feedback (prediction error).
+    """
+    def __init__(self, buckets: List[Bucket], learning_rate: float = 0.5):
+        # working copy of buckets (only counts matter for update)
+        self.buckets = [Bucket(b.lo, b.hi, count=b.count) for b in buckets]
+        self.lr = learning_rate
+        
+    def predict(self, q: RangeQuery) -> float:
+        # Standard uniform assumption
+        total = 0.0
+        for b in self.buckets:
+            ov_lo = max(q.low, b.lo)
+            ov_hi = min(q.high, b.hi)
+            if ov_lo <= ov_hi:
+                w = b.hi - b.lo + 1
+                frac = (ov_hi - ov_lo + 1) / w
+                total += frac * b.count
+        return total
+        
+    def update(self, q: RangeQuery, actual: float):
+        # Update rule: f_new = f_old * (actual / predicted) ^ (learning_rate * overlap_fraction)
+        # Simplified Multiplicative Weights
+        pred = self.predict(q)
+        if pred == 0: return # Avoid div zero
+        
+        ratio = actual / pred
+        # Clamp ratio to avoid explosion
+        ratio = max(0.1, min(10.0, ratio))
+        
+        for b in self.buckets:
+            ov_lo = max(q.low, b.lo)
+            ov_hi = min(q.high, b.hi)
+            if ov_lo <= ov_hi:
+                # Fraction of bucket involved in query
+                w = b.hi - b.lo + 1
+                overlap = (ov_hi - ov_lo + 1) / w
+                
+                # We update the bucket count
+                # If ratio > 1 (underestimate), we boost count
+                # If ratio < 1 (overestimate), we shrink count
+                # Weighted by overlap: only update part that was touched? 
+                # EquiHist updates the whole bucket density usually.
+                
+                # update factor: ratio ^ (lr * overlap)
+                factor = ratio ** (self.lr * overlap)
+                b.count = int(b.count * factor)
 
 # -------------------------
 # CDF Training (Isotonic)
@@ -286,6 +341,32 @@ def predict_local_cdf(model, x_norm) -> float:
 class RangeQuery:
     low: int
     high: int
+
+def identify_bad_buckets(queries: List[RangeQuery], y_true: np.ndarray, y_pred: np.ndarray, buckets: List[Bucket], threshold_mae: float = 0.05) -> List[int]:
+    """
+    Identify which buckets are responsible for errors.
+    """
+    bad_buckets = set()
+    errors = np.abs(y_true - y_pred)
+    
+    print(f"DEBUG: Max Error: {np.max(errors):.6f}, Mean Error: {np.mean(errors):.6f}, Threshold: {threshold_mae}")
+    n_violations = np.sum(errors > threshold_mae)
+    print(f"DEBUG: Queries exceeding threshold: {n_violations}/{len(queries)}")
+
+    # Map high error queries to buckets
+    # If error > threshold, mark all buckets in that query range as "suspect"
+    for i, err in enumerate(errors):
+        if err > threshold_mae:
+            q = queries[i]
+            # Find buckets touching this query
+            for b_idx, b in enumerate(buckets):
+                 if b.hi < q.low: continue
+                 if b.lo > q.high: break
+                 # Check if this bucket is "dense" (ML), sparse usually robust or needs rebuild
+                 if b.exact_values is None: 
+                     bad_buckets.add(b_idx)
+    
+    return list(bad_buckets)
 
 def predict_range_hybrid_cdf(q: RangeQuery, buckets: List[Bucket], models: Dict[int, Any]) -> float:
     
@@ -436,111 +517,190 @@ def main():
     n_bins = freedman_diaconis_bins(sample, mn, mx, N, 2000)
     print(f"FD Suggested Bins: {n_bins}")
     
-    buckets = make_equiwidth_buckets(mn, mx, n_bins, freq)
     
-    print("Training Initial Isotonic Models...")
-    rows = collect_cdf_training_rows(buckets, freq, mn, 50, rng)
-    models, t_train_init = train_cdf_models(rows)
-    print(f"Initial Train Time: {t_train_init:.4f}s")
+    # 2a. Equi-Width (Standard Baseline)
+    t0_hist = time.perf_counter()
+    buckets_eq_width = make_equiwidth_buckets(mn, mx, n_bins, freq)
+    t_hist_build = time.perf_counter() - t0_hist
     
-    # Eval Initial
+    # 3. Model Training (CDF - Hybrid "Training")
+    print("Training CDF models (Skipping buckets with low NDV)...")
+    rows = collect_cdf_training_rows(buckets_eq_width, freq, mn, 20, rng)
+    models, t_ml_train = train_cdf_models(rows)
+    print(f"Hist Build (Width): {t_hist_build:.4f}s, ML Train: {t_ml_train:.4f}s")
+    
+    # Count how many buckets used Exact vs ML
+    n_exact = sum(1 for b in buckets_eq_width if b.exact_values is not None)
+    n_ml = sum(1 for b in buckets_eq_width if b.exact_values is None)
+    print(f"Bucket Strategy: {n_exact} Exact (Sparse), {n_ml} ML (Dense)")
+    
+    # Total hybrid training is Hist + ML
+    t_hybrid_train = t_hist_build + t_ml_train
+    
+    # 4. Evaluation
+    print("Generating Evaluation Workload...")
     queries = []
     width = mx - mn
     ps = np.cumsum(freq)
+    
     for _ in range(args.eval_n):
         l = rng.integers(mn, mx)
         w = rng.integers(1, max(10, width // 20)) 
         r = min(mx, l + w)
         queries.append(RangeQuery(l, r))
         
-    y_true_1, y_pred_1 = evaluate_workload("Initial", queries, buckets, models, ps, N, mn)
-    summarize(y_true_1, y_pred_1, "Initial State")
+    y_true = []
+    y_hist_width = []
+    y_hybrid = []
     
+    # Measure Baseline Inference (Equi-Width)
+    t0_base = time.perf_counter()
+    for q in queries:
+        h = predict_range_histogram_uniform(q, buckets_eq_width)
+        y_hist_width.append(h / N)
+    t_base_inf = time.perf_counter() - t0_base
+
+    # Measure Hybrid Inference
+    t0_hyb = time.perf_counter()
+    for q in queries:
+        c = predict_range_hybrid_cdf(q, buckets_eq_width, models)
+        y_hybrid.append(c / N)
+    t_hyb_inf = time.perf_counter() - t0_hyb
+
+    # Truth (outside timing)
+    for q in queries:
+        li, ri = q.low - mn, q.high - mn
+        if li < 0: li=0
+        if ri >= len(ps): ri = len(ps)-1
+        truth = int(ps[ri] - (ps[li-1] if li > 0 else 0))
+        y_true.append(truth / N)
+        
+    y_true = np.array(y_true)
+    y_hist_width = np.array(y_hist_width)
+    y_hybrid = np.array(y_hybrid)
+    
+    m_hist_w = summarize(y_true, y_hist_width, "Equi-Width (Standard)")
+    m_hyb = summarize(y_true, y_hybrid, "Hybrid + NDV Smart")
+    
+    print("\n--- Results ---")
+    print(f"Equi-Width:  Median QErr={m_hist_w['QErr_median']:.4f}, MAE={m_hist_w['MAE']:.6f}, Time={t_base_inf:.4f}s")
+    print(f"Hybrid(FD):  Median QErr={m_hyb['QErr_median']:.4f}, MAE={m_hyb['MAE']:.6f}, Time={t_hyb_inf:.4f}s")
+    
+    summary = {
+        "bins": n_bins,
+        "hist_width_metrics": m_hist_w,
+        "hybrid_metrics": m_hyb
+    }
+    with open(Path(args.out_dir) / "summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
     # -----------------------------------------------------
     # Phase 2: Data Drift (Insert Data)
     # -----------------------------------------------------
     print(f"\n=== Phase 2: Data Drift (Inserting {args.drift_rows} rows of {args.drift_dist}) ===")
-    # Shift normal distribution to cause drift in specific region
     drift_vals = gen_values(rng, args.drift_dist, args.drift_rows, 0, 200_000, shift=50_000)
     save_csv_column(drift_vals, ds_path, mode='a')
     
-    # In real DB, we maintain stats. Here we simulate "stale stats" vs "refreshed freq"
-    # The models are STALE (trained on old data). The buckets are STALE (counts wrong).
-    # But usually, an optimizer maintains "total count" easily. 
-    # The problem is the internal distribution of buckets changed!
-    # Or simply that the buckets count is outdated.
-    # Adaptive Histogram: We usually update bucket COUNTS easily (Eq-Width).
-    # But the CDF CURVE inside bucket might change!
-    
-    # Let's assume we update bucket COUNTS (cheap), but NOT models (expensive).
+    # Update Ground Truth Frequencies (for evaluation)
     N_new = N + args.drift_rows
-    # We need updated frequency to check truth, but models are old.
-    
-    print("Updating Global Frequency (cheap maintenance)...")
-    mn_new, mx_new, N_real = scan_min_max_count(ds_path) # Full scan simulation
+    print("Updating Global Frequency (Ground Truth)...")
+    mn_new, mx_new, N_real = scan_min_max_count(ds_path) 
     freq_new, _ = build_frequency_and_sample(ds_path, mn_new, mx_new, N_real, 1000, 42)
     ps_new = np.cumsum(freq_new)
     
-    # Update bucket counts (Eq-Height would need split, but Eq-Width just updates counts)
-    # We map new freq to OLD bucket boundaries.
-    for b in buckets:
+    # --- Compare Approaches under Drift ---
+    
+    # 1. Static Equi-Width (STALE)
+    buckets_static = [Bucket(b.lo, b.hi, count=b.count, ndv=b.ndv, exact_values=b.exact_values) for b in buckets_eq_width]
+    
+    # 2. EquiHist (Online Learning)
+    # Starts from initial buckets (Phase 1 state)
+    eh_learner = EquiHistLearner(buckets_eq_width, learning_rate=0.5)
+    
+    # 3. Hybrid (Stale initially, then repair)
+    
+    print("Evaluating Drift Sequence...")
+    y_true_seq = []
+    y_static = []
+    y_eh = []
+    y_hybrid_stale = []
+    
+    for q in queries:
+        li, ri = q.low - mn_new, q.high - mn_new
+        if li < 0: li=0
+        if ri >= len(ps_new): ri = len(ps_new)-1
+        truth = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
+        actual_sel = truth / N_real
+        y_true_seq.append(actual_sel)
+        
+        # Static
+        est_static = predict_range_histogram_uniform(q, buckets_static) # Uses old counts!
+        y_static.append(est_static / N) 
+        
+        # EquiHist
+        est_eh = eh_learner.predict(q)
+        y_eh.append(est_eh / N) 
+        
+        # Update EquiHist
+        eh_learner.update(q, float(truth)) 
+        
+        # Hybrid (Stale buckets + Old Models)
+        est_hyb = predict_range_hybrid_cdf(q, buckets_eq_width, models)
+        y_hybrid_stale.append(est_hyb / N)
+        
+    y_true_arr = np.array(y_true_seq)
+    
+    m_static = summarize(y_true_arr, np.array(y_static), "Static Equi-Width (Stale)")
+    m_eh = summarize(y_true_arr, np.array(y_eh), "EquiHist (Online Adaptive)")
+    m_hyb = summarize(y_true_arr, np.array(y_hybrid_stale), "Hybrid (Stale)")
+    
+    # -----------------------------------------------------
+    # Phase 3: Adaptive Repair (Hybrid)
+    # -----------------------------------------------------
+    print(f"\n=== Phase 3: Hybrid Adaptive Repair ===")
+    
+    # Hybrid updates counts (Cheap)
+    for b in buckets_eq_width:
         li = b.lo - mn_new
         ri = b.hi - mn_new
         if li < 0: li=0
         if ri >= len(freq_new): ri = len(freq_new)-1
-        
         b.count = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
-        # Note: NDV and Exact Values might be stale too! 
-        # For simplicity, let's say we only trust ML models are stale.
-    
-    # Eval with STALE models
-    y_true_2, y_pred_2 = evaluate_workload("Drifted", queries, buckets, models, ps_new, N_real, mn_new)
-    res_drift = summarize(y_true_2, y_pred_2, "Drifted (Stale Models)")
-    
-    # -----------------------------------------------------
-    # Phase 3: Adaptive Repair
-    # -----------------------------------------------------
-    print(f"\n=== Phase 3: Adaptive Repair ===")
-    
-    # Identify buckets with high error
-    # We use the drift evaluation queries as "feedback"
-    bad_indices = identify_bad_buckets(queries, y_true_2, y_pred_2, buckets, threshold_mae=0.01)
-    print(f"Identified {len(bad_indices)}/{len(buckets)} buckets needing repair.")
+        
+    # Check error again with updated counts
+    y_hyb_counts_only = []
+    for q in queries:
+        y_hyb_counts_only.append(predict_range_hybrid_cdf(q, buckets_eq_width, models) / N_real)
+        
+    # Check bad buckets
+    bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_mae=0.0001)
+    print(f"Identified {len(bad_indices)}/{len(buckets_eq_width)} buckets needing repair.")
     
     t0_repair = time.perf_counter()
     if bad_indices:
-        # Retrain only these
         print("Retraining specific buckets...")
-        rows_repair = collect_cdf_training_rows(buckets, freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
+        rows_repair = collect_cdf_training_rows(buckets_eq_width, freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
         models_repair, _ = train_cdf_models(rows_repair)
-        
-        # Update model dict
-        result_models = models.copy()
         for k, v in models_repair.items():
-            result_models[k] = v
-    else:
-        result_models = models
-        
+            models[k] = v
+            
     t_repair = time.perf_counter() - t0_repair
     print(f"Repair Time: {t_repair:.4f}s")
     
-    # Eval Repaired
-    y_true_3, y_pred_3 = evaluate_workload("Repaired", queries, buckets, result_models, ps_new, N_real, mn_new)
-    summarize(y_true_3, y_pred_3, "Repaired State")
+    # Final Hybrid Eval
+    y_hyb_final = []
+    for q in queries:
+        y_hyb_final.append(predict_range_hybrid_cdf(q, buckets_eq_width, models) / N_real)
+        
+    m_hyb_final = summarize(y_true_arr, np.array(y_hyb_final), "Hybrid (Repaired)")
     
     final_summary = {
-        "initial_rows": N,
-        "drift_rows": args.drift_rows,
-        "buckets": len(buckets),
-        "repaired_buckets": len(bad_indices),
         "metrics": {
-            "initial": {"mae": float(np.mean(np.abs(y_true_1 - y_pred_1)))},
-            "drifted": {"mae": float(np.mean(np.abs(y_true_2 - y_pred_2)))},
-            "repaired": {"mae": float(np.mean(np.abs(y_true_3 - y_pred_3)))}
+            "static_stale": m_static,
+            "equihist_online": m_eh,
+            "hybrid_repaired": m_hyb_final
         },
         "timings": {
-            "init_train": t_train_init,
-            "repair_train": t_repair
+            "repair": t_repair
         }
     }
     
