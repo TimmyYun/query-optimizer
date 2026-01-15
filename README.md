@@ -45,12 +45,13 @@ On TPC-H (which is very uniform), simple histograms are already perfect. Our mod
 *   **Inference**: Adds ~30$\mu$s per query. Still fast enough for query optimization.
 
 ## 4. Usage
+To replicate the benchmarks (including Drift and Adaptive Repair):
 
-To replicate the benchmarks:
 ```bash
-# 1. Run full benchmark suite (Zipf + All TPC-H columns)
-poetry run python collect_results.py
+# 1. Run full experiment (Zipf + Destructive Drift + Repair)
+python pipeline_fd_cdf.py --dist zipf --rows 1000000 --drift-rows 1500000 --drift-dist anti_zipf --eval-n 1000
 
 # 2. View Results
-# Open all_benchmark_results.csv
+# Check artifacts_fd_cdf/drift_summary.json
 ```
+
