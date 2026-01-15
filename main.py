@@ -20,6 +20,8 @@ def main():
     parser.add_argument("--drift-dist", type=str, default="normal")
     parser.add_argument("--out-dir", type=str, default="artifacts_optimizer")
     parser.add_argument("--eval-n", type=int, default=1000)
+    
+    # Ablation Hyperparams
     args = parser.parse_args()
     
     rng = np.random.default_rng(42)
@@ -42,7 +44,7 @@ def main():
     
     # 2a. Equi-Width (Standard Baseline)
     t0_hist = time.perf_counter()
-    buckets_eq_width = make_equiwidth_buckets(mn, mx, n_bins, freq)
+    buckets_eq_width = make_equiwidth_buckets(mn, mx, n_bins, freq, ndv_threshold=args.ndv_threshold)
     t_hist_build = time.perf_counter() - t0_hist
     
     # 3. Model Training
@@ -132,7 +134,7 @@ def main():
     buckets_static = [Bucket(b.lo, b.hi, count=b.count, ndv=b.ndv, exact_values=b.exact_values) for b in buckets_eq_width]
     
     # 2. EquiHist (Online Learning)
-    eh_learner = EquiHistLearner(buckets_eq_width, learning_rate=0.5)
+    eh_learner = EquiHistLearner(buckets_eq_width, learning_rate=args.eh_lr)
     
     print("Evaluating Drift Sequence...")
     y_true_seq = []

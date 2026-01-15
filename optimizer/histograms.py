@@ -16,14 +16,14 @@ def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bi
     bins = int(total_width / bin_width)
     return max(1, min(bins, bins_max))
 
-def make_equiwidth_buckets(mn: int, mx: int, bins: int, freq: np.ndarray) -> List[Bucket]:
+def make_equiwidth_buckets(mn: int, mx: int, bins: int, freq: np.ndarray, ndv_threshold: int = 200) -> List[Bucket]:
     if len(freq) == 0: return []
     width = mx - mn + 1
     bw = max(1, int(math.ceil(width / bins)))
     buckets = []
     ps = np.cumsum(freq)
     
-    EXACT_STORAGE_THRESHOLD = 200
+    EXACT_STORAGE_THRESHOLD = ndv_threshold
     
     cur = mn
     for _ in range(bins):
