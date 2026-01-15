@@ -89,6 +89,12 @@ class Bucket:
     exact_values: Optional[List[Tuple[int, int]]] = None # For sparse buckets
     # Store model here? or separate dict? Separate is fine for pickling usually.
 
+@dataclass
+class RangeQuery:
+    low: int
+    high: int
+
+
 def scan_min_max_count(csv_path: Path, chunksize: int = 1_000_000) -> Tuple[int, int, int]:
     mn, mx, n = None, None, 0
     for ch in pd.read_csv(csv_path, header=None, names=["v"], dtype="int64", chunksize=chunksize, engine="c"):
@@ -196,6 +202,9 @@ def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bi
     bin_width = 2 * iqr / (n_rows ** (1/3))
     total_width = mx - mn
     if bin_width <= 0: return 10
+    
+    bins = int(total_width / bin_width)
+    return max(1, min(bins, bins_max))
     
 # -------------------------
 # EquiHist (Self-Tuning) Baseline
