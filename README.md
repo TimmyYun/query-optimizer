@@ -49,9 +49,9 @@ To replicate the benchmarks (including Drift and Adaptive Repair):
 
 ```bash
 # 1. Run full experiment (Zipf + Destructive Drift + Repair)
-python pipeline_fd_cdf.py --dist zipf --rows 1000000 --drift-rows 1500000 --drift-dist anti_zipf --eval-n 1000
+python main.py --dist zipf --rows 1000000 --drift-rows 1500000 --drift-dist anti_zipf --eval-n 1000
 
 # 2. View Results
-# Check artifacts_fd_cdf/drift_summary.json
+# Check artifacts_optimizer/drift_summary.json
 ```
 
