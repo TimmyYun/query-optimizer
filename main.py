@@ -18,10 +18,14 @@ def main():
     parser.add_argument("--rows", type=int, default=1_000_000)
     parser.add_argument("--drift-rows", type=int, default=200_000)
     parser.add_argument("--drift-dist", type=str, default="normal")
+    parser.add_argument("--drift-shift", type=int, default=50_000, help="Shift magnitude for drift data")
     parser.add_argument("--out-dir", type=str, default="artifacts_optimizer")
     parser.add_argument("--eval-n", type=int, default=1000)
     
     # Ablation Hyperparams
+    parser.add_argument("--ndv-threshold", type=int, default=200, help="Threshold for Exact Storage")
+    parser.add_argument("--eh-lr", type=float, default=0.5, help="EquiHist Learning Rate")
+    
     args = parser.parse_args()
     
     rng = np.random.default_rng(42)
@@ -117,8 +121,8 @@ def main():
     # -----------------------------------------------------
     # Phase 2: Data Drift (Insert Data)
     # -----------------------------------------------------
-    print(f"\n=== Phase 2: Data Drift (Inserting {args.drift_rows} rows of {args.drift_dist}) ===")
-    drift_vals = gen_values(rng, args.drift_dist, args.drift_rows, 0, 200_000, shift=50_000)
+    print(f"\n=== Phase 2: Data Drift (Inserting {args.drift_rows} rows of {args.drift_dist}, shift={args.drift_shift}) ===")
+    drift_vals = gen_values(rng, args.drift_dist, args.drift_rows, 0, 200_000, shift=args.drift_shift)
     save_csv_column(drift_vals, ds_path, mode='a')
     
     # Update Ground Truth Frequencies
@@ -207,6 +211,23 @@ def main():
         
     m_hyb_final = summarize(y_true_arr, np.array(y_hyb_final), "Hybrid (Repaired)")
     
+    # System Metrics (Memory & Disk)
+    import pickle
+    import os
+    
+    # 1. Disk Usage (Original Data + Drift Data)
+    disk_usage_bytes = os.path.getsize(ds_path)
+    
+    # 2. Memory Usage (Buckets + Models)
+    # Estimate utilizing pickle size
+    mem_buckets_bytes = len(pickle.dumps(buckets_eq_width))
+    mem_models_bytes = len(pickle.dumps(models))
+    total_memory_bytes = mem_buckets_bytes + mem_models_bytes
+    
+    print(f"\nResource Usage:")
+    print(f"Disk (CSV): {disk_usage_bytes / 1024 / 1024:.2f} MB")
+    print(f"Memory (Model): {total_memory_bytes / 1024:.2f} KB")
+
     final_summary = {
         "metrics": {
             "static_stale": m_static,
@@ -214,7 +235,15 @@ def main():
             "hybrid_repaired": m_hyb_final
         },
         "timings": {
+            "hist_build": t_hist_build,
+            "ml_train": t_ml_train,
+            "static_inf": t_base_inf,
+            "hybrid_inf": t_hyb_inf,
             "repair": t_repair
+        },
+        "resources": {
+            "disk_bytes": disk_usage_bytes,
+            "memory_bytes": total_memory_bytes
         }
     }
     

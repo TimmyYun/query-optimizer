@@ -20,12 +20,20 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
         v = lo + shift + z
     elif dist == "sparse_cluster":
         # Create clusters of values with empty gaps
+        # Centers shifted
         centers = rng.integers(lo, hi, size=10) + shift
         v = []
         for c in centers:
             # cluster width 100
-            cluster_vals = rng.integers(max(lo, c-50), min(hi, c+50), size=n // 10)
-            v.append(cluster_vals)
+            # Ensure valid range even after shift
+            c_lo = max(lo + shift, c - 50)
+            c_hi = min(hi + shift + 200_000, c + 50) # Allow drift to go higher
+            if c_lo < c_hi:
+                cluster_vals = rng.integers(c_lo, c_hi, size=n // 10)
+                v.append(cluster_vals)
+            else:
+                 # Fallback if cluster is out of bounds
+                 v.append(rng.integers(lo+shift, hi+shift+1, size=n//10))
         v = np.concatenate(v)
     elif dist == "anti_zipf":
         # Destructive distribution: Uniform injected into the heavy-hitter region of Zipf
@@ -33,6 +41,7 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
     else:
         v = rng.integers(lo, hi + 1, size=n)
         
+    if n == 0: return np.array([], dtype=np.int64)
     v = np.vectorize(lambda x: clamp_int(x, 0, 200_000))(v)
     return v.astype(np.int64)
 

@@ -1,0 +1,13 @@
+{
+  "bins": 500,
+  "hist_width_metrics": {
+    "name": "Equi-Width (Standard)",
+    "QErr_median": 1.0,
+    "MAE": 0.00025438686249999997
+  },
+  "hybrid_metrics": {
+    "name": "Hybrid + NDV Smart",
+    "QErr_median": 1.0,
+    "MAE": 1.5155434696636972e-07
+  }
+}

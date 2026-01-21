@@ -34,7 +34,8 @@ def q_error_vec(y_true, y_pred, eps=1e-9):
 def summarize(y_true, y_pred, name="Model"):
     qe = q_error_vec(y_true, y_pred)
     med = float(np.median(qe))
+    p95 = float(np.percentile(qe, 95))
     mae = float(np.mean(np.abs(y_true - y_pred)))
     
-    print(f"[{name}] Median QErr={med:.4f}, MAE={mae:.6f}")
-    return {"name": name, "QErr_median": med, "MAE": mae}
+    print(f"[{name}] Median QErr={med:.4f}, P95 QErr={p95:.4f}, MAE={mae:.6f}")
+    return {"name": name, "QErr_median": med, "QErr_p95": p95, "MAE": mae}

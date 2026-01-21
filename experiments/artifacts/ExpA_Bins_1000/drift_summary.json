@@ -1,0 +1,22 @@
+{
+  "metrics": {
+    "static_stale": {
+      "name": "Static Equi-Width (Stale)",
+      "QErr_median": 449583.33333333326,
+      "MAE": 0.0043628218866666665
+    },
+    "equihist_online": {
+      "name": "EquiHist (Online Adaptive)",
+      "QErr_median": 1.358101945164691,
+      "MAE": 0.0019058326300000002
+    },
+    "hybrid_repaired": {
+      "name": "Hybrid (Repaired)",
+      "QErr_median": 1.0175812090347136,
+      "MAE": 0.0003436037920838354
+    }
+  },
+  "timings": {
+    "repair": 0.047077791999981855
+  }
+}
