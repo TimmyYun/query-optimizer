@@ -11,10 +11,11 @@ def run_bench(dataset_name, dist, shift, drift_rows=500000):
     desc = f"Insert {drift_rows} (+{shift} Shift)" if drift_rows > 0 else "No Data Insert (Drift=0)"
     
     out_path = Path(f"{OUT_DIR}/{dataset_name}_{shift}_{drift_rows}")
-    res_path = out_path / "drift_summary.json"
+    path_drift = out_path / "drift_summary.json"
+    path_init = out_path / "summary.json"
     
     # 1. Run Experiment (Only if missing)
-    if not res_path.exists():
+    if not path_drift.exists():
         print(f"Benchmarking {dataset_name} ({dist}) {desc}...")
         cmd = [
             "python", "main.py",
@@ -30,67 +31,139 @@ def run_bench(dataset_name, dist, shift, drift_rows=500000):
         print(f"Skipping execution for {dataset_name} ({dist}) {desc} (Results exist)")
     
     # 2. Parse Results
-    if not res_path.exists(): return []
+    if not path_drift.exists(): return []
     
-    with open(res_path) as f:
-        data = json.load(f)
+    # Load Init Data (Phase 1)
+    data_init = {}
+    if path_init.exists():
+        with open(path_init) as f:
+            data_init = json.load(f)
+            
+    # Load Drift/Repair Data (Phase 2 & 3)
+    with open(path_drift) as f:
+        data_drift = json.load(f)
         
-    metrics = data["metrics"]
-    timings = data["timings"]
-    resources = data["resources"]
+    d_metrics = data_drift["metrics"]
+    d_timings = data_drift["timings"]
+    d_resources = data_drift["resources"]
+    
+    # Init Metrics (May not exist for EquiHist)
+    i_static = data_init.get("hist_width_metrics", {})
+    i_hybrid = data_init.get("hybrid_metrics", {})
+    i_eh = data_init.get("equihist_init_metrics", {})
+    
+    # Init Timings (New)
+    i_timings = data_init.get("timings", {})
     
     # Common Resource Metrics
-    disk_mb = resources["disk_bytes"] / (1024*1024)
-    mem_kb = resources["memory_bytes"] / 1024
+    # Fallback for old results (if any)
+    mem_buckets = d_resources.get("memory_buckets_bytes", d_resources.get("memory_bytes", 0)) / 1024
+    mem_total = d_resources.get("memory_total_bytes", d_resources.get("memory_bytes", 0)) / 1024
     
-    drift_desc = desc
+    # --- Helper to safe get ---
+    def fmt(val):
+        return f"{val}" if isinstance(val, (int, float)) else "N/A"
+
+    # --- Construct Rows (One per Approach) ---
     
-    # 3. Extract Rows per Approach
+    rows = []
     
-    # Approach 1: Static Equi-Width (Baseline 1)
+    # 1. Static Equi-Width
+    # Initial: Yes, Drift: Yes (Stale), Repair: Yes (Full Rebuild)
     row_static = {
         "Dataset": dataset_name,
-        "Drift Scenario": drift_desc,
         "Approach": "Static Equi-Width",
-        "Training time (s)": f"{timings['hist_build']:.9f}",
-        "QErr Median": f"{metrics['static_stale']['QErr_median']:.9f}",
-        "QErr P95": f"{metrics['static_stale']['QErr_p95']:.9f}",
-        "MAE": f"{metrics['static_stale']['MAE']:.9f}",
-        "Inference time (s)": f"{timings['static_inf']:.9f}",
-        "Memory (KB)": f"{mem_kb:.4f}",
-        "Disk usage (MB)": f"{disk_mb:.4f}",
-        "P95": f"{metrics['static_stale']['QErr_p95']:.9f}" 
+        
+        # Initial
+        "Init Training time (s)": fmt(d_timings['hist_build']),
+        "Init QErr Median": fmt(i_static.get('QErr_median', 'N/A')),
+        "Init QErr P95": fmt(i_static.get('QErr_p95', 'N/A')),
+        "Init MAE": fmt(i_static.get('MAE', 'N/A')),
+        "Init Inference time (s)": fmt(d_timings['static_inf']),
+        "Init Memory (KB)": fmt(mem_buckets),
+        
+        # Drift (Stale)
+        "Rows inserted": drift_rows,
+        "Drift Scenario": shift,
+        "Drift QErr Median": fmt(d_metrics['static_stale']['QErr_median']),
+        "Drift QErr P95": fmt(d_metrics['static_stale']['QErr_p95']),
+        "Drift MAE": fmt(d_metrics['static_stale']['MAE']),
+        "Drift Inference time (s)": fmt(d_timings['static_inf']),
+        "Drift Memory (KB)": fmt(mem_buckets),
+        
+        # Repair (Full Rebuild)
+        "Retrain time (s)": fmt(d_timings.get('static_rebuild', 'N/A')),
+        "Final QErr Median": fmt(d_metrics.get('static_rebuilt', {}).get('QErr_median', 'N/A')),
+        "Final QErr P95": fmt(d_metrics.get('static_rebuilt', {}).get('QErr_p95', 'N/A')),
+        "Final MAE": fmt(d_metrics.get('static_rebuilt', {}).get('MAE', 'N/A')),
+        "Final Inference time (s)": fmt(d_timings['static_inf']), # Inference is same algo
+        "Final Memory (KB)": fmt(mem_buckets),
     }
     
-    # Approach 2: EquiHist (Baseline 2)
+    # 2. EquiHist (Online) - No distinct "rebuild", it's continuous
+    # Initial: Initial Learning Phase (Phase 1)
+    # Drift: Online Adaptation (Phase 2)
+    # Final: Converged State Check (Phase 3)
     row_eh = {
         "Dataset": dataset_name,
-        "Drift Scenario": drift_desc,
         "Approach": "EquiHist (Online)",
-        "Training time (s)": "0.000000000",
-        "QErr Median": f"{metrics['equihist_online']['QErr_median']:.9f}",
-        "QErr P95": f"{metrics['equihist_online']['QErr_p95']:.9f}",
-        "MAE": f"{metrics['equihist_online']['MAE']:.9f}",
-        "Inference time (s)": "N/A", 
-        "Memory (KB)": f"{mem_kb:.4f}",
-        "Disk usage (MB)": f"{disk_mb:.4f}",
-        "P95": f"{metrics['equihist_online']['QErr_p95']:.9f}"
+        
+        # Initial
+        "Init Training time (s)": fmt(i_timings.get('equihist_init_train', 'N/A')), # Initial learning overhead (Update sum)
+        "Init QErr Median": fmt(i_eh.get('QErr_median', 'N/A')),
+        "Init QErr P95": fmt(i_eh.get('QErr_p95', 'N/A')),
+        "Init MAE": fmt(i_eh.get('MAE', 'N/A')),
+        "Init Inference time (s)": fmt(i_timings.get('equihist_init_inf', 'N/A')), # Measured inference time
+        "Init Memory (KB)": fmt(mem_buckets),
+        
+        # Drift - Effective Performance during drift
+        "Rows inserted": drift_rows,
+        "Drift Scenario": shift,
+        "Drift QErr Median": fmt(d_metrics['equihist_online']['QErr_median']),
+        "Drift QErr P95": fmt(d_metrics['equihist_online']['QErr_p95']),
+        "Drift MAE": fmt(d_metrics['equihist_online']['MAE']),
+        "Drift Inference time (s)": fmt(d_timings.get('equihist_drift_inf', 'N/A')), # Measured inference time
+        "Drift Memory (KB)": fmt(mem_buckets),
+        
+        # Repair - Final State Check
+        "Retrain time (s)": fmt(d_timings.get('equihist_retrain', 'N/A')), # Drift learning overhead (Update sum)
+        "Final QErr Median": fmt(d_metrics.get('equihist_final', {}).get('QErr_median', 'N/A')),
+        "Final QErr P95": fmt(d_metrics.get('equihist_final', {}).get('QErr_p95', 'N/A')),
+        "Final MAE": fmt(d_metrics.get('equihist_final', {}).get('MAE', 'N/A')),
+        "Final Inference time (s)": fmt(d_timings.get('equihist_final_inf', 'N/A')), # Measured inference time
+        "Final Memory (KB)": fmt(mem_buckets),
     }
-
-    # Approach 3: Hybrid Repaired (Ours)
-    total_train = timings['hist_build'] + timings['ml_train'] + timings['repair']
+    
+    # 3. Hybrid (Repaired) - Uses Buckets + Models
+    init_train_time = d_timings['hist_build'] + d_timings['ml_train']
     row_hybrid = {
         "Dataset": dataset_name,
-        "Drift Scenario": drift_desc,
         "Approach": "Hybrid (Repaired)",
-        "Training time (s)": f"{total_train:.9f}",
-        "QErr Median": f"{metrics['hybrid_repaired']['QErr_median']:.9f}",
-        "QErr P95": f"{metrics['hybrid_repaired']['QErr_p95']:.9f}",
-        "MAE": f"{metrics['hybrid_repaired']['MAE']:.9f}",
-        "Inference time (s)": f"{timings['hybrid_inf']:.9f}",
-        "Memory (KB)": f"{mem_kb:.4f}",
-        "Disk usage (MB)": f"{disk_mb:.4f}",
-        "P95": f"{metrics['hybrid_repaired']['QErr_p95']:.9f}"
+        
+        # Initial
+        "Init Training time (s)": fmt(init_train_time),
+        "Init QErr Median": fmt(i_hybrid.get('QErr_median', 'N/A')),
+        "Init QErr P95": fmt(i_hybrid.get('QErr_p95', 'N/A')),
+        "Init MAE": fmt(i_hybrid.get('MAE', 'N/A')),
+        "Init Inference time (s)": fmt(d_timings['hybrid_inf']),
+        "Init Memory (KB)": fmt(mem_total),
+        
+        # Drift (Stale)
+        "Rows inserted": drift_rows,
+        "Drift Scenario": shift,
+        "Drift QErr Median": fmt(d_metrics.get('hybrid_stale', {}).get('QErr_median', 'N/A')), 
+        "Drift QErr P95": fmt(d_metrics.get('hybrid_stale', {}).get('QErr_p95', 'N/A')),
+        "Drift MAE": fmt(d_metrics.get('hybrid_stale', {}).get('MAE', 'N/A')),
+        "Drift Inference time (s)": fmt(d_timings['hybrid_inf']),
+        "Drift Memory (KB)": fmt(mem_total),
+        
+        # Repair
+        "Retrain time (s)": fmt(d_timings['repair']),
+        "Final QErr Median": fmt(d_metrics['hybrid_repaired']['QErr_median']),
+        "Final QErr P95": fmt(d_metrics['hybrid_repaired']['QErr_p95']),
+        "Final MAE": fmt(d_metrics['hybrid_repaired']['MAE']),
+        "Final Inference time (s)": fmt(d_timings['hybrid_inf']),
+        "Final Memory (KB)": fmt(mem_total),
     }
     
     return [row_static, row_eh, row_hybrid]
@@ -125,7 +198,7 @@ def main():
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()
             writer.writerows(all_rows)
-        print(f"\nFinal Benchmark saved to {RESULTS_FILE}")
+        print(f"Final Benchmark saved to {RESULTS_FILE}")
 
 if __name__ == "__main__":
     main()

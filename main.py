@@ -51,6 +51,14 @@ def main():
     buckets_eq_width = make_equiwidth_buckets(mn, mx, n_bins, freq, ndv_threshold=args.ndv_threshold)
     t_hist_build = time.perf_counter() - t0_hist
     
+    # 2b. EquiHist (Online Learner) - Initialize
+    # We initialize with genericbuckets or starts empty? 
+    # Usually EquiHist starts from scratch or with initial buckets. 
+    # Let's initialize it with the same initial buckets to be fair (as a "started" histogram) 
+    # OR if it's pure online, it starts specific. 
+    # The class `EquiHistLearner` usually takes buckets. Let's give it the initial buckets.
+    eh_learner = EquiHistLearner(buckets_eq_width, learning_rate=args.eh_lr)
+    
     # 3. Model Training
     print("Training CDF models (Skipping buckets with low NDV)...")
     rows = collect_cdf_training_rows(buckets_eq_width, freq, mn, 20, rng)
@@ -61,7 +69,7 @@ def main():
     n_ml = sum(1 for b in buckets_eq_width if b.exact_values is None)
     print(f"Bucket Strategy: {n_exact} Exact (Sparse), {n_ml} ML (Dense)")
     
-    # 4. Evaluation
+    # 4. Evaluation (Initial)
     print("Generating Evaluation Workload...")
     queries = []
     width = mx - mn
@@ -76,6 +84,7 @@ def main():
     y_true = []
     y_hist_width = []
     y_hybrid = []
+    y_eh_init = []
     
     # Measure Baseline Inference
     t0_base = time.perf_counter()
@@ -83,7 +92,7 @@ def main():
         h = predict_range_histogram_uniform(q, buckets_eq_width)
         y_hist_width.append(h / N)
     t_base_inf = time.perf_counter() - t0_base
-
+    
     # Measure Hybrid Inference
     t0_hyb = time.perf_counter()
     for q in queries:
@@ -91,7 +100,12 @@ def main():
         y_hybrid.append(c / N)
     t_hyb_inf = time.perf_counter() - t0_hyb
 
-    # Truth
+    # Truth & EquiHist (Update loop)
+    # Note: EquiHist updates during evaluation! This simulates the "Initial Phase" online learning.
+    # Truth & EquiHist (Update loop)
+    # Note: EquiHist updates during evaluation! This simulates the "Initial Phase" online learning.
+    t_eh_update_p1 = 0.0
+    t_eh_inf_p1 = 0.0
     for q in queries:
         li, ri = q.low - mn, q.high - mn
         if li < 0: li=0
@@ -99,21 +113,43 @@ def main():
         truth = int(ps[ri] - (ps[li-1] if li > 0 else 0))
         y_true.append(truth / N)
         
+        # EquiHist Predict + Update
+        t0_inf = time.perf_counter()
+        est_eh = eh_learner.predict(q)
+        t_eh_inf_p1 += (time.perf_counter() - t0_inf)
+        
+        y_eh_init.append(est_eh / N) 
+        
+        t0_up = time.perf_counter()
+        eh_learner.update(q, float(truth))
+        t_eh_update_p1 += (time.perf_counter() - t0_up)
+        
     y_true = np.array(y_true)
     y_hist_width = np.array(y_hist_width)
     y_hybrid = np.array(y_hybrid)
+    y_eh_init = np.array(y_eh_init)
     
     m_hist_w = summarize(y_true, y_hist_width, "Equi-Width (Standard)")
     m_hyb = summarize(y_true, y_hybrid, "Hybrid + NDV Smart")
+    m_eh_init = summarize(y_true, y_eh_init, "EquiHist (Initial Learning)")
+    
+    # Calculate specialized training times
+    t_eh_init_total = t_hist_build + t_eh_update_p1
     
     print("\n--- Results ---")
     print(f"Equi-Width:  Median QErr={m_hist_w['QErr_median']:.4f}, MAE={m_hist_w['MAE']:.6f}, Time={t_base_inf:.4f}s")
     print(f"Hybrid(FD):  Median QErr={m_hyb['QErr_median']:.4f}, MAE={m_hyb['MAE']:.6f}, Time={t_hyb_inf:.4f}s")
+    print(f"EquiHist:    Median QErr={m_eh_init['QErr_median']:.4f}, MAE={m_eh_init['MAE']:.6f}, InitTrain={t_eh_init_total:.4f}s, Inf={t_eh_inf_p1:.4f}s")
     
     summary = {
         "bins": n_bins,
         "hist_width_metrics": m_hist_w,
-        "hybrid_metrics": m_hyb
+        "hybrid_metrics": m_hyb,
+        "equihist_init_metrics": m_eh_init,
+        "timings": {
+            "equihist_init_train": t_eh_init_total,
+            "equihist_init_inf": t_eh_inf_p1
+        }
     }
     with open(Path(args.out_dir) / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
@@ -137,14 +173,17 @@ def main():
     # 1. Static Equi-Width (STALE)
     buckets_static = [Bucket(b.lo, b.hi, count=b.count, ndv=b.ndv, exact_values=b.exact_values) for b in buckets_eq_width]
     
-    # 2. EquiHist (Online Learning)
-    eh_learner = EquiHistLearner(buckets_eq_width, learning_rate=args.eh_lr)
+    # 2. EquiHist (Online Learning - CONTINUES)
+    # eh_learner is already active.
     
     print("Evaluating Drift Sequence...")
     y_true_seq = []
     y_static = []
     y_eh = []
     y_hybrid_stale = []
+    
+    t_eh_update_p2 = 0.0
+    t_eh_inf_p2 = 0.0
     
     for q in queries:
         li, ri = q.low - mn_new, q.high - mn_new
@@ -158,10 +197,16 @@ def main():
         est_static = predict_range_histogram_uniform(q, buckets_static) 
         y_static.append(est_static / N) 
         
-        # EquiHist
+        # EquiHist (Predict then Update)
+        t0_inf = time.perf_counter()
         est_eh = eh_learner.predict(q)
+        t_eh_inf_p2 += (time.perf_counter() - t0_inf)
+        
         y_eh.append(est_eh / N) 
+        
+        t0_up = time.perf_counter()
         eh_learner.update(q, float(truth)) 
+        t_eh_update_p2 += (time.perf_counter() - t0_up)
         
         # Hybrid (Stale buckets + Old Models)
         est_hyb = predict_range_hybrid_cdf(q, buckets_eq_width, models)
@@ -172,8 +217,10 @@ def main():
     m_eh = summarize(y_true_arr, np.array(y_eh), "EquiHist (Online Adaptive)")
     m_hyb = summarize(y_true_arr, np.array(y_hybrid_stale), "Hybrid (Stale)")
     
+    print(f"EquiHist Drift Update Time (Retrain): {t_eh_update_p2:.4f}s")
+    
     # -----------------------------------------------------
-    # Phase 3: Adaptive Repair (Hybrid)
+    # Phase 3: Adaptive Repair (Hybrid) + EquiHist Final
     # -----------------------------------------------------
     print(f"\n=== Phase 3: Hybrid Adaptive Repair ===")
     
@@ -211,6 +258,157 @@ def main():
         
     m_hyb_final = summarize(y_true_arr, np.array(y_hyb_final), "Hybrid (Repaired)")
     
+    # Final EquiHist Eval (Static Check of Learner State)
+    y_eh_final = []
+    t_eh_inf_final = 0.0
+    for q in queries:
+        t0_inf = time.perf_counter()
+        est_eh = eh_learner.predict(q)
+        t_eh_inf_final += (time.perf_counter() - t0_inf)
+        y_eh_final.append(est_eh / N)
+        # No update here, just checking final state
+        
+    m_eh_final = summarize(y_true_arr, np.array(y_eh_final), "EquiHist (Final/Converged)")
+    
+    # -----------------------------------------------------
+    # Phase 4: Static Rebuild (Offline Baseline)
+    # -----------------------------------------------------
+    print(f"\n=== Phase 4: Static Rebuild (Full Scan) ===")
+    t0_rebuild = time.perf_counter()
+    mn_rb, mx_rb, N_rb = scan_min_max_count(ds_path)
+    freq_rb, _ = build_frequency_and_sample(ds_path, mn_rb, mx_rb, N_rb, 100_000, 42)
+    # Re-using previous bin settings or re-estimating? Let's keep bins constant for fairness or re-estimate?
+    # Standard static re-build usually re-estimates perfectly.
+    # Let's use the same suggested bins count but rebuilt boundaries.
+    buckets_rebuilt = make_equiwidth_buckets(mn_rb, mx_rb, n_bins, freq_rb, ndv_threshold=args.ndv_threshold)
+    t_static_rebuild = time.perf_counter() - t0_rebuild
+    print(f"Static Rebuild Time: {t_static_rebuild:.4f}s")
+    
+    y_static_new = []
+    for q in queries:
+        est = predict_range_histogram_uniform(q, buckets_rebuilt)
+        y_static_new.append(est / N_rb)
+        
+    m_static_new = summarize(y_true_arr, np.array(y_static_new), "Static Equi-Width (Rebuilt)")
+    
+    # --- Report Resources AND Save JSON ---
+    import os
+    disk_usage_bytes = os.path.getsize(ds_path)
+    
+    # Python object size approx
+    import pickle
+    memory_buckets_bytes = len(pickle.dumps(buckets_eq_width))
+    memory_models_bytes = len(pickle.dumps(models))
+    memory_total_bytes = memory_buckets_bytes + memory_models_bytes
+    
+    print(f"\nResource Usage:")
+    print(f"Disk (CSV): {disk_usage_bytes/1024/1024:.2f} MB")
+    print(f"Memory (Model): {memory_total_bytes/1024:.2f} KB")
+
+    drift_pkg = {
+        "metrics": {
+            "static_stale": m_static,
+            "equihist_online": m_eh,
+            "hybrid_stale": m_hyb,
+            "hybrid_repaired": m_hyb_final,
+            "equihist_final": m_eh_final,
+            "static_rebuilt": m_static_new
+        },
+        "timings": {
+            "hist_build": t_hist_build,
+            "ml_train": t_ml_train,
+            "static_inf": t_base_inf,
+            "hybrid_inf": t_hyb_inf,
+            "repair": t_repair,
+            "static_rebuild": t_static_rebuild,
+            "equihist_retrain": t_eh_update_p2,
+            "equihist_drift_inf": t_eh_inf_p2,
+            "equihist_final_inf": t_eh_inf_final
+        },
+        "resources": {
+            "disk_bytes": disk_usage_bytes,
+            "memory_buckets_bytes": memory_buckets_bytes,
+            "memory_models_bytes": memory_models_bytes,
+            "memory_total_bytes": memory_total_bytes
+        }
+    }
+    with open(Path(args.out_dir) / "drift_summary.json", "w") as f:
+        json.dump(drift_pkg, f, indent=2)
+    
+    # -----------------------------------------------------
+    # Phase 3: Adaptive Repair (Hybrid) + EquiHist Final
+    # -----------------------------------------------------
+    print(f"\n=== Phase 3: Hybrid Adaptive Repair ===")
+    
+    # Hybrid updates counts (Cheap)
+    for b in buckets_eq_width:
+        li = b.lo - mn_new
+        ri = b.hi - mn_new
+        if li < 0: li=0
+        if ri >= len(freq_new): ri = len(freq_new)-1
+        b.count = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
+        
+    # Check error again with updated counts
+    y_hyb_counts_only = []
+    for q in queries:
+        y_hyb_counts_only.append(predict_range_hybrid_cdf(q, buckets_eq_width, models) / N_real)
+        
+    bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_mae=0.0001)
+    print(f"Identified {len(bad_indices)}/{len(buckets_eq_width)} buckets needing repair.")
+    
+    t0_repair = time.perf_counter()
+    if bad_indices:
+        print("Retraining specific buckets...")
+        rows_repair = collect_cdf_training_rows(buckets_eq_width, freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
+        models_repair, _ = train_cdf_models(rows_repair)
+        for k, v in models_repair.items():
+            models[k] = v
+            
+    t_repair = time.perf_counter() - t0_repair
+    print(f"Repair Time: {t_repair:.4f}s")
+    
+    # Final Hybrid Eval
+    y_hyb_final = []
+    for q in queries:
+        y_hyb_final.append(predict_range_hybrid_cdf(q, buckets_eq_width, models) / N_real)
+        
+    m_hyb_final = summarize(y_true_arr, np.array(y_hyb_final), "Hybrid (Repaired)")
+    
+    # Final EquiHist Eval (Static Check of Learner State)
+    y_eh_final = []
+    for q in queries:
+        est_eh = eh_learner.predict(q)
+        y_eh_final.append(est_eh / N)
+        # No update here, just checking final state
+        
+    m_eh_final = summarize(y_true_arr, np.array(y_eh_final), "EquiHist (Final/Converged)")
+    
+    # -----------------------------------------------------
+    # Phase 4: Static Rebuild (Offline Baseline)
+    # -----------------------------------------------------
+    print(f"\n=== Phase 4: Static Rebuild (Full Scan) ===")
+    t0_rebuild_static = time.perf_counter()
+    
+    # 1. Full Scan & Freq Build
+    mn_full, mx_full, N_full = scan_min_max_count(ds_path)
+    freq_full, _ = build_frequency_and_sample(ds_path, mn_full, mx_full, N_full, 100_000, 42)
+    
+    # 2. Re-run FD (Optional, or reuse n_bins) - let's reuse n_bins to be fair on "params"
+    # But usually full rebuild might re-optimize bins. Let's keep n_bins fixed for direct comparison.
+    
+    # 3. Build Buckets
+    buckets_static_rebuilt = make_equiwidth_buckets(mn_full, mx_full, n_bins, freq_full, ndv_threshold=args.ndv_threshold)
+    t_static_rebuild = time.perf_counter() - t0_rebuild_static
+    print(f"Static Rebuild Time: {t_static_rebuild:.4f}s")
+    
+    # 4. Eval
+    y_static_rebuilt = []
+    for q in queries:
+        h = predict_range_histogram_uniform(q, buckets_static_rebuilt)
+        y_static_rebuilt.append(h / N_full)
+        
+    m_static_rebuilt = summarize(y_true_arr, np.array(y_static_rebuilt), "Static Equi-Width (Rebuilt)")
+    
     # System Metrics (Memory & Disk)
     import pickle
     import os
@@ -219,7 +417,6 @@ def main():
     disk_usage_bytes = os.path.getsize(ds_path)
     
     # 2. Memory Usage (Buckets + Models)
-    # Estimate utilizing pickle size
     mem_buckets_bytes = len(pickle.dumps(buckets_eq_width))
     mem_models_bytes = len(pickle.dumps(models))
     total_memory_bytes = mem_buckets_bytes + mem_models_bytes
@@ -231,7 +428,9 @@ def main():
     final_summary = {
         "metrics": {
             "static_stale": m_static,
+            "static_rebuilt": m_static_rebuilt,
             "equihist_online": m_eh,
+            "hybrid_stale": m_hyb,
             "hybrid_repaired": m_hyb_final
         },
         "timings": {
@@ -239,11 +438,15 @@ def main():
             "ml_train": t_ml_train,
             "static_inf": t_base_inf,
             "hybrid_inf": t_hyb_inf,
-            "repair": t_repair
+            "repair": t_repair,
+            "static_rebuild": t_static_rebuild,
+            "equihist_retrain": t_eh_update_p2
         },
         "resources": {
             "disk_bytes": disk_usage_bytes,
-            "memory_bytes": total_memory_bytes
+            "memory_buckets_bytes": mem_buckets_bytes,
+            "memory_models_bytes": mem_models_bytes,
+            "memory_total_bytes": total_memory_bytes
         }
     }
     
