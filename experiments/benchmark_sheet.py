@@ -173,7 +173,7 @@ def main():
     
     all_rows = []
     # 1. No Drift (Baseline)
-    for ds_name, dist in [("Uniform","uniform"), ("Normal","normal"), ("Zipf","zipf"), ("Sparse","sparse_cluster")]:
+    for ds_name, dist in [("Uniform","uniform"), ("Normal","normal"), ("Zipf","zipf"), ("Sparse","sparse_cluster"), ("IMDB", "imdb"), ("Census", "census")]:
          all_rows.extend(run_bench(ds_name, dist, shift=0, drift_rows=0))
          
     shifts = [0, 10_000, 25_000, 50_000, 100_000]
@@ -190,6 +190,12 @@ def main():
     
     for s in shifts:
         all_rows.extend(run_bench("Sparse", "sparse_cluster", s))
+
+    for s in shifts:
+        all_rows.extend(run_bench("IMDB", "imdb", s))
+
+    for s in shifts:
+        all_rows.extend(run_bench("Census", "census", s))
     
     # Write CSV
     if all_rows:

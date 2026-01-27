@@ -7,7 +7,9 @@ import numpy as np
 
 # New Modular Imports
 from optimizer.core import Bucket, RangeQuery
-from optimizer.datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample
+# New Modular Imports
+from optimizer.core import Bucket, RangeQuery
+from optimizer.datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample, load_imdb_lengths, load_census_age
 from optimizer.histograms import make_equiwidth_buckets, freedman_diaconis_bins
 from optimizer.models import collect_cdf_training_rows, train_cdf_models, predict_range_hybrid_cdf, predict_range_histogram_uniform, EquiHistLearner
 from optimizer.evaluation import identify_bad_buckets, summarize
@@ -37,7 +39,30 @@ def main():
     print(f"=== Phase 1: Initial Build ({args.rows} rows, {args.dist}) ===")
     
     ds_path = Path(args.out_dir) / f"data_initial.csv"
-    vals = gen_values(rng, args.dist, args.rows, 0, 200_000)
+    
+    if args.dist.lower() == "imdb":
+        print("Loading real IMDB review lengths...")
+        imdb_path = Path("datasets/IMDB Dataset.csv")
+        if not imdb_path.exists(): imdb_path = Path("IMDB Dataset.csv")
+        
+        if imdb_path.exists():
+            vals = load_imdb_lengths(imdb_path)
+        else:
+            print(f"Error: {imdb_path} not found. using uniform fallback.")
+            vals = gen_values(rng, "uniform", args.rows, 0, 10000)
+    elif args.dist.lower() == "census":
+        print("Loading real US Census Age data...")
+        census_path = Path("datasets/USCensus1990.data.txt.csv")
+        if not census_path.exists(): census_path = Path("USCensus1990.data.txt.csv")
+        
+        if census_path.exists():
+            vals = load_census_age(census_path)
+        else:
+            print(f"Error: {census_path} not found. using uniform fallback.")
+            vals = gen_values(rng, "uniform", args.rows, 0, 100)
+    else:
+        vals = gen_values(rng, args.dist, args.rows, 0, 200_000)
+        
     save_csv_column(vals, ds_path)
     
     mn, mx, N = scan_min_max_count(ds_path)
@@ -335,123 +360,7 @@ def main():
     with open(Path(args.out_dir) / "drift_summary.json", "w") as f:
         json.dump(drift_pkg, f, indent=2)
     
-    # -----------------------------------------------------
-    # Phase 3: Adaptive Repair (Hybrid) + EquiHist Final
-    # -----------------------------------------------------
-    print(f"\n=== Phase 3: Hybrid Adaptive Repair ===")
-    
-    # Hybrid updates counts (Cheap)
-    for b in buckets_eq_width:
-        li = b.lo - mn_new
-        ri = b.hi - mn_new
-        if li < 0: li=0
-        if ri >= len(freq_new): ri = len(freq_new)-1
-        b.count = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
-        
-    # Check error again with updated counts
-    y_hyb_counts_only = []
-    for q in queries:
-        y_hyb_counts_only.append(predict_range_hybrid_cdf(q, buckets_eq_width, models) / N_real)
-        
-    bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_mae=0.0001)
-    print(f"Identified {len(bad_indices)}/{len(buckets_eq_width)} buckets needing repair.")
-    
-    t0_repair = time.perf_counter()
-    if bad_indices:
-        print("Retraining specific buckets...")
-        rows_repair = collect_cdf_training_rows(buckets_eq_width, freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
-        models_repair, _ = train_cdf_models(rows_repair)
-        for k, v in models_repair.items():
-            models[k] = v
-            
-    t_repair = time.perf_counter() - t0_repair
-    print(f"Repair Time: {t_repair:.4f}s")
-    
-    # Final Hybrid Eval
-    y_hyb_final = []
-    for q in queries:
-        y_hyb_final.append(predict_range_hybrid_cdf(q, buckets_eq_width, models) / N_real)
-        
-    m_hyb_final = summarize(y_true_arr, np.array(y_hyb_final), "Hybrid (Repaired)")
-    
-    # Final EquiHist Eval (Static Check of Learner State)
-    y_eh_final = []
-    for q in queries:
-        est_eh = eh_learner.predict(q)
-        y_eh_final.append(est_eh / N)
-        # No update here, just checking final state
-        
-    m_eh_final = summarize(y_true_arr, np.array(y_eh_final), "EquiHist (Final/Converged)")
-    
-    # -----------------------------------------------------
-    # Phase 4: Static Rebuild (Offline Baseline)
-    # -----------------------------------------------------
-    print(f"\n=== Phase 4: Static Rebuild (Full Scan) ===")
-    t0_rebuild_static = time.perf_counter()
-    
-    # 1. Full Scan & Freq Build
-    mn_full, mx_full, N_full = scan_min_max_count(ds_path)
-    freq_full, _ = build_frequency_and_sample(ds_path, mn_full, mx_full, N_full, 100_000, 42)
-    
-    # 2. Re-run FD (Optional, or reuse n_bins) - let's reuse n_bins to be fair on "params"
-    # But usually full rebuild might re-optimize bins. Let's keep n_bins fixed for direct comparison.
-    
-    # 3. Build Buckets
-    buckets_static_rebuilt = make_equiwidth_buckets(mn_full, mx_full, n_bins, freq_full, ndv_threshold=args.ndv_threshold)
-    t_static_rebuild = time.perf_counter() - t0_rebuild_static
-    print(f"Static Rebuild Time: {t_static_rebuild:.4f}s")
-    
-    # 4. Eval
-    y_static_rebuilt = []
-    for q in queries:
-        h = predict_range_histogram_uniform(q, buckets_static_rebuilt)
-        y_static_rebuilt.append(h / N_full)
-        
-    m_static_rebuilt = summarize(y_true_arr, np.array(y_static_rebuilt), "Static Equi-Width (Rebuilt)")
-    
-    # System Metrics (Memory & Disk)
-    import pickle
-    import os
-    
-    # 1. Disk Usage (Original Data + Drift Data)
-    disk_usage_bytes = os.path.getsize(ds_path)
-    
-    # 2. Memory Usage (Buckets + Models)
-    mem_buckets_bytes = len(pickle.dumps(buckets_eq_width))
-    mem_models_bytes = len(pickle.dumps(models))
-    total_memory_bytes = mem_buckets_bytes + mem_models_bytes
-    
-    print(f"\nResource Usage:")
-    print(f"Disk (CSV): {disk_usage_bytes / 1024 / 1024:.2f} MB")
-    print(f"Memory (Model): {total_memory_bytes / 1024:.2f} KB")
 
-    final_summary = {
-        "metrics": {
-            "static_stale": m_static,
-            "static_rebuilt": m_static_rebuilt,
-            "equihist_online": m_eh,
-            "hybrid_stale": m_hyb,
-            "hybrid_repaired": m_hyb_final
-        },
-        "timings": {
-            "hist_build": t_hist_build,
-            "ml_train": t_ml_train,
-            "static_inf": t_base_inf,
-            "hybrid_inf": t_hyb_inf,
-            "repair": t_repair,
-            "static_rebuild": t_static_rebuild,
-            "equihist_retrain": t_eh_update_p2
-        },
-        "resources": {
-            "disk_bytes": disk_usage_bytes,
-            "memory_buckets_bytes": mem_buckets_bytes,
-            "memory_models_bytes": mem_models_bytes,
-            "memory_total_bytes": total_memory_bytes
-        }
-    }
-    
-    with open(Path(args.out_dir) / "drift_summary.json", "w") as f:
-        json.dump(final_summary, f, indent=2)
 
 if __name__ == "__main__":
     main()

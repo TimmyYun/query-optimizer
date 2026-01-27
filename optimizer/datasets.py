@@ -100,3 +100,40 @@ def build_frequency_and_sample(csv_path: Path, mn: int, mx: int, n_rows: int, sa
         sample = np.array([], dtype=np.int64)
         
     return freq, sample
+def load_imdb_lengths(csv_path: Path) -> np.ndarray:
+    """Reads IMDB Dataset.csv and returns review lengths as numpy array."""
+    try:
+        # IMDB Dataset has explicit header "review,sentiment"
+        df = pd.read_csv(csv_path)
+        if "review" not in df.columns:
+            # Fallback if no header or different name
+            df = pd.read_csv(csv_path, header=None)
+            vals = df.iloc[:, 0].astype(str).str.len().to_numpy()
+        else:
+            vals = df["review"].astype(str).str.len().to_numpy()
+            
+        print(f"Loaded IMDB: {len(vals)} rows. Max len: {vals.max()}, Min len: {vals.min()}")
+        return vals.astype(np.int64)
+    except Exception as e:
+        print(f"Error loading IMDB: {e}")
+        return np.array([], dtype=np.int64)
+
+def load_census_age(csv_path: Path) -> np.ndarray:
+    """Reads USCensus1990.data.txt.csv and returns dAge column."""
+    try:
+        # Check if file exists
+        if not csv_path.exists():
+            print(f"Census file not found: {csv_path}")
+            return np.array([], dtype=np.int64)
+            
+        # Read 'dAge' column. It's the 2nd column (index 1) in the header.
+        # Format: caseid,dAge,dAncstry1...
+        df = pd.read_csv(csv_path, usecols=['dAge'])
+        vals = df['dAge'].to_numpy()
+        
+        print(f"Loaded Census: {len(vals)} rows. Max Age: {vals.max()}, Min Age: {vals.min()}")
+        return vals.astype(np.int64)
+    except Exception as e:
+        print(f"Error loading Census: {e}")
+        return np.array([], dtype=np.int64)
+
