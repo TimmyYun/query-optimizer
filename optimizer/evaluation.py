@@ -5,6 +5,11 @@ from .core import Bucket, RangeQuery
 def identify_bad_buckets(queries: List[RangeQuery], y_true: np.ndarray, y_pred: np.ndarray, buckets: List[Bucket], threshold_mae: float = 0.05) -> List[int]:
     """
     Identify which buckets are responsible for errors.
+    
+    Heuristic:
+    If a query has high error, we "blame" all buckets that overlap with it.
+    This is a simplification. Ideally, we would know which specific bucket caused the error, 
+    but without ground truth per-bucket, we conservatively mark all involved buckets for retraining.
     """
     bad_buckets = set()
     errors = np.abs(y_true - y_pred)

@@ -36,6 +36,8 @@ def main():
     # -----------------------------------------------------
     # Phase 1: Initial Build
     # -----------------------------------------------------
+    # Goal: Train the histograms and ML models on the initial "clean" dataset.
+    # This represents the state of the database statistics immediately after a full ANALYZE.
     print(f"=== Phase 1: Initial Build ({args.rows} rows, {args.dist}) ===")
     
     ds_path = Path(args.out_dir) / f"data_initial.csv"
@@ -182,6 +184,9 @@ def main():
     # -----------------------------------------------------
     # Phase 2: Data Drift (Insert Data)
     # -----------------------------------------------------
+    # Goal: Simulate "Staleness". We insert new data (drifted distribution) but do NOT trigger a rebuild.
+    # The existing "Static" histogram will degrade in quality.
+    # The "EquiHist" online learner should adapt automatically during query execution.
     print(f"\n=== Phase 2: Data Drift (Inserting {args.drift_rows} rows of {args.drift_dist}, shift={args.drift_shift}) ===")
     drift_vals = gen_values(rng, args.drift_dist, args.drift_rows, 0, 200_000, shift=args.drift_shift)
     save_csv_column(drift_vals, ds_path, mode='a')
@@ -247,6 +252,9 @@ def main():
     # -----------------------------------------------------
     # Phase 3: Adaptive Repair (Hybrid) + EquiHist Final
     # -----------------------------------------------------
+    # Goal: Try to "Repair" the broken statistics without a full scan.
+    # 1. Hybrid: Update bucket counts (cheap scan) and only retrain models for "Bad" buckets.
+    # 2. EquiHist: Measure final convergence after the drift phase.
     print(f"\n=== Phase 3: Hybrid Adaptive Repair ===")
     
     # Hybrid updates counts (Cheap)
@@ -298,6 +306,8 @@ def main():
     # -----------------------------------------------------
     # Phase 4: Static Rebuild (Offline Baseline)
     # -----------------------------------------------------
+    # Goal: Gold Standard. Rebuild the histogram from scratch using all data.
+    # This is the most accurate but also the most expensive operation (Full Scan + Sort/Binning).
     print(f"\n=== Phase 4: Static Rebuild (Full Scan) ===")
     t0_rebuild = time.perf_counter()
     mn_rb, mx_rb, N_rb = scan_min_max_count(ds_path)
