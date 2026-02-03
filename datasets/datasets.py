@@ -62,7 +62,10 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
         v = np.concatenate(v)
     elif dist == "anti_zipf":
         # Destructive distribution: Uniform injected into the heavy-hitter region of Zipf
-        v = rng.integers(0, 20000, size=n)
+        # Respect lo and shift. Default Zipf pushes to 'lo', so Anti-Zipf should also start at 'lo'.
+        start = lo + shift
+        # Width of 20,000 matches the original hardcoded range [0, 20000]
+        v = rng.integers(start, start + 20000, size=n)
     else:
         v = rng.integers(lo, hi + 1, size=n)
         
