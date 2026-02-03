@@ -8,9 +8,9 @@ import numpy as np
 # New Modular Imports
 from models.core import Bucket, RangeQuery
 from datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample, load_imdb_lengths, load_census_age, freedman_diaconis_bins
-from approaches.equi_width import EquiWidthHistogram
-from approaches.equi_hist import EquiHistLearner
-from approaches.hybrid import HybridEstimator
+from models.equi_width import EquiWidthHistogram
+from models.equi_hist import EquiHistLearner
+from models.hybrid import HybridEstimator
 from models.evaluation import identify_bad_buckets, summarize
 
 def main():
