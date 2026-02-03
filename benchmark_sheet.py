@@ -48,7 +48,7 @@ def run_benchmark():
         # Model 1: Equi-Width
         # -----------------------------------
         t0 = time.perf_counter()
-        ew = EquiWidthHistogram.build(mn, mx, n_bins, freq, ndv_threshold=5)
+        ew = EquiWidthHistogram.build(mn, mx, n_bins, freq, ndv_threshold=0)
         t_build_ew = time.perf_counter() - t0
         
         # -----------------------------------
