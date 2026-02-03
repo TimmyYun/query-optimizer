@@ -4,9 +4,34 @@ from pathlib import Path
 from typing import Tuple
 
 def clamp_int(x, lo, hi):
+    """
+    Clamps a value `x` to the range [lo, hi].
+
+    Args:
+        x: The value to clamp.
+        lo: The lower bound.
+        hi: The upper bound.
+
+    Returns:
+        The clamped integer value.
+    """
     return int(min(max(int(round(x)), lo), hi))
 
 def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, shift: int = 0) -> np.ndarray:
+    """
+    Generates synthetic data based on a specified distribution.
+
+    Args:
+        rng: The random number generator.
+        dist: The distribution type ("uniform", "normal", "zipf", "sparse_cluster", "anti_zipf").
+        n: The number of values to generate.
+        lo: The lower bound of the range.
+        hi: The upper bound of the range.
+        shift: An optional shift to apply to the generated values.
+
+    Returns:
+        A numpy array of generated integer values.
+    """
     mid = 0.5 * (lo + hi) + shift
     span = max(1, hi - lo)
 
@@ -46,6 +71,14 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
     return v.astype(np.int64)
 
 def save_csv_column(values: np.ndarray, path: Path, mode='w'):
+    """
+    Saves a numpy array of values to a CSV file.
+
+    Args:
+        values: The numpy array of values to save.
+        path: The path to the CSV file.
+        mode: The file opening mode ('w' for write, 'a' for append).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     df = pd.Series(values)
     if mode == 'w':
@@ -54,6 +87,16 @@ def save_csv_column(values: np.ndarray, path: Path, mode='w'):
         df.to_csv(path, index=False, header=False, mode='a')
 
 def scan_min_max_count(csv_path: Path, chunksize: int = 1_000_000) -> Tuple[int, int, int]:
+    """
+    Scans a CSV file to find the minimum value, maximum value, and total count.
+
+    Args:
+        csv_path: The path to the CSV file.
+        chunksize: The number of rows to read per chunk.
+
+    Returns:
+        A tuple containing (min_val, max_val, count).
+    """
     mn, mx, n = None, None, 0
     for ch in pd.read_csv(csv_path, header=None, names=["v"], dtype="int64", chunksize=chunksize, engine="c"):
         v = ch["v"].to_numpy()
@@ -67,6 +110,22 @@ def scan_min_max_count(csv_path: Path, chunksize: int = 1_000_000) -> Tuple[int,
     return mn, mx, n
 
 def build_frequency_and_sample(csv_path: Path, mn: int, mx: int, n_rows: int, sample_size: int, seed: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Builds a frequency histogram and collects a random sample from a CSV file.
+
+    Args:
+        csv_path: The path to the CSV file.
+        mn: The minimum value in the dataset (used for indexing).
+        mx: The maximum value in the dataset.
+        n_rows: The total number of rows (estimated or exact).
+        sample_size: The desired size of the reservoir sample.
+        seed: Random seed for sampling.
+
+    Returns:
+        A tuple containing:
+        - freq: A numpy array representing the frequency of each value in the range [mn, mx].
+        - sample: A numpy array containing the random sample.
+    """
     width = mx - mn + 1
     if width <= 0: return np.array([]), np.array([])
     
