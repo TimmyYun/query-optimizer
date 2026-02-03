@@ -4,7 +4,7 @@ import csv
 import subprocess
 from pathlib import Path
 
-RESULTS_FILE = "ablation_results.csv"
+RESULTS_FILE = "datasets/files/benchmarks/ablation_results.csv"
 OUT_DIR = "experiments/artifacts"
 
 def run_experiment(exp_name, config):

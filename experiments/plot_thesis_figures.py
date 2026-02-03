@@ -11,7 +11,7 @@ sns.set_theme(style="whitegrid")
 plt.rcParams.update({'font.size': 12, 'figure.autolayout': True})
 
 def load_data():
-    df = pd.read_csv("final_benchmark.csv")
+    df = pd.read_csv("datasets/files/benchmarks/final_benchmark.csv")
     # Clean up names for plotting
     df['Approach'] = df['Approach'].replace({
         'Static Equi-Width': 'Static',

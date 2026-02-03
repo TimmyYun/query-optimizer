@@ -6,6 +6,7 @@ from pathlib import Path
 
 # Add current directory to path
 sys.path.append(os.getcwd())
+sys.path.append(os.path.dirname(os.getcwd()))
 
 from datasets import gen_values, freedman_diaconis_bins
 

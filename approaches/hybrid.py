@@ -2,7 +2,7 @@ import numpy as np
 import time
 from typing import List, Dict, Tuple, Optional, Any, Set
 from sklearn.isotonic import IsotonicRegression
-from ..core import Bucket, RangeQuery, CDFTrainRow
+from models.core import Bucket, RangeQuery, CDFTrainRow
 
 class HybridEstimator:
     """

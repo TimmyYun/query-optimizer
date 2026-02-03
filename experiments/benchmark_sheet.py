@@ -4,7 +4,7 @@ import csv
 import subprocess
 from pathlib import Path
 
-RESULTS_FILE = "final_benchmark.csv"
+RESULTS_FILE = "datasets/files/benchmarks/final_benchmark.csv"
 OUT_DIR = "experiments/artifacts_bench"
 
 def run_bench(dataset_name, dist, shift, drift_rows=500000):

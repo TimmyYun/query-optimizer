@@ -7,7 +7,7 @@ sys.path.append(os.getcwd())
 
 def inspect_results():
     try:
-        df = pd.read_excel("Results.xlsx")
+        df = pd.read_excel("datasets/files/benchmarks/Results.xlsx")
         print("Columns:", df.columns.tolist())
         print("\nFirst 5 rows:")
         print(df.head().to_string())
@@ -25,8 +25,8 @@ def inspect_results():
         print(f"Error reading excel: {e}")
         # Fallback to csv if excel fails (maybe it's meant to be the csv file?)
         try:
-             print("\nAttempting to read final_benchmark.csv...")
-             df_csv = pd.read_csv("final_benchmark.csv")
+             print("\nAttempting to read datasets/files/benchmarks/final_benchmark.csv...")
+             df_csv = pd.read_csv("datasets/files/benchmarks/final_benchmark.csv")
              print("CSV Columns:", df_csv.columns.tolist())
              print(df_csv.head().to_string())
         except Exception as e2:

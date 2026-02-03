@@ -5,7 +5,7 @@ from pathlib import Path
 
 # Set style
 sns.set_theme(style="whitegrid")
-DATA_FILE = "ablation_results.csv"
+DATA_FILE = "datasets/files/benchmarks/ablation_results.csv"
 
 def plot_exp(df, exp_name, x_col, x_label, title, filename):
     subset = df[df["Exp"].str.startswith(exp_name)].copy()

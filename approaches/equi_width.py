@@ -1,7 +1,7 @@
 from typing import List
 import numpy as np
 import math
-from ..core import Bucket, RangeQuery
+from models.core import Bucket, RangeQuery
 
 class EquiWidthHistogram:
     """

@@ -38,27 +38,22 @@ def main():
     print(f"=== Phase 1: Initial Build ({args.rows} rows, {args.dist}) ===")
     
     ds_path = Path(args.out_dir) / f"data_initial.csv"
+    # Or should generated data go to datasets/files/generated?
+    # User said "datasets/generated/1.csv".
+    # Let's put generated synthetic data there.
+    ds_path = Path("datasets/files/generated") / f"data_initial_{args.dist}.csv"
+    ds_path.parent.mkdir(parents=True, exist_ok=True)
     
     if args.dist.lower() == "imdb":
         print("Loading real IMDB review lengths...")
-        imdb_path = Path("datasets/IMDB Dataset.csv")
-        if not imdb_path.exists(): imdb_path = Path("IMDB Dataset.csv")
-        
-        if imdb_path.exists():
-            vals = load_imdb_lengths(imdb_path)
-        else:
-            print(f"Error: {imdb_path} not found. using uniform fallback.")
-            vals = gen_values(rng, "uniform", args.rows, 0, 10000)
+        # Paths handled in datasets.py now, but we need to pass a valid path or dummy
+        imdb_path = Path("datasets/files/imdb/IMDB Dataset.csv")
+        vals = load_imdb_lengths(imdb_path)
     elif args.dist.lower() == "census":
         print("Loading real US Census Age data...")
-        census_path = Path("datasets/USCensus1990.data.txt.csv")
-        if not census_path.exists(): census_path = Path("USCensus1990.data.txt.csv")
-        
-        if census_path.exists():
-            vals = load_census_age(census_path)
-        else:
-            print(f"Error: {census_path} not found. using uniform fallback.")
-            vals = gen_values(rng, "uniform", args.rows, 0, 100)
+        # Paths handled in datasets.py
+        census_path = Path("datasets/files/census/USCensus1990.data.txt.csv")
+        vals = load_census_age(census_path)
     else:
         vals = gen_values(rng, args.dist, args.rows, 0, 200_000)
         

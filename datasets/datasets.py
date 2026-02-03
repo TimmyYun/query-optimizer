@@ -163,7 +163,12 @@ def load_imdb_lengths(csv_path: Path) -> np.ndarray:
     """Reads IMDB Dataset.csv and returns review lengths as numpy array."""
     try:
         # IMDB Dataset has explicit header "review,sentiment"
-        df = pd.read_csv(csv_path)
+        imdb_path = Path("datasets/files/imdb/IMDB Dataset.csv")
+        if not imdb_path.exists(): imdb_path = Path("files/imdb/IMDB Dataset.csv")
+        # Fallback to current dir if needed, but prefer organized structure
+        if not imdb_path.exists(): imdb_path = csv_path
+        
+        df = pd.read_csv(imdb_path)
         if "review" not in df.columns:
             # Fallback if no header or different name
             df = pd.read_csv(csv_path, header=None)
@@ -186,7 +191,12 @@ def load_census_age(csv_path: Path) -> np.ndarray:
             return np.array([], dtype=np.int64)
             
         # Read 'dAge' column. It's the 2nd column (index 1) in the header.
+        # Read 'dAge' column. It's the 2nd column (index 1) in the header.
         # Format: caseid,dAge,dAncstry1...
+        census_path_default = Path("datasets/files/census/USCensus1990.data.txt.csv")
+        if census_path_default.exists():
+            csv_path = census_path_default
+            
         df = pd.read_csv(csv_path, usecols=['dAge'])
         vals = df['dAge'].to_numpy()
         
