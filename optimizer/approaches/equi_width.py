@@ -1,7 +1,7 @@
 from typing import List
 import numpy as np
 import math
-from .core import Bucket, RangeQuery
+from ..core import Bucket, RangeQuery
 
 def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bins_max: int) -> int:
     if sample.size < 10: return 10

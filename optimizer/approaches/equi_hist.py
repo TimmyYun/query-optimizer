@@ -1,5 +1,5 @@
 from typing import List
-from .core import Bucket, RangeQuery
+from ..core import Bucket, RangeQuery
 
 class EquiHistLearner:
     """

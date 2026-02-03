@@ -2,7 +2,7 @@ import numpy as np
 import time
 from typing import List, Dict, Tuple, Optional, Any
 from sklearn.isotonic import IsotonicRegression
-from .core import Bucket, RangeQuery, CDFTrainRow
+from ..core import Bucket, RangeQuery, CDFTrainRow
 
 def collect_cdf_training_rows(buckets: List[Bucket], freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> Dict[int, List[CDFTrainRow]]:
     ps = np.cumsum(freq)
