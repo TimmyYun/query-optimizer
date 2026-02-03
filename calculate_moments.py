@@ -5,7 +5,7 @@ import numpy as np
 # Add current directory to path
 sys.path.append(os.getcwd())
 
-from optimizer.datasets import gen_values
+from datasets import gen_values
 
 def calc_moments(data):
     mean = np.mean(data)

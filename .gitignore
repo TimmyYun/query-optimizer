@@ -219,3 +219,5 @@ report.html
 .idea/inspectionProfiles/profiles_settings.xml
 .idea/inspectionProfiles/Project_Default.xml
 .idea/misc.xml
+/.agent/rules/thesis-project-overview.md
+/experiments/results_section.tex

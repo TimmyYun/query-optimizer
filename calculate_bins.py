@@ -7,8 +7,7 @@ from pathlib import Path
 # Add current directory to path
 sys.path.append(os.getcwd())
 
-from optimizer.datasets import gen_values
-from optimizer.histograms import freedman_diaconis_bins
+from datasets import gen_values, freedman_diaconis_bins
 
 def calculate_bin_stats(name, dist_key, rows=1_000_000):
     rng = np.random.default_rng(42)
