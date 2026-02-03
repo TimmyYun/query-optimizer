@@ -35,13 +35,18 @@ def plot_distributions():
             plt.figure(figsize=(12, 7))
             
             # Plot Histogram
-            plt.hist(df['v'], bins=100, color='skyblue', edgecolor='black', alpha=0.7)
+            # Use log scale for Zipf to see the tail
+            use_log = (dist == 'zipf')
+            plt.hist(df['v'], bins=100, color='skyblue', edgecolor='black', alpha=0.7, log=use_log)
             
             plt.title(f"Distribution: {dist}")
             plt.xlabel("Value")
-            plt.ylabel("Frequency")
+            plt.ylabel("Frequency" + (" (Log Scale)" if use_log else ""))
             plt.grid(axis='y', alpha=0.5)
             
+            # Fix X-Axis to global domain to show relative width (Anti-Zipf vs Uniform)
+            plt.xlim(0, 200_000)
+
             # Add text box with statistics
             plt.gcf().text(0.75, 0.5, stats_text, fontsize=10, 
                            bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray'))
