@@ -7,8 +7,8 @@ import numpy as np
 
 # New Modular Imports
 from optimizer.core import Bucket, RangeQuery
-from optimizer.datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample, load_imdb_lengths, load_census_age
-from optimizer.approaches.equi_width import EquiWidthHistogram, freedman_diaconis_bins
+from optimizer.datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample, load_imdb_lengths, load_census_age, freedman_diaconis_bins
+from optimizer.approaches.equi_width import EquiWidthHistogram
 from optimizer.approaches.equi_hist import EquiHistLearner
 from optimizer.approaches.hybrid import HybridEstimator
 from optimizer.evaluation import identify_bad_buckets, summarize

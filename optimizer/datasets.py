@@ -137,3 +137,33 @@ def load_census_age(csv_path: Path) -> np.ndarray:
         print(f"Error loading Census: {e}")
         return np.array([], dtype=np.int64)
 
+def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bins_max: int) -> int:
+    """
+    Calculates the optimal number of bins using the Freedman-Diaconis rule.
+    
+    The FD rule uses the Interquartile Range (IQR) to estimate the optimal bin width,
+    which is robust to outliers.
+    
+    Formula: Bin Width = 2 * IQR * n^(-1/3)
+    
+    Args:
+        sample: A sample of values from the dataset.
+        mn: Minimum value in the dataset.
+        mx: Maximum value in the dataset.
+        n_rows: Total number of rows in the dataset.
+        bins_max: Maximum allowed number of bins.
+    
+    Returns:
+        The calculated number of bins, clamped between 1 and bins_max.
+    """
+    if sample.size < 10: return 10
+    q25, q75 = np.quantile(sample, [0.25, 0.75])
+    iqr = q75 - q25
+    if iqr <= 0: return 10
+    
+    bin_width = 2 * iqr / (n_rows ** (1/3))
+    total_width = mx - mn
+    if bin_width <= 0: return 10
+    
+    bins = int(total_width / bin_width)
+    return max(1, min(bins, bins_max))
