@@ -13,7 +13,7 @@ from models.evaluation import summarize
 
 def run_benchmark():
     distributions = ['uniform', 'normal', 'zipf', 'sparse_cluster', 'anti_zipf']
-    rows = 1_000_000
+    rows = 60_000_000
     eval_n = 100_000
     seed = 42
     rnd = np.random.default_rng(seed)
@@ -48,7 +48,7 @@ def run_benchmark():
         # Model 1: Equi-Width
         # -----------------------------------
         t0 = time.perf_counter()
-        ew = EquiWidthHistogram.build(mn, mx, n_bins, freq, ndv_threshold=200)
+        ew = EquiWidthHistogram.build(mn, mx, n_bins, freq, ndv_threshold=5)
         t_build_ew = time.perf_counter() - t0
         
         # -----------------------------------
