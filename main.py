@@ -7,12 +7,10 @@ import numpy as np
 
 # New Modular Imports
 from optimizer.core import Bucket, RangeQuery
-# New Modular Imports
-from optimizer.core import Bucket, RangeQuery
 from optimizer.datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample, load_imdb_lengths, load_census_age
-from optimizer.approaches.equi_width import make_equiwidth_buckets, freedman_diaconis_bins, predict_range_histogram_uniform
+from optimizer.approaches.equi_width import EquiWidthHistogram, freedman_diaconis_bins
 from optimizer.approaches.equi_hist import EquiHistLearner
-from optimizer.approaches.hybrid import collect_cdf_training_rows, train_cdf_models, predict_range_hybrid_cdf
+from optimizer.approaches.hybrid import HybridEstimator
 from optimizer.evaluation import identify_bad_buckets, summarize
 
 def main():
@@ -74,21 +72,19 @@ def main():
     
     # 2a. Equi-Width (Standard Baseline)
     t0_hist = time.perf_counter()
-    buckets_eq_width = make_equiwidth_buckets(mn, mx, n_bins, freq, ndv_threshold=args.ndv_threshold)
+    # Refactored: Use Class Builder
+    ew_hist = EquiWidthHistogram.build(mn, mx, n_bins, freq, ndv_threshold=args.ndv_threshold)
+    buckets_eq_width = ew_hist.buckets # Access buckets for others to use
     t_hist_build = time.perf_counter() - t0_hist
     
     # 2b. EquiHist (Online Learner) - Initialize
-    # We initialize with genericbuckets or starts empty? 
-    # Usually EquiHist starts from scratch or with initial buckets. 
-    # Let's initialize it with the same initial buckets to be fair (as a "started" histogram) 
-    # OR if it's pure online, it starts specific. 
-    # The class `EquiHistLearner` usually takes buckets. Let's give it the initial buckets.
     eh_learner = EquiHistLearner(buckets_eq_width, learning_rate=args.eh_lr)
     
-    # 3. Model Training
+    # 3. Model Training (Hybrid)
     print("Training CDF models (Skipping buckets with low NDV)...")
-    rows = collect_cdf_training_rows(buckets_eq_width, freq, mn, 20, rng)
-    models, t_ml_train = train_cdf_models(rows)
+    # Refactored: Use Hybrid Class
+    hybrid_est = HybridEstimator(buckets_eq_width)
+    t_ml_train = hybrid_est.train(freq, mn, 20, rng)
     print(f"Hist Build (Width): {t_hist_build:.4f}s, ML Train: {t_ml_train:.4f}s")
     
     n_exact = sum(1 for b in buckets_eq_width if b.exact_values is not None)
@@ -115,21 +111,20 @@ def main():
     # Measure Baseline Inference
     t0_base = time.perf_counter()
     for q in queries:
-        h = predict_range_histogram_uniform(q, buckets_eq_width)
+        # Refactored: Class method
+        h = ew_hist.predict(q)
         y_hist_width.append(h / N)
     t_base_inf = time.perf_counter() - t0_base
     
     # Measure Hybrid Inference
     t0_hyb = time.perf_counter()
     for q in queries:
-        c = predict_range_hybrid_cdf(q, buckets_eq_width, models)
+        # Refactored: Class method
+        c = hybrid_est.predict(q)
         y_hybrid.append(c / N)
     t_hyb_inf = time.perf_counter() - t0_hyb
 
     # Truth & EquiHist (Update loop)
-    # Note: EquiHist updates during evaluation! This simulates the "Initial Phase" online learning.
-    # Truth & EquiHist (Update loop)
-    # Note: EquiHist updates during evaluation! This simulates the "Initial Phase" online learning.
     t_eh_update_p1 = 0.0
     t_eh_inf_p1 = 0.0
     for q in queries:
@@ -197,7 +192,9 @@ def main():
     # --- Compare Approaches under Drift ---
     
     # 1. Static Equi-Width (STALE)
+    # Refactored: Create Stale Class Instance
     buckets_static = [Bucket(b.lo, b.hi, count=b.count, ndv=b.ndv, exact_values=b.exact_values) for b in buckets_eq_width]
+    static_hist_stale = EquiWidthHistogram(buckets_static)
     
     # 2. EquiHist (Online Learning - CONTINUES)
     # eh_learner is already active.
@@ -220,7 +217,8 @@ def main():
         y_true_seq.append(actual_sel)
         
         # Static
-        est_static = predict_range_histogram_uniform(q, buckets_static) 
+        # Refactored
+        est_static = static_hist_stale.predict(q) 
         y_static.append(est_static / N) 
         
         # EquiHist (Predict then Update)
@@ -235,7 +233,8 @@ def main():
         t_eh_update_p2 += (time.perf_counter() - t0_up)
         
         # Hybrid (Stale buckets + Old Models)
-        est_hyb = predict_range_hybrid_cdf(q, buckets_eq_width, models)
+        # Refactored: HybridEstimator holds the stale state
+        est_hyb = hybrid_est.predict(q)
         y_hybrid_stale.append(est_hyb / N)
         
     y_true_arr = np.array(y_true_seq)
@@ -261,7 +260,8 @@ def main():
     # Check error again with updated counts
     y_hyb_counts_only = []
     for q in queries:
-        y_hyb_counts_only.append(predict_range_hybrid_cdf(q, buckets_eq_width, models) / N_real)
+        # Refactored call
+        y_hyb_counts_only.append(hybrid_est.predict(q) / N_real)
         
     bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_mae=0.0001)
     print(f"Identified {len(bad_indices)}/{len(buckets_eq_width)} buckets needing repair.")
@@ -269,10 +269,8 @@ def main():
     t0_repair = time.perf_counter()
     if bad_indices:
         print("Retraining specific buckets...")
-        rows_repair = collect_cdf_training_rows(buckets_eq_width, freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
-        models_repair, _ = train_cdf_models(rows_repair)
-        for k, v in models_repair.items():
-            models[k] = v
+        # Refactored: train method handles logic
+        hybrid_est.train(freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
             
     t_repair = time.perf_counter() - t0_repair
     print(f"Repair Time: {t_repair:.4f}s")
@@ -280,7 +278,7 @@ def main():
     # Final Hybrid Eval
     y_hyb_final = []
     for q in queries:
-        y_hyb_final.append(predict_range_hybrid_cdf(q, buckets_eq_width, models) / N_real)
+        y_hyb_final.append(hybrid_est.predict(q) / N_real)
         
     m_hyb_final = summarize(y_true_arr, np.array(y_hyb_final), "Hybrid (Repaired)")
     
@@ -306,13 +304,15 @@ def main():
     # Re-using previous bin settings or re-estimating? Let's keep bins constant for fairness or re-estimate?
     # Standard static re-build usually re-estimates perfectly.
     # Let's use the same suggested bins count but rebuilt boundaries.
-    buckets_rebuilt = make_equiwidth_buckets(mn_rb, mx_rb, n_bins, freq_rb, ndv_threshold=args.ndv_threshold)
+    
+    # Refactored: Rebuild using class
+    rebuilt_hist = EquiWidthHistogram.build(mn_rb, mx_rb, n_bins, freq_rb, ndv_threshold=args.ndv_threshold)
     t_static_rebuild = time.perf_counter() - t0_rebuild
     print(f"Static Rebuild Time: {t_static_rebuild:.4f}s")
     
     y_static_new = []
     for q in queries:
-        est = predict_range_histogram_uniform(q, buckets_rebuilt)
+        est = rebuilt_hist.predict(q)
         y_static_new.append(est / N_rb)
         
     m_static_new = summarize(y_true_arr, np.array(y_static_new), "Static Equi-Width (Rebuilt)")
@@ -324,7 +324,8 @@ def main():
     # Python object size approx
     import pickle
     memory_buckets_bytes = len(pickle.dumps(buckets_eq_width))
-    memory_models_bytes = len(pickle.dumps(models))
+    # Refactored: Access models from hybrid_est
+    memory_models_bytes = len(pickle.dumps(hybrid_est.models))
     memory_total_bytes = memory_buckets_bytes + memory_models_bytes
     
     print(f"\nResource Usage:")
@@ -361,7 +362,6 @@ def main():
     with open(Path(args.out_dir) / "drift_summary.json", "w") as f:
         json.dump(drift_pkg, f, indent=2)
     
-
 
 if __name__ == "__main__":
     main()
