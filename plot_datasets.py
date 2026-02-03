@@ -21,15 +21,36 @@ def plot_distributions():
             # Read first 100k rows for plotting speed if large, or full
             df = pd.read_csv(ds_path, header=None, names=['v'])
             
-            plt.figure(figsize=(10, 6))
+            # Calculate statistics
+            stats_text = (
+                f"Count (N): {len(df)}\n"
+                f"Min: {df['v'].min()}\n"
+                f"Max: {df['v'].max()}\n"
+                f"Mean: {df['v'].mean():.2f}\n"
+                f"Std Dev: {df['v'].std():.2f}\n"
+                f"Skew: {df['v'].skew():.2f}\n"
+                f"Kurtosis: {df['v'].kurt():.2f}"
+            )
+
+            plt.figure(figsize=(12, 7))
+            
+            # Plot Histogram
             plt.hist(df['v'], bins=100, color='skyblue', edgecolor='black', alpha=0.7)
+            
             plt.title(f"Distribution: {dist}")
             plt.xlabel("Value")
             plt.ylabel("Frequency")
             plt.grid(axis='y', alpha=0.5)
             
+            # Add text box with statistics
+            plt.gcf().text(0.75, 0.5, stats_text, fontsize=10, 
+                           bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray'))
+            
+            # Adjust layout to make room for text if needed (though .text with gcf coordinates overlays)
+            plt.subplots_adjust(right=0.7) # Make room on the right for the stats box if we used axes coordinates, but here checking visuals
+            
             out_path = plot_dir / f"dist_{dist}.png"
-            plt.savefig(out_path)
+            plt.savefig(out_path, bbox_inches='tight') # bbox_inches=tight helps save the extra text
             plt.close()
             print(f"Saved plot to {out_path}")
             
