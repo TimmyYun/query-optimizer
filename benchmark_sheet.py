@@ -14,7 +14,7 @@ from models.evaluation import summarize
 def run_benchmark():
     distributions = ['uniform', 'normal', 'zipf', 'sparse_cluster', 'anti_zipf']
     rows = 1_000_000
-    eval_n = 1000
+    eval_n = 100_000
     seed = 42
     rnd = np.random.default_rng(seed)
     
