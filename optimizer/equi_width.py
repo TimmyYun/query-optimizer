@@ -1,7 +1,7 @@
 from typing import List
 import numpy as np
 import math
-from .core import Bucket
+from .core import Bucket, RangeQuery
 
 def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bins_max: int) -> int:
     if sample.size < 10: return 10
@@ -53,3 +53,14 @@ def make_equiwidth_buckets(mn: int, mx: int, bins: int, freq: np.ndarray, ndv_th
         cur = hi + 1
         if cur > mx: break
     return buckets
+
+def predict_range_histogram_uniform(q: RangeQuery, buckets: List[Bucket]) -> float:
+    total = 0.0
+    for b in buckets:
+        ov_lo = max(q.low, b.lo)
+        ov_hi = min(q.high, b.hi)
+        if ov_lo <= ov_hi:
+            w = b.hi - b.lo + 1
+            frac = (ov_hi - ov_lo + 1) / w
+            total += frac * b.count
+    return total

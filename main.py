@@ -10,8 +10,9 @@ from optimizer.core import Bucket, RangeQuery
 # New Modular Imports
 from optimizer.core import Bucket, RangeQuery
 from optimizer.datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample, load_imdb_lengths, load_census_age
-from optimizer.histograms import make_equiwidth_buckets, freedman_diaconis_bins
-from optimizer.models import collect_cdf_training_rows, train_cdf_models, predict_range_hybrid_cdf, predict_range_histogram_uniform, EquiHistLearner
+from optimizer.equi_width import make_equiwidth_buckets, freedman_diaconis_bins, predict_range_histogram_uniform
+from optimizer.equi_hist import EquiHistLearner
+from optimizer.hybrid import collect_cdf_training_rows, train_cdf_models, predict_range_hybrid_cdf
 from optimizer.evaluation import identify_bad_buckets, summarize
 
 def main():
