@@ -3,31 +3,70 @@ import csv
 from pathlib import Path
 from typing import List
 
+"""
+Workload Module
+===============
+
+This module handles the generation, storage, and retrieval of workload queries used for benchmarking.
+A workload consists of a set of Range Queries.
+
+Key Responsibilities:
+1. Query Representation: Defines the `RangeQuery` class.
+2. Workload Generation: Generates random range queries based on dataset domain and size.
+3. Persistence: Saves and loads workloads to/from CSV files to ensure consistent evaluation across runs.
+"""
+
 class RangeQuery:
+    """
+    Represents a selection range query [low, high] (inclusive).
+    """
     def __init__(self, low: int, high: int):
         self.low = low
         self.high = high
 
     def to_dict(self):
+        """Returns the query as a dictionary."""
         return {"low": int(self.low), "high": int(self.high)}
 
     @staticmethod
     def from_dict(d):
+        """Creates a RangeQuery instance from a dictionary."""
         return RangeQuery(int(d["low"]), int(d["high"]))
 
 def generate_workload(n: int, mn: int, mx: int, seed: int = 42) -> List[RangeQuery]:
+    """
+    Generates a list of random range queries.
+
+    Args:
+        n (int): Number of queries to generate.
+        mn (int): Minimum value of the domain.
+        mx (int): Maximum value of the domain.
+        seed (int): Random seed for reproducibility.
+
+    Returns:
+        List[RangeQuery]: A list of generated RangeQuery objects.
+    """
     rng = np.random.default_rng(seed)
     queries = []
     width = mx - mn
     for _ in range(n):
         l = rng.integers(mn, mx)
-        # Random width up to 5% of domain
-        w = rng.integers(1, max(10, width // 20)) 
+        # Random width up to 5% of domain, with a minimum width of 1
+        max_width = max(10, width // 20)
+        w = rng.integers(1, max_width) 
         r = min(mx, l + w)
         queries.append(RangeQuery(l, r))
     return queries
 
 def save_workload_csv(queries: List[RangeQuery], output_path: Path):
+    """
+    Saves a list of RangeQuery objects to a CSV file.
+    Format: low,high
+
+    Args:
+        queries (List[RangeQuery]): List of queries to save.
+        output_path (Path): Destination CSV path.
+    """
     with open(output_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(["low", "high"])
@@ -35,6 +74,15 @@ def save_workload_csv(queries: List[RangeQuery], output_path: Path):
             writer.writerow([q.low, q.high])
 
 def load_workload_csv(input_path: Path) -> List[RangeQuery]:
+    """
+    Loads a list of RangeQuery objects from a CSV file.
+
+    Args:
+        input_path (Path): Path to the CSV file.
+
+    Returns:
+        List[RangeQuery]: Loaded queries.
+    """
     queries = []
     with open(input_path, "r") as f:
         reader = csv.DictReader(f)
@@ -43,6 +91,11 @@ def load_workload_csv(input_path: Path) -> List[RangeQuery]:
     return queries
 
 def main():
+    """
+    Main execution entry point for independent workload generation.
+    Generates standard workloads (1k, 100k, 1M queries) in the `workload/` directory.
+    Uses a standard domain of [0, 200,000] to match the default dataset generation parameters.
+    """
     workload_dir = Path("workload")
     workload_dir.mkdir(parents=True, exist_ok=True)
     

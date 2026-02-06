@@ -8,14 +8,43 @@ import pickle
 from pathlib import Path
 from typing import Tuple, List
 
+"""
+Datasets Module
+===============
+
+This module handles the generation, storage, and statistical analysis of datasets used for benchmarking
+query optimizer cardinality estimation strategies.
+
+Key Responsibilities:
+1. Data Generation: Generates synthetic data (Uniform, Normal, Zipf, etc.) or loads real-world data (IMDB, Census).
+2. Statistical Analysis: Computes metadata like Min, Max, Count, NDV, Skewness, Kurtosis.
+3. Visualization: Generates histograms and boxplots for data distributions and error metrics.
+4. Dataset Management: Manages directory structures and file persistence/caching.
+"""
+
 # ==========================================
 # Data Utils
 # ==========================================
 
 def clamp_int(x, lo, hi):
+    """Clamps an integer x between lo and hi (inclusive)."""
     return int(min(max(int(round(x)), lo), hi))
 
 def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, shift: int = 0) -> np.ndarray:
+    """
+    Generates an array of integer values according to a specified distribution.
+
+    Args:
+        rng (np.random.Generator): Random number generator instance.
+        dist (str): Distribution type ("uniform", "normal", "zipf", "sparse_cluster", "anti_zipf").
+        n (int): Number of values to generate.
+        lo (int): Lower bound of the value domain.
+        hi (int): Upper bound of the value domain.
+        shift (int): Shift applied to the distribution (used for drift simulation).
+
+    Returns:
+        np.ndarray: Array of generated integer values.
+    """
     mid = 0.5 * (lo + hi) + shift
     span = max(1, hi - lo)
 
@@ -26,6 +55,7 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
     elif dist == "zipf":
         v = lo + shift + rng.zipf(2.0, size=n)
     elif dist == "sparse_cluster":
+        # Create 10 dense clusters
         centers = rng.integers(lo, hi, size=10) + shift
         v = []
         for c in centers:
@@ -37,20 +67,42 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
                 v.append(rng.integers(lo+shift, hi+shift+1, size=n//10))
         v = np.concatenate(v)
     elif dist == "anti_zipf":
+        # Uniform distribution over a small subset of the domain
         v = rng.integers(lo + shift, lo + shift + 20000, size=n)
     else:
+        # Default fallback to uniform
         v = rng.integers(lo, hi + 1, size=n)
         
     if n == 0: return np.array([], dtype=np.int64)
+    
+    # Ensure all values are strictly within the global domain limits [0, 200_000]
     v = np.vectorize(lambda x: clamp_int(x, 0, 200_000))(v)
     return v.astype(np.int64)
 
 def save_csv_column(values: np.ndarray, path: Path, mode='w'):
+    """
+    Saves a numpy array as a single-column CSV file without a header.
+    
+    Args:
+        values (np.ndarray): Data to save.
+        path (Path): Destination file path.
+        mode (str): File open mode ('w' for write/overwrite, 'a' for append).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     df = pd.Series(values)
     df.to_csv(path, index=False, header=False, mode=mode)
 
 def scan_min_max_count(csv_path: Path, chunksize: int = 1_000_000) -> Tuple[int, int, int]:
+    """
+    Efficiently scans a large CSV file to find the minimum value, maximum value, and total count.
+    
+    Args:
+        csv_path (Path): Path to the CSV file.
+        chunksize (int): Number of rows to process at a time.
+
+    Returns:
+        Tuple[int, int, int]: (min_val, max_val, count)
+    """
     mn, mx, n = None, None, 0
     for ch in pd.read_csv(csv_path, header=None, names=["v"], dtype="int64", chunksize=chunksize, engine="c"):
         v = ch["v"].to_numpy()
@@ -63,6 +115,22 @@ def scan_min_max_count(csv_path: Path, chunksize: int = 1_000_000) -> Tuple[int,
     return mn, mx, n
 
 def build_frequency_and_sample(csv_path: Path, mn: int, mx: int, n_rows: int, sample_size: int, seed: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Scans the dataset to build an exact frequency histogram and collect a reservoir sample.
+
+    Args:
+        csv_path (Path): Path to the CSV dataset.
+        mn (int): Minimum value in the dataset (for offset calculation).
+        mx (int): Maximum value in the dataset.
+        n_rows (int): Total expected number of rows (used for sampling probability).
+        sample_size (int): Target size for the reservoir sample.
+        seed (int): Random seed for sampling.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]:
+            - freq: Exact frequency counts for each value in the range [mn, mx].
+            - sample: A random sample of values from the dataset.
+    """
     width = mx - mn + 1
     if width <= 0: return np.array([]), np.array([])
     freq = np.zeros(width, dtype=np.int64)
@@ -73,10 +141,14 @@ def build_frequency_and_sample(csv_path: Path, mn: int, mx: int, n_rows: int, sa
     for ch in pd.read_csv(csv_path, header=None, names=["v"], dtype="int64", chunksize=1_000_000, engine="c"):
         vals = ch["v"].to_numpy()
         idx = vals - mn
+        
+        # Update exact frequencies
         m = (idx >= 0) & (idx < width)
         valid_idx = idx[m]
         if valid_idx.size:
             freq += np.bincount(valid_idx, minlength=width)
+            
+        # Reservoir sampling step
         if p > 0 and len(sampled) < sample_size:
             mask = rng.random(vals.size) < p
             s = vals[mask]
@@ -91,6 +163,7 @@ def build_frequency_and_sample(csv_path: Path, mn: int, mx: int, n_rows: int, sa
     return freq, sample
 
 def load_imdb_lengths(csv_path: Path) -> np.ndarray:
+    """Loads review lengths from the IMDB dataset."""
     try:
         df = pd.read_csv(csv_path)
         col = "review" if "review" in df.columns else df.columns[0]
@@ -101,6 +174,7 @@ def load_imdb_lengths(csv_path: Path) -> np.ndarray:
         return np.array([], dtype=np.int64)
 
 def load_census_age(csv_path: Path) -> np.ndarray:
+    """Loads age data ('dAge') from the US Census dataset."""
     try:
         df = pd.read_csv(csv_path, usecols=['dAge'])
         return df['dAge'].to_numpy().astype(np.int64)
@@ -113,19 +187,26 @@ def load_census_age(csv_path: Path) -> np.ndarray:
 # ==========================================
 
 def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bins_max: int = 2000) -> int:
+    """
+    Calculates the optimal number of bins for a histogram using the Freedman-Diaconis rule.
+    
+    The rule uses the Interquartile Range (IQR) to be robust to outliers.
+    """
     if sample.size < 10: return 10
     q25, q75 = np.quantile(sample, [0.25, 0.75])
     iqr = q75 - q25
     if iqr <= 0: return 10
+    
     bin_width = 2 * iqr / (n_rows ** (1/3))
     total_width = mx - mn
+    
     if bin_width <= 0: return 10
     return max(1, min(int(total_width / bin_width), bins_max))
 
 def calculate_skew_kurt(csv_path: Path) -> Tuple[float, float]:
+    """Calculates skewness and kurtosis of the dataset."""
     try:
-        # For performance with large files, we should probably chunk this or use sampling, 
-        # but maintaining compatibility for now.
+        # Note: Reading simple CSV for skew/kurt. For huge files, this might be slow.
         df = pd.read_csv(csv_path, header=None, names=["v"], dtype="int64")
         return float(df["v"].skew()), float(df["v"].kurt())
     except Exception as e:
@@ -133,6 +214,7 @@ def calculate_skew_kurt(csv_path: Path) -> Tuple[float, float]:
         return 0.0, 0.0
 
 def calculate_ndv(csv_path: Path):
+    """Calculates the Number of Distinct Values (NDV) in the dataset."""
     seen = np.zeros(200_001, dtype=bool)
     try:
         for chunk in pd.read_csv(csv_path, header=None, names=["v"], dtype="int64", chunksize=1_000_000, engine="c"):
@@ -145,6 +227,7 @@ def calculate_ndv(csv_path: Path):
         return 0
 
 def save_stats(stats: dict, output_path: Path):
+    """Saves a dictionary of statistics to a JSON file."""
     with open(output_path, "w") as f:
         json.dump(stats, f, indent=4)
 
@@ -153,6 +236,14 @@ def save_stats(stats: dict, output_path: Path):
 # ==========================================
 
 def plot_data_distribution(vals, dist_name, output_path):
+    """
+    Plots a histogram of the data distribution.
+    
+    Args:
+        vals (np.ndarray): The full dataset or a large sample.
+        dist_name (str): Name of the distribution (e.g., "Zipf").
+        output_path (Path): Path to save the PNG plot.
+    """
     print(f"Plotting distribution for {dist_name} to {output_path}...")
     plot_vals = np.random.choice(vals, min(len(vals), 1_000_000), replace=False)
     stats_text = (f"Count (N): {len(vals)}\nMin: {np.min(vals)}\nMax: {np.max(vals)}\n"
@@ -173,6 +264,10 @@ def plot_data_distribution(vals, dist_name, output_path):
     plt.close()
 
 def generate_boxplots(csv_path, output_path, title="Q-Error Distribution"):
+    """
+    Generates faceted boxplots for Q-Error distributions across multiple models and data distributions.
+    Expects a DataFrame with columns: 'Model', 'QErr', 'Distribution'.
+    """
     print(f"Loading data from {csv_path}...")
     df = pd.read_csv(csv_path)
     if df.empty: return
@@ -187,6 +282,9 @@ def generate_boxplots(csv_path, output_path, title="Q-Error Distribution"):
     print(f"Faceted boxplot saved to {output_path}")
 
 def plot_model_comparison(csv_path: str, output_path: str, title: str):
+    """
+    Generates a single boxplot comparing models for a specific experiment scenario.
+    """
     df = pd.read_csv(csv_path)
     if df.empty: return
     
@@ -207,13 +305,37 @@ def plot_model_comparison(csv_path: str, output_path: str, title: str):
 # ==========================================
 
 class DatasetManager:
+    """
+    Manages the lifecycle of datasets, including generation, caching, and retrieval.
+    """
     def __init__(self, base_path: str = "data"):
         self.base_path = Path(base_path)
 
     def get_dataset_dir(self, rows: int, dist: str) -> Path:
+        """Returns the structured directory path for a specific dataset configuration."""
         return self.base_path / "generated" / str(rows) / dist
 
     def prepare_dataset(self, rows: int, dist: str, force_regeneration: bool = False):
+        """
+        Orchestrates the creation of a dataset.
+        
+        Steps:
+        1. Checks if dataset exists. If so, returns early (unless force_regeneration=True).
+        2. Generates values based on distribution.
+        3. Saves data to CSV.
+        4. Calculates statistics (Min, Max, Skew, Kurtosis, NDV).
+        5. Saves statistics to JSON.
+        6. Saves a pickle metadata file for fast loading.
+        7. Generates a distribution plot.
+
+        Args:
+            rows (int): Number of rows to generate.
+            dist (str): Distribution type.
+            force_regeneration (bool): If True, overwrites existing data.
+
+        Returns:
+            Path: The directory containing the generated dataset and metadata.
+        """
         ds_dir = self.get_dataset_dir(rows, dist)
         ds_dir.mkdir(parents=True, exist_ok=True)
         
@@ -270,6 +392,11 @@ class DatasetManager:
 import time
 
 def main():
+    """
+    Batch generation entry point.
+    Generates datasets for predefined distributions (uniform, normal, zipf, etc.)
+    and row counts (1M, 10M, 60M).
+    """
     rows_list = [1_000_000, 10_000_000, 60_000_000]
     distributions = ["uniform", "normal", "zipf", "sparse_cluster", "anti_zipf"]
     
