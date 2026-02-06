@@ -90,7 +90,47 @@ class EquiWidthHistogram:
                      cur = hi + 1
                      if cur > mid_mx: break
                      
-        return EquiWidthHistogram(pb + mid_buckets + sb)
+    @staticmethod
+    def build_from_sample(mn: int, mx: int, bins: int, sample: np.ndarray, total_rows: int) -> 'EquiWidthHistogram':
+        """
+        Builds a histogram using a reservoir sample (Postgres-like).
+        Estimates bucket counts based on the sample's distribution.
+        """
+        if len(sample) == 0: return EquiWidthHistogram([])
+        
+        sample_size = len(sample)
+        scale_factor = total_rows / sample_size if sample_size > 0 else 0
+        
+        width = mx - mn + 1
+        if bins <= 0: bins = 1
+        bw = max(1, int(math.ceil(width / bins)))
+        
+        buckets = []
+        cur = mn
+        
+        # Pre-sort sample for faster counting (or just use range queries if small)
+        # Using numpy searchsorted is efficient since we scan linearly
+        sample_sorted = np.sort(sample)
+        
+        for _ in range(bins):
+            lo = cur
+            hi = min(mx, lo + bw - 1)
+            
+            # Count elements in sample within [lo, hi]
+            # searchsorted returns index where element would be inserted to maintain order
+            # left side (lo) is inclusive, right side (hi) is inclusive
+            idx_start = np.searchsorted(sample_sorted, lo, side='left')
+            idx_end = np.searchsorted(sample_sorted, hi, side='right')
+            
+            count_in_sample = idx_end - idx_start
+            estimated_count = int(count_in_sample * scale_factor)
+            
+            buckets.append(Bucket(lo, hi, count=estimated_count))
+            
+            cur = hi + 1
+            if cur > mx: break
+            
+        return EquiWidthHistogram(buckets)
 
     def predict(self, q: RangeQuery) -> float:
         total = 0.0
@@ -237,5 +277,7 @@ def summarize(y_true, y_pred, name="Model"):
     qe = q_error_vec(y_true, y_pred)
     med = float(np.median(qe))
     p95 = float(np.percentile(qe, 95))
-    print(f"[{name}] Median QErr={med:.4f}, P95 QErr={p95:.4f}")
-    return {"name": name, "QErr_median": med, "QErr_p95": p95}
+    avg = float(np.mean(qe))
+    print(f"[{name}] Median QErr={med:.4f}, P95 QErr={p95:.4f}, Avg QErr={avg:.4f}")
+    return {"name": name, "QErr_median": med, "QErr_p95": p95, "QErr_avg": avg}
+

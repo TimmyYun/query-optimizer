@@ -143,7 +143,8 @@ def _run_experiment_internal(args):
     # This represents a traditional database histogram.
     t0_hist = time.perf_counter()
     # Refactored: Use Class Builder to create the histogram
-    ew_hist = EquiWidthHistogram.build(mn, mx, n_bins, freq)
+    # Using Sample-Based Construction (Postgres-like)
+    ew_hist = EquiWidthHistogram.build_from_sample(mn, mx, n_bins, sample, N)
     buckets_eq_width = ew_hist.buckets # Access buckets for other models to use as a base
     t_hist_build = time.perf_counter() - t0_hist
     
@@ -179,11 +180,21 @@ def _run_experiment_internal(args):
     skipped_count = 0
     
     for q in all_queries:
-        li, ri = q.low - mn, q.high - mn
-        if li < 0: li=0
-        if ri >= len(ps): ri = len(ps)-1
-        truth = int(ps[ri] - (ps[li-1] if li > 0 else 0))
+        li = int(q.low - mn)
+        ri = int(q.high - mn)
         
+        # Robust check for out-of-bounds
+        if ri < 0 or li >= len(ps):
+            truth = 0
+        else:
+            if li < 0: li = 0
+            if ri >= len(ps): ri = len(ps) - 1
+            
+            if li > ri:
+                truth = 0
+            else:
+                truth = int(ps[ri] - (ps[li-1] if li > 0 else 0))
+                
         if truth > 0:
             queries.append(q)
         else:
@@ -222,10 +233,19 @@ def _run_experiment_internal(args):
     t_eh_update_p1 = 0.0
     t_eh_inf_p1 = 0.0
     for q in queries:
-        li, ri = q.low - mn, q.high - mn
-        if li < 0: li=0
-        if ri >= len(ps): ri = len(ps)-1
-        truth = int(ps[ri] - (ps[li-1] if li > 0 else 0))
+        li = int(q.low - mn)
+        ri = int(q.high - mn)
+        
+        if ri < 0 or li >= len(ps):
+            truth = 0
+        else:
+            if li < 0: li = 0
+            if ri >= len(ps): ri = len(ps) - 1
+            if li > ri:
+                truth = 0
+            else:
+                truth = int(ps[ri] - (ps[li-1] if li > 0 else 0))
+                
         y_true.append(truth / N)
         
         # EquiHist Predict + Update
@@ -293,6 +313,41 @@ def _run_experiment_internal(args):
          df_results.to_csv(result_file, index=False)
          print(f"Detailed results saved to {result_file}")
          
+         # Save Summary JSON for Aggregation
+         summary_data = {
+             "row_count": args.rows,
+             "distribution": args.dist,
+             "workload_size": args.eval_n,
+             "metrics": {
+                 "Equi-Width": {
+                     "build_time": t_hist_build,
+                     "infer_time": t_base_inf,
+                     "avg_q_error": m_hist_w['QErr_avg'],
+                     "p95_q_error": m_hist_w['QErr_p95']
+                 },
+                 "Hybrid": {
+                     "build_time": t_ml_train, # Includes hist build implicitly if we consider full pipeline, but t_ml_train is mostly training. 
+                                               # However, Hybrid uses buckets_eq_width which took t_hist_build. 
+                                               # Let's sum them for fairness or keep distinct? User asked for "Build (s)".
+                                               # Usually Hybrid Build = Hist Build + ML Train.
+                     "build_time_total": t_hist_build + t_ml_train,
+                     "infer_time": t_hyb_inf,
+                     "avg_q_error": m_hyb['QErr_avg'],
+                     "p95_q_error": m_hyb['QErr_p95']
+                 },
+                 "EquiHist": {
+                     "build_time": t_eh_init_total,
+                     "infer_time": t_eh_inf_p1,
+                     "avg_q_error": m_eh_init['QErr_avg'],
+                     "p95_q_error": m_eh_init['QErr_p95']
+                 }
+             }
+         }
+         
+         with open(result_dir / "summary.json", "w") as f:
+             json.dump(summary_data, f, indent=4)
+         print(f"Summary stats saved to {result_dir / 'summary.json'}")
+         
          # Generate Plot
          plot_q_error_boxplots(result_file, result_dir)
          return
@@ -333,10 +388,19 @@ def _run_experiment_internal(args):
     t_eh_update_p2 = 0.0
     
     for q in queries:
-        li, ri = q.low - mn_new, q.high - mn_new
-        if li < 0: li=0
-        if ri >= len(ps_new): ri = len(ps_new)-1
-        truth = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
+        li = int(q.low - mn_new)
+        ri = int(q.high - mn_new)
+        
+        if ri < 0 or li >= len(ps_new):
+            truth = 0
+        else:
+            if li < 0: li = 0
+            if ri >= len(ps_new): ri = len(ps_new) - 1
+            if li > ri:
+                truth = 0
+            else:
+                truth = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
+                
         actual_sel = truth / N_real
         y_true_seq.append(actual_sel)
         
