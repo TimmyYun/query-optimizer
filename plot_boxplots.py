@@ -4,7 +4,7 @@ import seaborn as sns
 import os
 from pathlib import Path
 
-def generate_boxplots(csv_path="static_errors.csv", output_path="plots/static_boxplots.png"):
+def generate_boxplots(csv_path="static_errors.csv", output_path="plots/static_boxplots.png", title="Q-Error Distribution"):
     # Try Parquet first, then CSV
     # If the user passed a specific path, use it. If default, check for parquet fallback.
     
@@ -50,7 +50,7 @@ def generate_boxplots(csv_path="static_errors.csv", output_path="plots/static_bo
     )
 
     plt.yscale("log")
-    plt.title("Q-Error Distribution by Model and Dataset (Static Benchmarks)", fontsize=16)
+    plt.title(title, fontsize=16)
     plt.ylabel("Q-Error (Log Scale)", fontsize=14)
     plt.xlabel("Distribution", fontsize=14)
     plt.legend(title="Model", bbox_to_anchor=(1.05, 1), loc='upper left')
