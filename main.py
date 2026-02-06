@@ -45,6 +45,7 @@ from datasets import (
 )
 from workload import RangeQuery, load_workload_csv
 import copy
+from aggregate_results import aggregate_summaries
 
 def plot_q_error_boxplots(result_csv_path, output_dir):
     """
@@ -492,6 +493,10 @@ def run_static_benchmark(args):
             print(f"Failed to run for {dist}: {e}")
             import traceback
             traceback.print_exc()
+            
+    # Auto-aggregate results at the end of the batch
+    print("\n>>> Aggregating All Results <<<")
+    aggregate_summaries(args.out_dir)
 
 def run_drift_benchmark(args):
     """

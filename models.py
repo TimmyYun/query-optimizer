@@ -3,7 +3,7 @@ import math
 import time
 from typing import List, Dict, Tuple, Optional, Any, Set
 from dataclasses import dataclass
-from sklearn.isotonic import IsotonicRegression
+from sklearn.linear_model import Ridge
 
 # -----------------------------------------------------------------------------
 # Core Data Structures
@@ -228,10 +228,11 @@ class HybridEstimator:
             if not rlist:
                 models[i] = None
                 continue
-            X = np.array([r.x_norm for r in rlist])
+            X = np.array([r.x_norm for r in rlist]).reshape(-1, 1)
             y = np.array([r.y_cdf for r in rlist])
             t0 = time.perf_counter()
-            mdl = IsotonicRegression(y_min=0.0, y_max=1.0, increasing=True, out_of_bounds='clip')
+            # Ridge Regression with positive constraint approximation
+            mdl = Ridge(alpha=1.0) 
             mdl.fit(X, y)
             train_time += (time.perf_counter() - t0)
             models[i] = mdl
@@ -239,7 +240,9 @@ class HybridEstimator:
 
     def _predict_local_cdf(self, model, x_norm) -> float:
         if model is None: return max(0.0, min(1.0, x_norm))
-        return float(model.transform([x_norm])[0])
+        # Ensure prediction is within [0, 1]
+        pred = model.predict([[x_norm]])[0]
+        return max(0.0, min(1.0, float(pred)))
 
     def _get_bucket_overlap_count(self, b_idx: int, q_lo: int, q_hi: int) -> float:
         b = self.buckets[b_idx]
