@@ -4,15 +4,15 @@ import numpy as np
 from pathlib import Path
 from datasets import scan_min_max_count, build_frequency_and_sample, freedman_diaconis_bins
 
-def calculate_stats():
-    distributions = ['uniform', 'normal', 'zipf', 'sparse_cluster', 'anti_zipf']
-    cache_dir = Path("datasets/files/generated")
+def calculate_stats(rows=10000000):
+    distributions = ['uniform', 'normal', 'zipf', 'exponential', 'lognormal']
+    cache_dir = Path("datasets/files/generated") / str(rows)
     
     stats_list = []
     
     for dist in distributions:
         print(f"Processing {dist}...")
-        ds_path = cache_dir / f"bench_{dist}.csv"
+        ds_path = cache_dir / f"data_initial_{dist}.csv"
         
         if not ds_path.exists():
             print(f"Warning: {ds_path} not found. Skipping.")

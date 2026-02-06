@@ -57,7 +57,7 @@ def main():
     7. Saves metrics and timings to JSON artifacts.
     """
     parser = argparse.ArgumentParser(description="Run Query Optimizer Benchmark")
-    parser.add_argument("--mode", type=str, choices=["single", "static", "drift"], default="single", help="Experiment mode")
+    parser.add_argument("--mode", type=str, choices=["static", "drift"], default="static", help="Experiment mode")
     parser.add_argument("--dist", type=str, default="zipf")
     parser.add_argument("--rows", type=int, default=1_000_000)
     parser.add_argument("--drift-rows", type=int, default=200_000)
@@ -75,14 +75,12 @@ def main():
     
     args = parser.parse_args()
     
-    if args.mode == "single":
-        run_single_experiment(args)
-    elif args.mode == "static":
+    if args.mode == "static":
         run_static_benchmark(args)
     elif args.mode == "drift":
         run_drift_benchmark(args)
 
-def run_single_experiment(args):
+def _run_experiment_internal(args):
     rng = np.random.default_rng(42)
     Path(args.out_dir).mkdir(parents=True, exist_ok=True)
     
@@ -563,7 +561,7 @@ def run_static_benchmark(args):
         # let's just use it and then read its output.
         
         try:
-            run_single_experiment(dist_args)
+            _run_experiment_internal(dist_args)
             
             # Read back summary
             with open(Path(dist_args.out_dir) / "summary.json", "r") as f:
@@ -650,9 +648,9 @@ def run_drift_benchmark(args):
         scenario_args.out_dir = str(output_dir / scenario_name)
         
         try:
-            run_single_experiment(scenario_args)
+            _run_experiment_internal(scenario_args)
             
-            with open(Path(scenario_args.out_dir) / "drift_summary.json", "r") as f:
+            with open(Path(scenario_args.out_dir) / "summary.json", "r") as f:
                 res = json.load(f)
                 
             metrics = res["metrics"]
@@ -675,17 +673,6 @@ def run_drift_benchmark(args):
     df_summary = pd.DataFrame(all_results)
     df_summary.to_excel(excel_path, index=False)
     print(f"\nFinal Drift Summary saved to {excel_path}")
-    
-    return drift_pkg, {
-        "Distribution": args.dist,
-        "Rows": args.rows,
-        "Min": mn,
-        "Max": mx,
-        "NDV": N, # Assuming N is count, but user stats often mean NDV. scan_min_max_count returns count as N.
-        "Skewness": skew,
-        "Kurtosis": kurt,
-        "Bin Count (k)": n_bins
-    }
 
 if __name__ == "__main__":
     main()
