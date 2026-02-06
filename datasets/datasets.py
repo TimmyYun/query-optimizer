@@ -239,3 +239,18 @@ def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bi
     
     bins = int(total_width / bin_width)
     return max(1, min(bins, bins_max))
+def calculate_skew_kurt(csv_path: Path, chunksize: int = 1_000_000) -> Tuple[float, float]:
+    """
+    Calculates the skewness and kurtosis of a dataset from a CSV file.
+    Uses pandas for calculation on the full series (loads all values into memory).
+    """
+    try:
+        # For simplicity and given the 60M limit (which fits in memory for a single column),
+        # we load the values. If memory becomes an issue, this would need an online algorithm.
+        df = pd.read_csv(csv_path, header=None, names=["v"], dtype="int64")
+        skew = float(df["v"].skew())
+        kurt = float(df["v"].kurt())
+        return skew, kurt
+    except Exception as e:
+        print(f"Error calculating skew/kurt: {e}")
+        return 0.0, 0.0

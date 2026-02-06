@@ -221,3 +221,6 @@ report.html
 .idea/misc.xml
 /.agent/rules/thesis-project-overview.md
 /experiments/results_section.tex
+
+*.xlsx
+*.meta.pkl

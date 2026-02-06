@@ -6,5 +6,6 @@ from .datasets import (
     build_frequency_and_sample,
     load_imdb_lengths,
     load_census_age,
-    freedman_diaconis_bins
+    freedman_diaconis_bins,
+    calculate_skew_kurt
 )

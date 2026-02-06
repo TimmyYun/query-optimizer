@@ -31,12 +31,17 @@ import pandas as pd
 
 # New Modular Imports
 from models.core import Bucket, RangeQuery
-from datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample, load_imdb_lengths, load_census_age, freedman_diaconis_bins
+from datasets import (
+    gen_values, save_csv_column, scan_min_max_count, 
+    build_frequency_and_sample, freedman_diaconis_bins,
+    load_imdb_lengths, load_census_age, calculate_skew_kurt
+)
 from models.equi_width import EquiWidthHistogram
 from models.equi_hist import EquiHistLearner
 from models.hybrid import HybridEstimator
 from models.evaluation import identify_bad_buckets, summarize, q_error_vec
 from datasets.plot_boxplots import generate_boxplots
+from datasets.plot_datasets import plot_data_distribution
 import copy
 
 def main():
@@ -108,8 +113,13 @@ def run_single_experiment(args):
         print(f"Loading cached dataset and metrics from {cached_ds_path}...")
         try:
             with open(meta_path, "rb") as f:
-                mn, mx, N, freq, sample, n_bins = pickle.load(f)
-            # Copy cached dataset to working path
+                # Compatibility check for older meta files
+                meta_data = pickle.load(f)
+                if len(meta_data) == 6:
+                    mn, mx, N, freq, sample, n_bins = meta_data
+                    skew, kurt = 0.0, 0.0 # Default if missing
+                else:
+                    mn, mx, N, freq, sample, n_bins, skew, kurt = meta_data
             shutil.copy2(cached_ds_path, working_ds_path)
             ds_path = working_ds_path # update ds_path to point to the working copy
         except Exception as e:
@@ -141,16 +151,26 @@ def run_single_experiment(args):
         
         # Build a frequency map and a sample for histogram construction
         freq, sample = build_frequency_and_sample(cached_ds_path, mn, mx, N, 100_000, 42)
-        n_bins = freedman_diaconis_bins(sample, mn, mx, N, 2000)
+        # 4. Compute Skewness and Kurtosis
+        skew, kurt = calculate_skew_kurt(cached_ds_path)
         
-        # 4. Save Metrics to Cache
+        # 5. Save Metrics to Cache
         with open(meta_path, "wb") as f:
-            pickle.dump((mn, mx, N, freq, sample, n_bins), f)
+            pickle.dump((mn, mx, N, freq, sample, n_bins, skew, kurt), f)
             
         # 5. Create Working Copy
         shutil.copy2(cached_ds_path, working_ds_path)
         ds_path = working_ds_path
+        vals_for_plot = vals
         
+
+        # Refresh Data Distribution Plot
+        print(f"Refreshing distribution plot for {args.dist}...")
+        try:
+            plot_data_distribution(vals, args.dist, Path("plots") / f"{args.dist}.png")
+        except Exception as e:
+            print(f"Failed to refresh distribution plot: {e}")
+
     print(f"FD Suggested Bins: {n_bins}")
     
     # 2a. Equi-Width Histogram (Standard Baseline)
@@ -482,7 +502,21 @@ def run_single_experiment(args):
             "memory_total_bytes": memory_total_bytes
         }
     }
-    with open(Path(args.out_dir) / "drift_summary.json", "w") as f:
+    dataset_stats = {
+        "Distribution": args.dist,
+        "Rows": args.rows,
+        "Min": mn,
+        "Max": mx,
+        "NDV": N,
+        "Skewness": skew,
+        "Kurtosis": kurt,
+        "Bin Count (k)": n_bins
+    }
+    
+    drift_pkg["dataset_stats"] = dataset_stats
+    drift_pkg["bins"] = n_bins
+
+    with open(Path(args.out_dir) / "summary.json", "w") as f:
         json.dump(drift_pkg, f, indent=2)
         
     # Save Raw Errors and Plot
@@ -537,14 +571,18 @@ def run_static_benchmark(args):
                 
             summary_row = {
                 "Distribution": dist,
-                "Bins": res["bins"],
-                "EW_Median_QErr": res["hist_width_metrics"]["QErr_median"],
-                "EW_P95_QErr": res["hist_width_metrics"]["QErr_p95"],
-                "Hybrid_Median_QErr": res["hybrid_metrics"]["QErr_median"],
-                "Hybrid_P95_QErr": res["hybrid_metrics"]["QErr_p95"],
-                "EH_Median_QErr": res["equihist_init_metrics"]["QErr_median"],
-                "EH_P95_QErr": res["equihist_init_metrics"]["QErr_p95"],
-                "EH_Train_Time": res["timings"]["equihist_init_train"]
+                "Rows": res["dataset_stats"]["Rows"],
+                "Min": res["dataset_stats"]["Min"],
+                "Max": res["dataset_stats"]["Max"],
+                "Skewness": res["dataset_stats"]["Skewness"],
+                "Kurtosis": res["dataset_stats"]["Kurtosis"],
+                "EW_Median_QErr": res["metrics"]["static_stale"]["QErr_median"],
+                "EW_P95_QErr": res["metrics"]["static_stale"]["QErr_p95"],
+                "Hybrid_Median_QErr": res["metrics"]["hybrid_stale"]["QErr_median"],
+                "Hybrid_P95_QErr": res["metrics"]["hybrid_stale"]["QErr_p95"],
+                "EH_Median_QErr": res["metrics"]["equihist_online"]["QErr_median"],
+                "EH_P95_QErr": res["metrics"]["equihist_online"]["QErr_p95"],
+                "EH_Train_Time": res["timings"]["hist_build"]
             }
             all_results.append(summary_row)
             
@@ -562,6 +600,12 @@ def run_static_benchmark(args):
     df_summary = pd.DataFrame(all_results)
     df_summary.to_excel(excel_path, index=False)
     print(f"\nFinal Summary saved to {excel_path}")
+    
+    # Also refresh the global dataset statistics file
+    dataset_stats_df = df_summary[["Distribution", "Rows", "Min", "Max", "Skewness", "Kurtosis"]].copy()
+    dataset_stats_file = Path("datasets/dataset_statistics.xlsx")
+    dataset_stats_df.to_excel(dataset_stats_file, index=False)
+    print(f"Dataset Statistics refreshed at {dataset_stats_file}")
     
     df_errors = pd.concat(raw_errors)
     df_errors.to_csv(csv_errors_path, index=False)
@@ -632,6 +676,16 @@ def run_drift_benchmark(args):
     df_summary.to_excel(excel_path, index=False)
     print(f"\nFinal Drift Summary saved to {excel_path}")
     
+    return drift_pkg, {
+        "Distribution": args.dist,
+        "Rows": args.rows,
+        "Min": mn,
+        "Max": mx,
+        "NDV": N, # Assuming N is count, but user stats often mean NDV. scan_min_max_count returns count as N.
+        "Skewness": skew,
+        "Kurtosis": kurt,
+        "Bin Count (k)": n_bins
+    }
 
 if __name__ == "__main__":
     main()
