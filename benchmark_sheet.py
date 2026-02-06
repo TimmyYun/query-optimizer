@@ -9,7 +9,7 @@ from models.equi_width import EquiWidthHistogram
 from models.equi_hist import EquiHistLearner
 from models.hybrid import HybridEstimator
 from datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample, freedman_diaconis_bins
-from models.evaluation import summarize
+from models.evaluation import summarize, q_error_vec
 
 def run_benchmark():
     distributions = ['uniform', 'normal', 'zipf', 'sparse_cluster', 'anti_zipf']
@@ -19,6 +19,7 @@ def run_benchmark():
     rnd = np.random.default_rng(seed)
     
     results = []
+    raw_errors = [] # List to store dicts: {'Distribution': dist, 'Model': model, 'QErr': val}
     
     # Ensure directories exist
     cache_dir = Path("datasets/files/generated")
@@ -48,7 +49,7 @@ def run_benchmark():
         # Model 1: Equi-Width
         # -----------------------------------
         t0 = time.perf_counter()
-        ew = EquiWidthHistogram.build(mn, mx, n_bins, freq, ndv_threshold=0)
+        ew = EquiWidthHistogram.build(mn, mx, n_bins, freq)
         t_build_ew = time.perf_counter() - t0
         
         # -----------------------------------
@@ -123,6 +124,19 @@ def run_benchmark():
         # -----------------------------------
         y_true = np.array(y_true)
         
+        # Store raw errors for plotting
+        q_ew = summarize(np.array(y_true), np.array(y_ew), "Equi-Width")
+        for val in q_error_vec(np.array(y_true), np.array(y_ew)):
+            raw_errors.append({'Distribution': dist, 'Model': 'Equi-Width', 'QErr': val})
+
+        q_hyb = summarize(np.array(y_true), np.array(y_hyb), "Hybrid")
+        for val in q_error_vec(np.array(y_true), np.array(y_hyb)):
+            raw_errors.append({'Distribution': dist, 'Model': 'Hybrid', 'QErr': val})
+            
+        q_eh = summarize(np.array(y_true), np.array(y_eh), "EquiHist")
+        for val in q_error_vec(np.array(y_true), np.array(y_eh)):
+            raw_errors.append({'Distribution': dist, 'Model': 'EquiHist', 'QErr': val})
+        
         def get_metrics(y_pred, name, build_time, inf_time):
             m = summarize(y_true, np.array(y_pred), name)
             return {
@@ -147,6 +161,12 @@ def run_benchmark():
     out_file = "static_benchmark_results.xlsx"
     df.to_excel(out_file, index=False)
     print(f"\nResults saved to {out_file}")
+    
+    # Save raw errors
+    print("Saving raw errors to static_errors.parquet...")
+    df_raw = pd.DataFrame(raw_errors)
+    df_raw.to_parquet("static_errors.parquet", index=False)
+    print("Raw errors saved to static_errors.parquet")
 
 if __name__ == "__main__":
     run_benchmark()
