@@ -4,21 +4,21 @@
     "workload_size": "100000_narrow",
     "metrics": {
         "Equi-Width": {
-            "build_time": 0.004293374999861044,
-            "infer_time": 5.345721041999923,
+            "build_time": 0.004771417000029032,
+            "infer_time": 5.67327937500022,
             "avg_q_error": 388.0879343364704,
             "p95_q_error": 1700.0
         },
         "Hybrid": {
-            "build_time": 0.00512796099951629,
-            "build_time_total": 0.009421335999377334,
-            "infer_time": 0.45716012499997305,
-            "avg_q_error": 406.64055863513033,
+            "build_time": 0.00640600199903929,
+            "build_time_total": 0.011177418999068323,
+            "infer_time": 0.5202329580001788,
+            "avg_q_error": 402.36164308243445,
             "p95_q_error": 1799.9999999999998
         },
         "EquiHist": {
-            "build_time": 8.891055155990443,
-            "infer_time": 5.44138932399278,
+            "build_time": 9.304782041982435,
+            "infer_time": 5.702432935003799,
             "avg_q_error": 62.69650512458274,
             "p95_q_error": 199.99999999999997
         }

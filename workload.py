@@ -96,12 +96,18 @@ def load_workload_csv(input_path: Path) -> List[RangeQuery]:
             queries.append(RangeQuery(int(row["low"]), int(row["high"])))
     return queries
 
+import argparse
+
 def main():
     """
     Main execution entry point for independent workload generation.
     Generates standard workloads (1k, 100k, 1M queries) in the `workload/` directory.
     Uses a standard domain of [0, 200,000] to match the default dataset generation parameters.
     """
+    parser = argparse.ArgumentParser(description="Generate workload queries.")
+    parser.add_argument("--narrow", action="store_true", help="Generate narrow workloads (max_width=500).")
+    args = parser.parse_args()
+
     workload_dir = Path("workload")
     workload_dir.mkdir(parents=True, exist_ok=True)
     
@@ -113,18 +119,13 @@ def main():
     query_counts = [1000, 100000, 1000000]
     
     for count in query_counts:
-        print(f"Generating independent workload: {count} queries for domain [{MN}, {MX}]...")
-        queries = generate_workload(count, MN, MX)
-        out_path = workload_dir / f"{count}.csv"
-        save_workload_csv(queries, out_path)
-        print(f"Saved to {out_path}")
-
-    # Generate Narrow Workloads (Stress Test)
-    narrow_counts = [1000, 100000]
-    for count in narrow_counts:
-        print(f"Generating NARROW workload: {count} queries (max_width=500)...")
-        queries = generate_workload(count, MN, MX, max_width=500)
-        out_path = workload_dir / f"{count}_narrow.csv"
+        max_w = 500 if args.narrow else None
+        label = "NARROW" if args.narrow else "standard"
+        suffix = "_narrow" if args.narrow else ""
+        
+        print(f"Generating {label} workload: {count} queries for domain [{MN}, {MX}]...")
+        queries = generate_workload(count, MN, MX, max_width=max_w)
+        out_path = workload_dir / f"{count}{suffix}.csv"
         save_workload_csv(queries, out_path)
         print(f"Saved to {out_path}")
 
