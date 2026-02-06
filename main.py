@@ -270,7 +270,7 @@ def _run_experiment_internal(args):
     # -----------------------------------------------------
     # Save Results
     # -----------------------------------------------------
-    result_dir = Path(f"results/{args.rows}/{args.dist}")
+    result_dir = Path(args.out_dir) / str(args.rows) / args.dist
     result_dir.mkdir(parents=True, exist_ok=True)
     
     # Save Detailed Results per Query
