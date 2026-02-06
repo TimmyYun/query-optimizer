@@ -193,6 +193,24 @@ def generate_boxplots(csv_path, output_path, title="Q-Error Distribution"):
     plt.close()
     print(f"Faceted boxplot saved to {output_path}")
 
+def plot_model_comparison(csv_path: str, output_path: str, title: str):
+    """
+    Plots a boxplot for a single distribution's models.
+    """
+    df = pd.read_csv(csv_path)
+    if df.empty: return
+    
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(data=df, x="Model", y="QErr", showfliers=False, palette="Set2")
+    plt.title(title)
+    plt.ylabel("Q-Error")
+    plt.yscale("log")
+    plt.grid(axis='y', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Single distribution boxplot saved to {output_path}")
+
 def calculate_ndv(csv_path: Path):
     """
     Calculates the Number of Distinct Values (NDV) using a bitmask (domain 0-200,000).

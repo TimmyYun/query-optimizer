@@ -39,7 +39,7 @@ from datasets import (
     gen_values, save_csv_column, scan_min_max_count, 
     build_frequency_and_sample, freedman_diaconis_bins,
     load_imdb_lengths, load_census_age, calculate_skew_kurt,
-    generate_boxplots, plot_data_distribution
+    generate_boxplots, plot_data_distribution, plot_model_comparison
 )
 import copy
 
@@ -167,7 +167,13 @@ def _run_experiment_internal(args):
         # Refresh Data Distribution Plot
         print(f"Refreshing distribution plot for {args.dist}...")
         try:
-            plot_data_distribution(vals, args.dist, Path("plots") / f"{args.dist}.png")
+            # If vals is not in memory (cached), load it for plotting
+            if 'vals' not in locals() or vals is None:
+                df_temp = pd.read_csv(ds_path, header=None, names=["v"])
+                vals_for_plot = df_temp["v"].to_numpy()
+            else:
+                vals_for_plot = vals
+            plot_data_distribution(vals_for_plot, args.dist, Path("plots") / f"{args.dist}.png")
         except Exception as e:
             print(f"Failed to refresh distribution plot: {e}")
 
@@ -529,13 +535,13 @@ def _run_experiment_internal(args):
     print(f"Saving raw errors to {csv_out}...")
     pd.DataFrame(raw_errors).to_csv(csv_out, index=False)
     
-    # plot_out = Path(args.out_dir) / "experiment_boxplots.png"
-    # print(f"Generating boxplots at {plot_out}...")
-    # generate_boxplots(
-    #     csv_path=str(csv_out), 
-    #     output_path=str(plot_out), 
-    #     title=f"Q-Error Distribution ({args.dist}, {args.rows} rows)"
-    # )
+    plot_out = Path(args.out_dir) / "experiment_boxplots.png"
+    print(f"Generating boxplots at {plot_out}...")
+    plot_model_comparison(
+        csv_path=str(csv_out), 
+        output_path=str(plot_out), 
+        title=f"Q-Error Distribution ({args.dist}, {args.rows} rows)"
+    )
 
 def run_static_benchmark(args):
     """
