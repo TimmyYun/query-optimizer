@@ -1,0 +1,62 @@
+{
+  "metrics": {
+    "static_stale": {
+      "name": "Static Equi-Width (Stale)",
+      "QErr_median": 7.908997771453715,
+      "QErr_p95": 427.24450035144866
+    },
+    "equihist_online": {
+      "name": "EquiHist (Online Adaptive)",
+      "QErr_median": 9.126133160490085,
+      "QErr_p95": 344.30426346092406
+    },
+    "hybrid_stale": {
+      "name": "Hybrid (Stale)",
+      "QErr_median": 8.138668205949937,
+      "QErr_p95": 37643034.82587057
+    },
+    "hybrid_repaired": {
+      "name": "Hybrid (Repaired)",
+      "QErr_median": 1.1673198932505136,
+      "QErr_p95": 27.725648079921957
+    },
+    "equihist_final": {
+      "name": "EquiHist (Final/Converged)",
+      "QErr_median": 14.420614404443896,
+      "QErr_p95": 344.30426346092406
+    },
+    "static_rebuilt": {
+      "name": "Static Equi-Width (Rebuilt)",
+      "QErr_median": 1.085273269306712,
+      "QErr_p95": 9.880386978853373
+    }
+  },
+  "timings": {
+    "hist_build": 0.0006262499991862569,
+    "ml_train": 0.0026125390068045817,
+    "static_inf": 5.358400085242465e-05,
+    "hybrid_inf": 0.0004363330008345656,
+    "repair": 0.0009432500010007061,
+    "static_rebuild": 0.02773712500129477,
+    "equihist_retrain": 8.903999878384639e-05,
+    "equihist_drift_inf": 4.512500163400546e-05,
+    "equihist_final_inf": 4.354099837655667e-05
+  },
+  "resources": {
+    "disk_bytes": 1392985,
+    "memory_buckets_bytes": 681,
+    "memory_models_bytes": 15534,
+    "memory_total_bytes": 16215
+  },
+  "dataset_stats": {
+    "Distribution": "normal",
+    "Rows": 1000,
+    "Min": 0,
+    "Max": 200000,
+    "NDV": 1000,
+    "Skewness": 0.0,
+    "Kurtosis": 0.0,
+    "Bin Count (k)": 23
+  },
+  "bins": 23
+}
