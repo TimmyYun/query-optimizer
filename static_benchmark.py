@@ -10,12 +10,12 @@ from models.equi_hist import EquiHistLearner
 from models.hybrid import HybridEstimator
 from datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample, freedman_diaconis_bins
 from models.evaluation import summarize, q_error_vec
-from plot_boxplots import generate_boxplots
+from datasets.plot_boxplots import generate_boxplots
 
 def run_benchmark():
     distributions = ['uniform', 'normal', 'zipf', 'sparse_cluster', 'anti_zipf']
-    rows = 60_000_000
-    eval_n = 100_000
+    rows = 1_000_000
+    eval_n = 1_000
     seed = 42
     rnd = np.random.default_rng(seed)
     
