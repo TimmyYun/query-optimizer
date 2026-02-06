@@ -14,8 +14,8 @@ from datasets.plot_boxplots import generate_boxplots
 
 def run_benchmark():
     distributions = ['uniform', 'normal', 'zipf', 'sparse_cluster', 'anti_zipf']
-    rows = 1_000_000
-    eval_n = 1_000
+    rows = 60_000_000
+    eval_n = 1_000_000
     seed = 42
     rnd = np.random.default_rng(seed)
     

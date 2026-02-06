@@ -34,7 +34,7 @@ from models.equi_width import EquiWidthHistogram
 from models.equi_hist import EquiHistLearner
 from models.hybrid import HybridEstimator
 from models.evaluation import identify_bad_buckets, summarize, q_error_vec
-from plot_boxplots import generate_boxplots
+from datasets.plot_boxplots import generate_boxplots
 
 def main():
     """
