@@ -1,0 +1,80 @@
+{
+  "metrics": {
+    "static_stale": {
+      "name": "Static Equi-Width (Stale)",
+      "QErr_median": 21428.571428571428,
+      "QErr_p95": 219999.9999999999
+    },
+    "equihist_online": {
+      "name": "EquiHist (Online Adaptive)",
+      "QErr_median": 28571.42857142857,
+      "QErr_p95": 4669310.344827583
+    },
+    "hybrid_stale": {
+      "name": "Hybrid (Stale)",
+      "QErr_median": 21428.571428571428,
+      "QErr_p95": 219999.9999999999
+    },
+    "hybrid_repaired": {
+      "name": "Hybrid (Repaired)",
+      "QErr_median": 1.0357142857142856,
+      "QErr_p95": 1.0545871691599544
+    },
+    "equihist_final": {
+      "name": "EquiHist (Final/Converged)",
+      "QErr_median": 30952.380952380954,
+      "QErr_p95": 4669310.344827583
+    },
+    "static_rebuilt": {
+      "name": "Static Equi-Width (Rebuilt)",
+      "QErr_median": 1.0044002534581815,
+      "QErr_p95": 1.2036651556721938
+    }
+  },
+  "hist_width_metrics": {
+    "name": "Equi-Width (Standard)",
+    "QErr_median": 1.0,
+    "QErr_p95": 1.0
+  },
+  "hybrid_metrics": {
+    "name": "Hybrid (Stale)",
+    "QErr_median": 21428.571428571428,
+    "QErr_p95": 219999.9999999999
+  },
+  "equihist_init_metrics": {
+    "name": "EquiHist (Initial Learning)",
+    "QErr_median": 1.0,
+    "QErr_p95": 575172.4137931025
+  },
+  "timings": {
+    "hist_build": 0.0026092089974554256,
+    "ml_train": 0.0039466190137318335,
+    "static_inf": 0.020712624998850515,
+    "hybrid_inf": 0.00494379199881223,
+    "repair": 0.0007499999992433004,
+    "static_rebuild": 0.028701749997708248,
+    "equihist_retrain": 0.026686704994062893,
+    "equihist_drift_inf": 0.020580787997459993,
+    "equihist_final_inf": 0.02017165501456475,
+    "equihist_init_train": 0.02521395897929324
+  },
+  "resources": {
+    "disk_bytes": 1407214,
+    "memory_buckets_bytes": 47312,
+    "memory_models_bytes": 16670,
+    "memory_total_bytes": 63982
+  },
+  "dataset_stats": {
+    "Distribution": "zipf",
+    "Rows": 10000,
+    "Min": 1,
+    "Max": 57105,
+    "NDV": 142,
+    "Skewness": 80.42188640331013,
+    "Kurtosis": 7050.300342311814,
+    "Bin Count (k)": 2000,
+    "Bin Width (h)": 28.552
+  },
+  "bins": 2000,
+  "bin_width": 28.552
+}

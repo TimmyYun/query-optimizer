@@ -1,0 +1,80 @@
+{
+  "metrics": {
+    "static_stale": {
+      "name": "Static Equi-Width (Stale)",
+      "QErr_median": 2.1907160524191527,
+      "QErr_p95": 20.472992448061998
+    },
+    "equihist_online": {
+      "name": "EquiHist (Online Adaptive)",
+      "QErr_median": 4.750309247415981,
+      "QErr_p95": 21.08587764160813
+    },
+    "hybrid_stale": {
+      "name": "Hybrid (Stale)",
+      "QErr_median": 2.2150351472233827,
+      "QErr_p95": 19.87772218332347
+    },
+    "hybrid_repaired": {
+      "name": "Hybrid (Repaired)",
+      "QErr_median": 1.0580715376565606,
+      "QErr_p95": 1.2066422736916829
+    },
+    "equihist_final": {
+      "name": "EquiHist (Final/Converged)",
+      "QErr_median": 12.51032012301078,
+      "QErr_p95": 21.039237988631108
+    },
+    "static_rebuilt": {
+      "name": "Static Equi-Width (Rebuilt)",
+      "QErr_median": 1.026543134242622,
+      "QErr_p95": 1.5438033174718062
+    }
+  },
+  "hist_width_metrics": {
+    "name": "Equi-Width (Standard)",
+    "QErr_median": 1.0388060175751084,
+    "QErr_p95": 1.1832497422351955
+  },
+  "hybrid_metrics": {
+    "name": "Hybrid (Stale)",
+    "QErr_median": 2.2150351472233827,
+    "QErr_p95": 19.87772218332347
+  },
+  "equihist_init_metrics": {
+    "name": "EquiHist (Initial Learning)",
+    "QErr_median": 1.0342529900422333,
+    "QErr_p95": 1.165883810346063
+  },
+  "timings": {
+    "hist_build": 0.000653125000098953,
+    "ml_train": 0.002599334991828073,
+    "static_inf": 0.00019458299721009098,
+    "hybrid_inf": 0.0037302919990906958,
+    "repair": 0.0007089999999152496,
+    "static_rebuild": 0.03181658299945411,
+    "equihist_retrain": 0.0005244989988568705,
+    "equihist_drift_inf": 0.0002424180092930328,
+    "equihist_final_inf": 0.00027570298698265105,
+    "equihist_init_train": 0.0011117519934487063
+  },
+  "resources": {
+    "disk_bytes": 1450890,
+    "memory_buckets_bytes": 628,
+    "memory_models_bytes": 20308,
+    "memory_total_bytes": 20936
+  },
+  "dataset_stats": {
+    "Distribution": "uniform",
+    "Rows": 10000,
+    "Min": 0,
+    "Max": 199992,
+    "NDV": 9760,
+    "Skewness": 0.024637036426228172,
+    "Kurtosis": -1.1903689322975537,
+    "Bin Count (k)": 21,
+    "Bin Width (h)": 9523.42857142857
+  },
+  "bins": 21,
+  "bin_width": 9523.42857142857
+}

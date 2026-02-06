@@ -1,0 +1,80 @@
+{
+  "metrics": {
+    "static_stale": {
+      "name": "Static Equi-Width (Stale)",
+      "QErr_median": 5.180925627120839,
+      "QErr_p95": 18.47356448065331
+    },
+    "equihist_online": {
+      "name": "EquiHist (Online Adaptive)",
+      "QErr_median": 8.939454277115733,
+      "QErr_p95": 20.15198394923861
+    },
+    "hybrid_stale": {
+      "name": "Hybrid (Stale)",
+      "QErr_median": 5.2389879805148105,
+      "QErr_p95": 20.175524193548384
+    },
+    "hybrid_repaired": {
+      "name": "Hybrid (Repaired)",
+      "QErr_median": 1.0333454980929746,
+      "QErr_p95": 1.2634221060443824
+    },
+    "equihist_final": {
+      "name": "EquiHist (Final/Converged)",
+      "QErr_median": 15.378458549177765,
+      "QErr_p95": 23.00103244681602
+    },
+    "static_rebuilt": {
+      "name": "Static Equi-Width (Rebuilt)",
+      "QErr_median": 1.0083111288124709,
+      "QErr_p95": 1.378496843286446
+    }
+  },
+  "hist_width_metrics": {
+    "name": "Equi-Width (Standard)",
+    "QErr_median": 1.0271005318865596,
+    "QErr_p95": 1.5547484296767244
+  },
+  "hybrid_metrics": {
+    "name": "Hybrid (Stale)",
+    "QErr_median": 5.2389879805148105,
+    "QErr_p95": 20.175524193548384
+  },
+  "equihist_init_metrics": {
+    "name": "EquiHist (Initial Learning)",
+    "QErr_median": 1.029499224322537,
+    "QErr_p95": 1.433260739648272
+  },
+  "timings": {
+    "hist_build": 0.0006278330001805443,
+    "ml_train": 0.005265880994556937,
+    "static_inf": 0.0004905420028080698,
+    "hybrid_inf": 0.00505962500028545,
+    "repair": 0.0010910000019066501,
+    "static_rebuild": 0.031993333002901636,
+    "equihist_retrain": 0.0012468709719541948,
+    "equihist_drift_inf": 0.0005974150080874097,
+    "equihist_final_inf": 0.000544573998922715,
+    "equihist_init_train": 0.0016505750245414674
+  },
+  "resources": {
+    "disk_bytes": 1451336,
+    "memory_buckets_bytes": 1363,
+    "memory_models_bytes": 40910,
+    "memory_total_bytes": 42273
+  },
+  "dataset_stats": {
+    "Distribution": "normal",
+    "Rows": 10000,
+    "Min": 0,
+    "Max": 200000,
+    "NDV": 9576,
+    "Skewness": -0.002001525751926918,
+    "Kurtosis": -0.03267799164143126,
+    "Bin Count (k)": 48,
+    "Bin Width (h)": 4166.666666666667
+  },
+  "bins": 48,
+  "bin_width": 4166.666666666667
+}

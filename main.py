@@ -36,10 +36,10 @@ from models import (
     identify_bad_buckets, summarize, q_error_vec
 )
 from datasets import (
-    gen_values, save_csv_column, scan_min_max_count, 
-    build_frequency_and_sample, freedman_diaconis_bins,
-    load_imdb_lengths, load_census_age, calculate_skew_kurt,
-    generate_boxplots, plot_data_distribution, plot_model_comparison
+    DatasetManager,
+    scan_min_max_count, build_frequency_and_sample,
+    generate_boxplots, plot_data_distribution, plot_model_comparison,
+    load_workload, gen_values, save_csv_column
 )
 import copy
 
@@ -91,91 +91,19 @@ def _run_experiment_internal(args):
     # -----------------------------------------------------
     print(f"=== Phase 1: Initial Build ({args.rows} rows, {args.dist}) ===")
     
-    # Define cache paths
-    cache_dir = Path("datasets/files/generated") / str(args.rows)
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    # Use DatasetManager for Stage 1 (Dataset + Stats)
+    dm = DatasetManager()
+    ds_dir = dm.prepare_dataset(args.rows, args.dist, force_regeneration=args.recreate)
     
-    cached_ds_path = cache_dir / f"data_initial_{args.dist}.csv"
-    meta_path = cache_dir / f"data_initial_{args.dist}.meta.pkl"
+    # Load dataset metadata
+    ds_path = ds_dir / "data.csv"
+    with open(ds_dir / "meta.pkl", "rb") as f:
+        mn, mx, N, freq, sample, n_bins, skew, kurt = pickle.load(f)
     
-    # Working copy for this specific run (to allow drift appending without corrupting cache)
+    # Create working copy for drift experiments
     working_ds_path = Path(args.out_dir) / "data_current_run.csv"
-    
-    # Check if we can load from cache
-    load_cache = False
-    if not args.recreate and cached_ds_path.exists() and meta_path.exists():
-        load_cache = True
-
-    if load_cache:
-        print(f"Loading cached dataset and metrics from {cached_ds_path}...")
-        try:
-            with open(meta_path, "rb") as f:
-                # Compatibility check for older meta files
-                meta_data = pickle.load(f)
-                if len(meta_data) == 6:
-                    mn, mx, N, freq, sample, n_bins = meta_data
-                    skew, kurt = 0.0, 0.0 # Default if missing
-                else:
-                    mn, mx, N, freq, sample, n_bins, skew, kurt = meta_data
-            shutil.copy2(cached_ds_path, working_ds_path)
-            ds_path = working_ds_path # update ds_path to point to the working copy
-        except Exception as e:
-            print(f"Failed to load cache: {e}. Regenerating...")
-            load_cache = False
-
-    if not load_cache:
-        print(f"Generating/Loading new dataset for {args.dist}...")
-        # 1. Generate/Load Data
-        if args.dist.lower() == "imdb":
-            print("Loading real IMDB review lengths...")
-            # Paths handled in datasets.py now, but we need to pass a valid path or dummy
-            imdb_path = Path("datasets/files/imdb/IMDB Dataset.csv")
-            vals = load_imdb_lengths(imdb_path)
-        elif args.dist.lower() == "census":
-            print("Loading real US Census Age data...")
-            # Paths handled in datasets.py
-            census_path = Path("datasets/files/census/USCensus1990.data.txt.csv")
-            vals = load_census_age(census_path)
-        else:
-            vals = gen_values(rng, args.dist, args.rows, 0, 200_000)
-            
-        # 2. Save to Cache
-        save_csv_column(vals, cached_ds_path)
-        
-        # 3. Compute Metrics
-        # Analyze the dataset to get min, max, and total count (N)
-        mn, mx, N = scan_min_max_count(cached_ds_path)
-        
-        # Build a frequency map and a sample for histogram construction
-        freq, sample = build_frequency_and_sample(cached_ds_path, mn, mx, N, 100_000, 42)
-        # 4. Compute Skewness and Kurtosis
-        skew, kurt = calculate_skew_kurt(cached_ds_path)
-        
-        # 5. Calculate Sugested Bins (Freedman-Diaconis)
-        n_bins = freedman_diaconis_bins(sample, mn, mx, N)
-        
-        # 5. Save Metrics to Cache
-        with open(meta_path, "wb") as f:
-            pickle.dump((mn, mx, N, freq, sample, n_bins, skew, kurt), f)
-            
-        # 5. Create Working Copy
-        shutil.copy2(cached_ds_path, working_ds_path)
-        ds_path = working_ds_path
-        vals_for_plot = vals
-        
-
-        # Refresh Data Distribution Plot
-        print(f"Refreshing distribution plot for {args.dist}...")
-        try:
-            # If vals is not in memory (cached), load it for plotting
-            if 'vals' not in locals() or vals is None:
-                df_temp = pd.read_csv(ds_path, header=None, names=["v"])
-                vals_for_plot = df_temp["v"].to_numpy()
-            else:
-                vals_for_plot = vals
-            plot_data_distribution(vals_for_plot, args.dist, Path("plots") / f"{args.dist}.png")
-        except Exception as e:
-            print(f"Failed to refresh distribution plot: {e}")
+    shutil.copy2(ds_path, working_ds_path)
+    ds_path = working_ds_path
 
     print(f"FD Suggested Bins: {n_bins}")
     
@@ -202,15 +130,13 @@ def _run_experiment_internal(args):
     
     # 4. Evaluation (Initial)
     print("Generating Evaluation Workload...")
-    queries = []
-    width = mx - mn
-    ps = np.cumsum(freq)
     
-    for _ in range(args.eval_n):
-        l = rng.integers(mn, mx)
-        w = rng.integers(1, max(10, width // 20)) 
-        r = min(mx, l + w)
-        queries.append(RangeQuery(l, r))
+    # Use DatasetManager for Stage 2 (Workload)
+    workload_path = dm.prepare_workload(args.rows, args.dist, args.eval_n, force_regeneration=args.recreate)
+    queries = load_workload(workload_path)
+    
+    # Compute cumulative sum for ground truth calculation
+    ps = np.cumsum(freq)
         
     y_true = []
     y_hist_width = []
@@ -288,6 +214,16 @@ def _run_experiment_internal(args):
     
     summary = {
         "bins": n_bins,
+        "dataset_stats": {
+            "Rows": int(N),
+            "Min": int(mn),
+            "Max": int(mx),
+            "NDV": 0,  # Will be loaded from stats.json if available
+            "Skewness": float(skew),
+            "Kurtosis": float(kurt),
+            "Bin Count (k)": int(n_bins),
+            "Bin Width (h)": float((mx - mn) / n_bins if n_bins > 0 else 0)
+        },
         "hist_width_metrics": m_hist_w,
         "hybrid_metrics": m_hyb,
         "equihist_init_metrics": m_eh_init,
@@ -296,6 +232,14 @@ def _run_experiment_internal(args):
             "equihist_init_inf": t_eh_inf_p1
         }
     }
+    
+    # Load NDV from stats.json if available
+    stats_json_path = ds_dir / "stats.json"
+    if stats_json_path.exists():
+        with open(stats_json_path, "r") as f:
+            stats_data = json.load(f)
+            summary["dataset_stats"]["NDV"] = stats_data.get("NDV", 0)
+    
     with open(Path(args.out_dir) / "summary.json", "w") as f:
         json.dump(summary, f, indent=2)
         
@@ -490,6 +434,10 @@ def _run_experiment_internal(args):
             "equihist_final": m_eh_final,
             "static_rebuilt": m_static_new
         },
+        # Add initial metrics for static benchmark compatibility
+        "hist_width_metrics": m_hist_w,
+        "hybrid_metrics": m_hyb,
+        "equihist_init_metrics": m_eh_init,
         "timings": {
             "hist_build": t_hist_build,
             "ml_train": t_ml_train,
@@ -499,7 +447,9 @@ def _run_experiment_internal(args):
             "static_rebuild": t_static_rebuild,
             "equihist_retrain": t_eh_update_p2,
             "equihist_drift_inf": t_eh_inf_p2,
-            "equihist_final_inf": t_eh_inf_final
+            "equihist_final_inf": t_eh_inf_final,
+            # Add initial timing for static benchmark compatibility
+            "equihist_init_train": t_eh_init_total
         },
         "resources": {
             "disk_bytes": disk_usage_bytes,
@@ -590,13 +540,13 @@ def run_static_benchmark(args):
                 "Kurtosis": res["dataset_stats"]["Kurtosis"],
                 "Bin Count": res["dataset_stats"]["Bin Count (k)"],
                 "Bin Width": res["dataset_stats"]["Bin Width (h)"],
-                "EW_Median_QErr": res["metrics"]["static_stale"]["QErr_median"],
-                "EW_P95_QErr": res["metrics"]["static_stale"]["QErr_p95"],
-                "Hybrid_Median_QErr": res["metrics"]["hybrid_stale"]["QErr_median"],
-                "Hybrid_P95_QErr": res["metrics"]["hybrid_stale"]["QErr_p95"],
-                "EH_Median_QErr": res["metrics"]["equihist_online"]["QErr_median"],
-                "EH_P95_QErr": res["metrics"]["equihist_online"]["QErr_p95"],
-                "EH_Train_Time": res["timings"]["hist_build"]
+                "EW_Median_QErr": res["hist_width_metrics"]["QErr_median"],
+                "EW_P95_QErr": res["hist_width_metrics"]["QErr_p95"],
+                "Hybrid_Median_QErr": res["hybrid_metrics"]["QErr_median"],
+                "Hybrid_P95_QErr": res["hybrid_metrics"]["QErr_p95"],
+                "EH_Median_QErr": res["equihist_init_metrics"]["QErr_median"],
+                "EH_P95_QErr": res["equihist_init_metrics"]["QErr_p95"],
+                "EH_Train_Time": res["timings"]["equihist_init_train"]
             }
             all_results.append(summary_row)
             

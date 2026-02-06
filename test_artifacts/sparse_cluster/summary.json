@@ -1,0 +1,80 @@
+{
+  "metrics": {
+    "static_stale": {
+      "name": "Static Equi-Width (Stale)",
+      "QErr_median": 11.477256262730688,
+      "QErr_p95": 25366190.476190474
+    },
+    "equihist_online": {
+      "name": "EquiHist (Online Adaptive)",
+      "QErr_median": 9.25822498586772,
+      "QErr_p95": 806.5268494611053
+    },
+    "hybrid_stale": {
+      "name": "Hybrid (Stale)",
+      "QErr_median": 4147619.0476190476,
+      "QErr_p95": 43291666.66666664
+    },
+    "hybrid_repaired": {
+      "name": "Hybrid (Repaired)",
+      "QErr_median": 1.0315509356069104,
+      "QErr_p95": 1.3725387697912286
+    },
+    "equihist_final": {
+      "name": "EquiHist (Final/Converged)",
+      "QErr_median": 11.538089106869439,
+      "QErr_p95": 733.0963831858988
+    },
+    "static_rebuilt": {
+      "name": "Static Equi-Width (Rebuilt)",
+      "QErr_median": 1.130625567125886,
+      "QErr_p95": 15.780336646756226
+    }
+  },
+  "hist_width_metrics": {
+    "name": "Equi-Width (Standard)",
+    "QErr_median": 3.1931804231859475,
+    "QErr_p95": 50348886.086591005
+  },
+  "hybrid_metrics": {
+    "name": "Hybrid (Stale)",
+    "QErr_median": 4147619.0476190476,
+    "QErr_p95": 43291666.66666664
+  },
+  "equihist_init_metrics": {
+    "name": "EquiHist (Initial Learning)",
+    "QErr_median": 39117.27616645649,
+    "QErr_p95": 46488730.77577102
+  },
+  "timings": {
+    "hist_build": 0.0003566249979485292,
+    "ml_train": 0.0008873749975464307,
+    "static_inf": 0.00014741599807166494,
+    "hybrid_inf": 0.002003000001423061,
+    "repair": 0.0015856249992793892,
+    "static_rebuild": 0.02419279199966695,
+    "equihist_retrain": 0.0003174110170220956,
+    "equihist_drift_inf": 0.0001530460358480923,
+    "equihist_final_inf": 0.00014090400509303436,
+    "equihist_init_train": 0.0006483389624918345
+  },
+  "resources": {
+    "disk_bytes": 1450489,
+    "memory_buckets_bytes": 405,
+    "memory_models_bytes": 8496,
+    "memory_total_bytes": 8901
+  },
+  "dataset_stats": {
+    "Distribution": "sparse_cluster",
+    "Rows": 10000,
+    "Min": 17139,
+    "Max": 171768,
+    "NDV": 1000,
+    "Skewness": 0.05518180321940259,
+    "Kurtosis": -1.5524992361723875,
+    "Bin Count (k)": 13,
+    "Bin Width (h)": 11894.538461538461
+  },
+  "bins": 13,
+  "bin_width": 11894.538461538461
+}
