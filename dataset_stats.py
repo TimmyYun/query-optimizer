@@ -50,7 +50,7 @@ def calculate_stats():
     print("\nDataset Statistics:")
     print(stats_df)
     
-    out_file = "dataset_statistics.xlsx"
+    out_file = "datasets/dataset_statistics.xlsx"
     stats_df.to_excel(out_file, index=False)
     print(f"\nSaved stats to {out_file}")
 

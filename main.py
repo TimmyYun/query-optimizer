@@ -25,6 +25,7 @@ import shutil
 import os
 from pathlib import Path
 import numpy as np
+import pandas as pd
 
 # New Modular Imports
 from models.core import Bucket, RangeQuery
@@ -32,7 +33,8 @@ from datasets import gen_values, save_csv_column, scan_min_max_count, build_freq
 from models.equi_width import EquiWidthHistogram
 from models.equi_hist import EquiHistLearner
 from models.hybrid import HybridEstimator
-from models.evaluation import identify_bad_buckets, summarize
+from models.evaluation import identify_bad_buckets, summarize, q_error_vec
+from plot_boxplots import generate_boxplots
 
 def main():
     """
@@ -63,6 +65,9 @@ def main():
     
     rng = np.random.default_rng(42)
     Path(args.out_dir).mkdir(parents=True, exist_ok=True)
+    
+    # Store raw errors for plotting
+    raw_errors = []
     
     # -----------------------------------------------------
     # Phase 1: Initial Build
@@ -179,6 +184,7 @@ def main():
         y_hist_width.append(h / N)
     t_base_inf = time.perf_counter() - t0_base
     
+    
     # Measure Hybrid Inference
     t0_hyb = time.perf_counter()
     for q in queries:
@@ -186,6 +192,7 @@ def main():
         c = hybrid_est.predict(q)
         y_hybrid.append(c / N)
     t_hyb_inf = time.perf_counter() - t0_hyb
+
 
     # Truth & EquiHist (Update loop)
     t_eh_update_p1 = 0.0
@@ -219,13 +226,24 @@ def main():
     m_hyb = summarize(y_true, y_hybrid, "Hybrid")
     m_eh_init = summarize(y_true, y_eh_init, "EquiHist (Initial Learning)")
     
+    # Collect Phase 1 Stats
+    for val in q_error_vec(y_true, y_hist_width):
+        raw_errors.append({'Distribution': args.dist, 'Model': 'Equi-Width (Initial)', 'QErr': val})
+        
+    for val in q_error_vec(y_true, y_hybrid):
+        raw_errors.append({'Distribution': args.dist, 'Model': 'Hybrid (Initial)', 'QErr': val})
+
+    for val in q_error_vec(y_true, y_eh_init):
+        # We label this EquiHist (Initial) - it tracks learning over the static workload
+        raw_errors.append({'Distribution': args.dist, 'Model': 'EquiHist (Initial)', 'QErr': val})
+    
     # Calculate specialized training times
     t_eh_init_total = t_hist_build + t_eh_update_p1
     
     print("\n--- Results ---")
-    print(f"Equi-Width:  Median QErr={m_hist_w['QErr_median']:.4f}, MAE={m_hist_w['MAE']:.6f}, Time={t_base_inf:.4f}s")
-    print(f"Hybrid(FD):  Median QErr={m_hyb['QErr_median']:.4f}, MAE={m_hyb['MAE']:.6f}, Time={t_hyb_inf:.4f}s")
-    print(f"EquiHist:    Median QErr={m_eh_init['QErr_median']:.4f}, MAE={m_eh_init['MAE']:.6f}, InitTrain={t_eh_init_total:.4f}s, Inf={t_eh_inf_p1:.4f}s")
+    print(f"Equi-Width:  Median QErr={m_hist_w['QErr_median']:.4f}, Time={t_base_inf:.4f}s")
+    print(f"Hybrid(FD):  Median QErr={m_hyb['QErr_median']:.4f}, Time={t_hyb_inf:.4f}s")
+    print(f"EquiHist:    Median QErr={m_eh_init['QErr_median']:.4f}, InitTrain={t_eh_init_total:.4f}s, Inf={t_eh_inf_p1:.4f}s")
     
     summary = {
         "bins": n_bins,
@@ -309,6 +327,19 @@ def main():
     m_eh = summarize(y_true_arr, np.array(y_eh), "EquiHist (Online Adaptive)")
     m_hyb = summarize(y_true_arr, np.array(y_hybrid_stale), "Hybrid (Stale)")
     
+    # Collect Phase 2 Stats
+    # Static Stale
+    for val in q_error_vec(y_true_arr, np.array(y_static)):
+        raw_errors.append({'Distribution': args.dist, 'Model': 'Equi-Width (Stale)', 'QErr': val})
+        
+    # EquiHist Drift
+    for val in q_error_vec(y_true_arr, np.array(y_eh)):
+        raw_errors.append({'Distribution': args.dist, 'Model': 'EquiHist (Drift)', 'QErr': val})
+        
+    # Hybrid Stale
+    for val in q_error_vec(y_true_arr, np.array(y_hybrid_stale)):
+        raw_errors.append({'Distribution': args.dist, 'Model': 'Hybrid (Stale)', 'QErr': val})
+    
     print(f"EquiHist Drift Update Time (Retrain): {t_eh_update_p2:.4f}s")
     
     # -----------------------------------------------------
@@ -332,7 +363,7 @@ def main():
         # Refactored call
         y_hyb_counts_only.append(hybrid_est.predict(q) / N_real)
         
-    bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_mae=0.0001)
+    bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_q=2.0)
     print(f"Identified {len(bad_indices)}/{len(buckets_eq_width)} buckets needing repair.")
     
     t0_repair = time.perf_counter()
@@ -351,6 +382,9 @@ def main():
         
     m_hyb_final = summarize(y_true_arr, np.array(y_hyb_final), "Hybrid (Repaired)")
     
+    for val in q_error_vec(y_true_arr, np.array(y_hyb_final)):
+        raw_errors.append({'Distribution': args.dist, 'Model': 'Hybrid (Repaired)', 'QErr': val})
+    
     # Final EquiHist Eval (Static Check of Learner State)
     y_eh_final = []
     t_eh_inf_final = 0.0
@@ -362,6 +396,9 @@ def main():
         # No update here, just checking final state
         
     m_eh_final = summarize(y_true_arr, np.array(y_eh_final), "EquiHist (Final/Converged)")
+    
+    for val in q_error_vec(y_true_arr, np.array(y_eh_final)):
+        raw_errors.append({'Distribution': args.dist, 'Model': 'EquiHist (Final)', 'QErr': val})
     
     # -----------------------------------------------------
     # Phase 4: Static Rebuild (Offline Baseline)
@@ -385,6 +422,9 @@ def main():
         y_static_new.append(est / N_rb)
         
     m_static_new = summarize(y_true_arr, np.array(y_static_new), "Static Equi-Width (Rebuilt)")
+    
+    for val in q_error_vec(y_true_arr, np.array(y_static_new)):
+        raw_errors.append({'Distribution': args.dist, 'Model': 'Equi-Width (Rebuilt)', 'QErr': val})
     
     # --- Report Resources AND Save JSON ---
     import os
@@ -429,6 +469,19 @@ def main():
     }
     with open(Path(args.out_dir) / "drift_summary.json", "w") as f:
         json.dump(drift_pkg, f, indent=2)
+        
+    # Save Raw Errors and Plot
+    csv_out = Path(args.out_dir) / "experiment_errors.csv"
+    print(f"Saving raw errors to {csv_out}...")
+    pd.DataFrame(raw_errors).to_csv(csv_out, index=False)
+    
+    plot_out = Path(args.out_dir) / "experiment_boxplots.png"
+    print(f"Generating boxplots at {plot_out}...")
+    generate_boxplots(
+        csv_path=str(csv_out), 
+        output_path=str(plot_out), 
+        title=f"Q-Error Distribution ({args.dist}, {args.rows} rows)"
+    )
     
 
 if __name__ == "__main__":

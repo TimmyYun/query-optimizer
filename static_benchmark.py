@@ -161,19 +161,19 @@ def run_benchmark():
     print("\nBenchmark Results:")
     print(df)
     
-    out_file = "static_benchmark_results.xlsx"
+    out_file = "experiments/static_benchmark_results.xlsx"
     df.to_excel(out_file, index=False)
     print(f"\nResults saved to {out_file}")
     
     # Save raw errors
-    print("Saving raw errors to static_errors.csv...")
+    print("Saving raw errors to experiments/static_errors.csv...")
     df_raw = pd.DataFrame(raw_errors)
-    df_raw.to_csv("static_errors.csv", index=False)
-    print("Raw errors saved to static_errors.csv")
+    df_raw.to_csv("experiments/static_errors.csv", index=False)
+    print("Raw errors saved to experiments/static_errors.csv")
     
     # Generate Plots
     print("\nGenerating Box Plots...")
-    generate_boxplots(csv_path="static_errors.csv", output_path="plots/static_boxplots.png")
+    generate_boxplots(csv_path="experiments/static_errors.csv", output_path="plots/static_boxplots.png")
 
 if __name__ == "__main__":
     run_benchmark()
