@@ -14,7 +14,9 @@ Models compared:
 - Hybrid Estimator (Combines Histograms with ML models like CDFs)
 
 Usage:
-    python main.py --dist zipf --rows 1000000 --drift-dist normal
+    python main.py --mode single --dist zipf --rows 1000000
+    python main.py --mode static --rows 10000000
+    python main.py --mode drift --rows 10000000
 """
 
 import argparse
@@ -35,6 +37,7 @@ from models.equi_hist import EquiHistLearner
 from models.hybrid import HybridEstimator
 from models.evaluation import identify_bad_buckets, summarize, q_error_vec
 from datasets.plot_boxplots import generate_boxplots
+import copy
 
 def main():
     """
@@ -49,6 +52,7 @@ def main():
     7. Saves metrics and timings to JSON artifacts.
     """
     parser = argparse.ArgumentParser(description="Run Query Optimizer Benchmark")
+    parser.add_argument("--mode", type=str, choices=["single", "static", "drift"], default="single", help="Experiment mode")
     parser.add_argument("--dist", type=str, default="zipf")
     parser.add_argument("--rows", type=int, default=1_000_000)
     parser.add_argument("--drift-rows", type=int, default=200_000)
@@ -58,11 +62,22 @@ def main():
     parser.add_argument("--eval-n", type=int, default=1000)
     parser.add_argument("--recreate", action="store_true", help="Force regeneration of the dataset even if cached")
     
+    # Batch specific params
+    parser.add_argument("--experiment-name", type=str, default=None, help="Suffix for output files")
+    
     # Ablation Hyperparams
     parser.add_argument("--eh-lr", type=float, default=0.5, help="EquiHist Learning Rate")
     
     args = parser.parse_args()
     
+    if args.mode == "single":
+        run_single_experiment(args)
+    elif args.mode == "static":
+        run_static_benchmark(args)
+    elif args.mode == "drift":
+        run_drift_benchmark(args)
+
+def run_single_experiment(args):
     rng = np.random.default_rng(42)
     Path(args.out_dir).mkdir(parents=True, exist_ok=True)
     
@@ -75,7 +90,7 @@ def main():
     print(f"=== Phase 1: Initial Build ({args.rows} rows, {args.dist}) ===")
     
     # Define cache paths
-    cache_dir = Path("datasets/files/generated")
+    cache_dir = Path("datasets/files/generated") / str(args.rows)
     cache_dir.mkdir(parents=True, exist_ok=True)
     
     cached_ds_path = cache_dir / f"data_initial_{args.dist}.csv"
@@ -482,6 +497,140 @@ def main():
         output_path=str(plot_out), 
         title=f"Q-Error Distribution ({args.dist}, {args.rows} rows)"
     )
+
+def run_static_benchmark(args):
+    """
+    Runs a batch of static experiments over multiple distributions.
+    Migrated from static_benchmark.py
+    """
+    distributions = ["uniform", "normal", "zipf", "exponential", "lognormal", "imdb", "census"]
+    all_results = []
+    raw_errors = []
+    
+    output_dir = Path(args.out_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    experiment_suffix = f"_{args.experiment_name}" if args.experiment_name else ""
+    excel_path = output_dir / f"static_benchmark_results{experiment_suffix}.xlsx"
+    csv_errors_path = output_dir / f"static_benchmark_errors{experiment_suffix}.csv"
+    
+    print(f"Starting Static Benchmark Batch (Rows: {args.rows}, Eval: {args.eval_n})")
+    
+    for dist in distributions:
+        print(f"\n>>> Processing Distribution: {dist} <<<")
+        # Create a copy of args to modify for each distribution
+        dist_args = copy.deepcopy(args)
+        dist_args.dist = dist
+        dist_args.out_dir = str(output_dir / dist)
+        
+        # We need run_single_experiment to return something, or we collect from files
+        # Let's modify run_single_experiment to return results, or just read the summary it saves.
+        # For simplicity and to avoid deep refactoring of run_single_experiment, 
+        # let's just use it and then read its output.
+        
+        try:
+            run_single_experiment(dist_args)
+            
+            # Read back summary
+            with open(Path(dist_args.out_dir) / "summary.json", "r") as f:
+                res = json.load(f)
+                
+            summary_row = {
+                "Distribution": dist,
+                "Bins": res["bins"],
+                "EW_Median_QErr": res["hist_width_metrics"]["QErr_median"],
+                "EW_P95_QErr": res["hist_width_metrics"]["QErr_p95"],
+                "Hybrid_Median_QErr": res["hybrid_metrics"]["QErr_median"],
+                "Hybrid_P95_QErr": res["hybrid_metrics"]["QErr_p95"],
+                "EH_Median_QErr": res["equihist_init_metrics"]["QErr_median"],
+                "EH_P95_QErr": res["equihist_init_metrics"]["QErr_p95"],
+                "EH_Train_Time": res["timings"]["equihist_init_train"]
+            }
+            all_results.append(summary_row)
+            
+            # Read back raw errors
+            dist_errors = pd.read_csv(Path(dist_args.out_dir) / "experiment_errors.csv")
+            # Only keep Initial models for static benchmark
+            dist_errors = dist_errors[dist_errors['Model'].str.contains('Initial')]
+            raw_errors.append(dist_errors)
+            
+        except Exception as e:
+            print(f"Error processing {dist}: {e}")
+            continue
+
+    # Final Save
+    df_summary = pd.DataFrame(all_results)
+    df_summary.to_excel(excel_path, index=False)
+    print(f"\nFinal Summary saved to {excel_path}")
+    
+    df_errors = pd.concat(raw_errors)
+    df_errors.to_csv(csv_errors_path, index=False)
+    
+    plot_path = output_dir / f"static_boxplots{experiment_suffix}.png"
+    print(f"Generating aggregated boxplots at {plot_path}...")
+    generate_boxplots(
+        csv_path=str(csv_errors_path),
+        output_path=str(plot_path),
+        title=f"Static Benchmark Q-Error ({args.rows} rows)"
+    )
+
+def run_drift_benchmark(args):
+    """
+    Runs a batch of drift experiments over multiple scenarios.
+    Migrated from drift_benchmark.py
+    """
+    scenarios = [
+        ("zipf", "normal", 50000),      # Shifted insert
+        ("uniform", "exponential", 0),  # Radical distribution change
+        ("normal", "zipf", 20000),      # Overlap drift
+        ("lognormal", "uniform", 100000) # Out of range drift
+    ]
+    
+    all_results = []
+    output_dir = Path(args.out_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    experiment_suffix = f"_{args.experiment_name}" if args.experiment_name else ""
+    excel_path = output_dir / f"drift_benchmark_results{experiment_suffix}.xlsx"
+    
+    print(f"Starting Drift Benchmark Batch (Rows: {args.rows}, DriftRows: {args.drift_rows})")
+    
+    for init_dist, drift_dist, shift in scenarios:
+        scenario_name = f"{init_dist}_to_{drift_dist}_s{shift}"
+        print(f"\n>>> Processing Scenario: {scenario_name} <<<")
+        
+        scenario_args = copy.deepcopy(args)
+        scenario_args.dist = init_dist
+        scenario_args.drift_dist = drift_dist
+        scenario_args.drift_shift = shift
+        scenario_args.out_dir = str(output_dir / scenario_name)
+        
+        try:
+            run_single_experiment(scenario_args)
+            
+            with open(Path(scenario_args.out_dir) / "drift_summary.json", "r") as f:
+                res = json.load(f)
+                
+            metrics = res["metrics"]
+            summary_row = {
+                "Scenario": scenario_name,
+                "Init_Dist": init_dist,
+                "Drift_Dist": drift_dist,
+                "Shift": shift,
+                "Static_Stale_QErr": metrics["static_stale"]["QErr_median"],
+                "Static_Rebuilt_QErr": metrics["static_rebuilt"]["QErr_median"],
+                "EH_Adaptive_QErr": metrics["equihist_online"]["QErr_median"],
+                "Hybrid_Stale_QErr": metrics["hybrid_stale"]["QErr_median"],
+                "Hybrid_Repaired_QErr": metrics["hybrid_repaired"]["QErr_median"]
+            }
+            all_results.append(summary_row)
+        except Exception as e:
+            print(f"Error processing scenario {scenario_name}: {e}")
+            continue
+
+    df_summary = pd.DataFrame(all_results)
+    df_summary.to_excel(excel_path, index=False)
+    print(f"\nFinal Drift Summary saved to {excel_path}")
     
 
 if __name__ == "__main__":
