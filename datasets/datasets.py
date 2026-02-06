@@ -209,7 +209,7 @@ def load_census_age(csv_path: Path) -> np.ndarray:
         print(f"Error loading Census: {e}")
         return np.array([], dtype=np.int64)
 
-def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bins_max: int) -> int:
+def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bins_max: int = 2000) -> int:
     """
     Calculates the optimal number of bins using the Freedman-Diaconis rule.
     

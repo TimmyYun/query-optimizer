@@ -106,7 +106,7 @@ def _run_experiment_internal(args):
     load_cache = False
     if not args.recreate and cached_ds_path.exists() and meta_path.exists():
         load_cache = True
-        
+
     if load_cache:
         print(f"Loading cached dataset and metrics from {cached_ds_path}...")
         try:
@@ -151,6 +151,9 @@ def _run_experiment_internal(args):
         freq, sample = build_frequency_and_sample(cached_ds_path, mn, mx, N, 100_000, 42)
         # 4. Compute Skewness and Kurtosis
         skew, kurt = calculate_skew_kurt(cached_ds_path)
+        
+        # 5. Calculate Sugested Bins (Freedman-Diaconis)
+        n_bins = freedman_diaconis_bins(sample, mn, mx, N)
         
         # 5. Save Metrics to Cache
         with open(meta_path, "wb") as f:
@@ -500,19 +503,24 @@ def _run_experiment_internal(args):
             "memory_total_bytes": memory_total_bytes
         }
     }
+    ndv = int(np.count_nonzero(freq))
+    bin_width = float((mx - mn) / n_bins) if n_bins > 0 else 0.0
+
     dataset_stats = {
         "Distribution": args.dist,
         "Rows": args.rows,
         "Min": mn,
         "Max": mx,
-        "NDV": N,
+        "NDV": ndv,
         "Skewness": skew,
         "Kurtosis": kurt,
-        "Bin Count (k)": n_bins
+        "Bin Count (k)": n_bins,
+        "Bin Width (h)": bin_width
     }
     
     drift_pkg["dataset_stats"] = dataset_stats
     drift_pkg["bins"] = n_bins
+    drift_pkg["bin_width"] = bin_width
 
     with open(Path(args.out_dir) / "summary.json", "w") as f:
         json.dump(drift_pkg, f, indent=2)
@@ -535,7 +543,7 @@ def run_static_benchmark(args):
     Runs a batch of static experiments over multiple distributions.
     Migrated from static_benchmark.py
     """
-    distributions = ["uniform", "normal", "zipf", "exponential", "lognormal"]
+    distributions = ["uniform", "normal", "zipf", "sparse_cluster", "anti_zipf"]
     all_results = []
     raw_errors = []
     
@@ -572,8 +580,11 @@ def run_static_benchmark(args):
                 "Rows": res["dataset_stats"]["Rows"],
                 "Min": res["dataset_stats"]["Min"],
                 "Max": res["dataset_stats"]["Max"],
+                "NDV": res["dataset_stats"]["NDV"],
                 "Skewness": res["dataset_stats"]["Skewness"],
                 "Kurtosis": res["dataset_stats"]["Kurtosis"],
+                "Bin Count": res["dataset_stats"]["Bin Count (k)"],
+                "Bin Width": res["dataset_stats"]["Bin Width (h)"],
                 "EW_Median_QErr": res["metrics"]["static_stale"]["QErr_median"],
                 "EW_P95_QErr": res["metrics"]["static_stale"]["QErr_p95"],
                 "Hybrid_Median_QErr": res["metrics"]["hybrid_stale"]["QErr_median"],
@@ -600,7 +611,7 @@ def run_static_benchmark(args):
     print(f"\nFinal Summary saved to {excel_path}")
     
     # Also refresh the global dataset statistics file
-    dataset_stats_df = df_summary[["Distribution", "Rows", "Min", "Max", "Skewness", "Kurtosis"]].copy()
+    dataset_stats_df = df_summary[["Distribution", "Rows", "Min", "Max", "NDV", "Skewness", "Kurtosis", "Bin Count", "Bin Width"]].copy()
     dataset_stats_file = Path("datasets/dataset_statistics.xlsx")
     dataset_stats_df.to_excel(dataset_stats_file, index=False)
     print(f"Dataset Statistics refreshed at {dataset_stats_file}")
@@ -623,9 +634,9 @@ def run_drift_benchmark(args):
     """
     scenarios = [
         ("zipf", "normal", 50000),      # Shifted insert
-        ("uniform", "exponential", 0),  # Radical distribution change
+        ("uniform", "sparse_cluster", 0),  # Radical distribution change
         ("normal", "zipf", 20000),      # Overlap drift
-        ("lognormal", "uniform", 100000) # Out of range drift
+        ("anti_zipf", "uniform", 100000) # Out of range drift
     ]
     
     all_results = []
