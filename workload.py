@@ -33,7 +33,7 @@ class RangeQuery:
         """Creates a RangeQuery instance from a dictionary."""
         return RangeQuery(int(d["low"]), int(d["high"]))
 
-def generate_workload(n: int, mn: int, mx: int, seed: int = 42) -> List[RangeQuery]:
+def generate_workload(n: int, mn: int, mx: int, seed: int = 42, max_width: int = None) -> List[RangeQuery]:
     """
     Generates a list of random range queries.
 
@@ -42,6 +42,7 @@ def generate_workload(n: int, mn: int, mx: int, seed: int = 42) -> List[RangeQue
         mn (int): Minimum value of the domain.
         mx (int): Maximum value of the domain.
         seed (int): Random seed for reproducibility.
+        max_width (int): Maximum width of range query. If None, defaults to 5% of domain.
 
     Returns:
         List[RangeQuery]: A list of generated RangeQuery objects.
@@ -49,11 +50,16 @@ def generate_workload(n: int, mn: int, mx: int, seed: int = 42) -> List[RangeQue
     rng = np.random.default_rng(seed)
     queries = []
     width = mx - mn
+    
+    # Determined max query width
+    if max_width is None:
+        limit_w = max(10, width // 20) # Default ~5%
+    else:
+        limit_w = max(1, max_width)
+
     for _ in range(n):
         l = rng.integers(mn, mx)
-        # Random width up to 5% of domain, with a minimum width of 1
-        max_width = max(10, width // 20)
-        w = rng.integers(1, max_width) 
+        w = rng.integers(1, limit_w) 
         r = min(mx, l + w)
         queries.append(RangeQuery(l, r))
     return queries
@@ -110,6 +116,15 @@ def main():
         print(f"Generating independent workload: {count} queries for domain [{MN}, {MX}]...")
         queries = generate_workload(count, MN, MX)
         out_path = workload_dir / f"{count}.csv"
+        save_workload_csv(queries, out_path)
+        print(f"Saved to {out_path}")
+
+    # Generate Narrow Workloads (Stress Test)
+    narrow_counts = [1000, 100000]
+    for count in narrow_counts:
+        print(f"Generating NARROW workload: {count} queries (max_width=500)...")
+        queries = generate_workload(count, MN, MX, max_width=500)
+        out_path = workload_dir / f"{count}_narrow.csv"
         save_workload_csv(queries, out_path)
         print(f"Saved to {out_path}")
 
