@@ -27,6 +27,9 @@ import os
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 
 # New Modular Imports
 from models import (
@@ -43,7 +46,36 @@ from datasets import (
 from workload import RangeQuery, load_workload_csv
 import copy
 
+def plot_q_error_boxplots(result_csv_path, output_dir):
+    """
+    Generates a box plot for Q-Error distributions across different models.
+    """
+    try:
+        df = pd.read_csv(result_csv_path)
+        
+        plt.figure(figsize=(10, 6))
+        # Filter out extremely high q-errors for visualization if needed, 
+        # but boxplots usually handle outliers. 
+        # We plot log scale as Q-Error is multiplicative.
+        
+        sns.boxplot(data=df, x='Model', y='Q_Error', hue='Phase')
+        plt.yscale('log')
+        plt.title('Q-Error Distribution by Model')
+        plt.ylabel('Q-Error (Log Scale)')
+        plt.xlabel('Model')
+        plt.grid(True, which="both", ls="-", alpha=0.2)
+        plt.tight_layout()
+        
+        plot_path = output_dir / "q_error_boxplot.png"
+        plt.savefig(plot_path)
+        plt.close()
+        print(f"Q-Error plot saved to {plot_path}")
+        
+    except Exception as e:
+        print(f"Error plotting Q-Error: {e}")
+
 def main():
+
     """
     Main execution entry point.
     
@@ -260,7 +292,15 @@ def _run_experiment_internal(args):
          result_file = result_dir / f"{args.eval_n}.csv"
          df_results.to_csv(result_file, index=False)
          print(f"Detailed results saved to {result_file}")
+         
+         # Generate Plot
+         plot_q_error_boxplots(result_file, result_dir)
          return
+         
+         # Generate Plot
+         plot_q_error_boxplots(result_file, result_dir)
+         return
+
 
     # -----------------------------------------------------
     # Phase 2: Data Drift (Insert Data)
@@ -359,6 +399,12 @@ def _run_experiment_internal(args):
     result_file = result_dir / f"{args.eval_n}_drift.csv"
     df_results.to_csv(result_file, index=False)
     print(f"Detailed drift results saved to {result_file}")
+    
+    # Generate Plot
+    plot_q_error_boxplots(result_file, result_dir)
+    
+    # Generate Plot
+    plot_q_error_boxplots(result_file, result_dir)
 
 
 def run_static_benchmark(args):
