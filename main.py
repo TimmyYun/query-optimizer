@@ -41,7 +41,7 @@ from datasets import (
     generate_boxplots, plot_data_distribution, plot_model_comparison,
     gen_values, save_csv_column
 )
-from workload import RangeQuery, load_workload
+from workload import RangeQuery, load_workload_csv
 import copy
 
 def main():
@@ -132,9 +132,12 @@ def _run_experiment_internal(args):
     # 4. Evaluation (Initial)
     print("Generating Evaluation Workload...")
     
-    # Use DatasetManager for Stage 2 (Workload)
-    workload_path = dm.prepare_workload(args.rows, args.dist, args.eval_n, force_regeneration=args.recreate)
-    queries = load_workload(workload_path)
+    # Use load_workload_csv for independent workloads
+    workload_path = Path(f"workload/{args.eval_n}.csv")
+    if not workload_path.exists():
+        raise FileNotFoundError(f"Workload file not found at {workload_path}. Run workload.py first.")
+        
+    queries = load_workload_csv(workload_path)
     
     # Compute cumulative sum for ground truth calculation
     ps = np.cumsum(freq)
