@@ -4,13 +4,13 @@ import seaborn as sns
 import os
 from pathlib import Path
 
-def generate_boxplots(csv_path="static_errors.csv", output_path="plots/static_boxplots.png", title="Q-Error Distribution"):
+def generate_boxplots(csv_path="experiments/static_errors.csv", output_path="plots/static_boxplots.png", title="Q-Error Distribution"):
     # Try Parquet first, then CSV
     # If the user passed a specific path, use it. If default, check for parquet fallback.
     
-    if csv_path == "static_errors.csv" and not os.path.exists(csv_path):
-        if os.path.exists("static_errors.parquet"):
-            csv_path = "static_errors.parquet"
+    if csv_path == "experiments/static_errors.csv" and not os.path.exists(csv_path):
+        if os.path.exists("experiments/static_errors.parquet"):
+            csv_path = "experiments/static_errors.parquet"
             
     if not os.path.exists(csv_path):
         print(f"Error: {csv_path} not found.")
@@ -30,61 +30,35 @@ def generate_boxplots(csv_path="static_errors.csv", output_path="plots/static_bo
     print(f"Distributions: {df['Distribution'].unique()}")
     print(f"Models: {df['Model'].unique()}")
 
-    # Combined Plot
-    plt.figure(figsize=(15, 8))
-    sns.set_style("whitegrid")
+    # Use catplot to create a faceted boxplot
+    # col="Distribution": creates a subplot for each distribution
+    # sharey=False: allows each subplot to have its own y-axis scale, preventing squishing
+    # col_wrap: wraps columns to keep the plot compact
     
-    sns.boxplot(
+    g = sns.catplot(
         data=df, 
-        x="Distribution", 
+        x="Model", 
         y="QErr", 
-        hue="Model", 
+        col="Distribution", 
+        kind="box", 
         showfliers=False, 
         palette="Set2",
-        width=0.8
+        sharey=False,
+        col_wrap=3,
+        height=4, 
+        aspect=1.2
     )
 
-    plt.yscale("log")
-    plt.title(title, fontsize=16)
-    plt.ylabel("Q-Error (Log Scale)", fontsize=14)
-    plt.xlabel("Distribution", fontsize=14)
-    plt.legend(title="Model", bbox_to_anchor=(1.05, 1), loc='upper left')
+    g.set(yscale="log")
+    g.set_axis_labels("Model", "Q-Error (Log Scale)")
+    g.figure.subplots_adjust(top=0.9)
+    g.figure.suptitle(title, fontsize=16)
     
-    # Save combined plot
+    # Save plot
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    plt.savefig(output_path, dpi=300, bbox_inches="tight")
-    print(f"Combined Boxplot saved to {output_path}")
+    g.savefig(output_path, dpi=300, bbox_inches="tight")
+    print(f"Faceted boxplot saved to {output_path}")
     plt.close()
-
-    # Per-Distribution Plots
-    distributions = df['Distribution'].unique()
-    for dist in distributions:
-        plt.figure(figsize=(10, 6))
-        sns.set_style("whitegrid")
-        
-        dist_df = df[df['Distribution'] == dist]
-        
-        sns.boxplot(
-            data=dist_df, 
-            x="Model", 
-            y="QErr", 
-            showfliers=False, 
-            palette="Set2",
-            width=0.6
-        )
-        
-        plt.yscale("log")
-        plt.title(f"{title} - {dist}", fontsize=16)
-        plt.ylabel("Q-Error (Log Scale)", fontsize=14)
-        plt.xlabel("Model", fontsize=14)
-        
-        # Construct path for individual plot
-        path_obj = Path(output_path)
-        dist_output_path = path_obj.parent / f"dist_{dist}.png"
-        
-        plt.savefig(dist_output_path, dpi=300, bbox_inches="tight")
-        print(f"Distribution plot saved to {dist_output_path}")
-        plt.close()
 
 if __name__ == "__main__":
     generate_boxplots()
