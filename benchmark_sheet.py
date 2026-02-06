@@ -144,7 +144,6 @@ def run_benchmark():
                 "Model": name,
                 "Build Time (s)": build_time,
                 "Inference Time (s)": inf_time,
-                "MAE": m['MAE'],
                 "Median QErr": m['QErr_median'],
                 "95% QErr": m['QErr_p95'],
                 "Max QErr": m.get('QErr_max', 0)
