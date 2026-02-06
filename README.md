@@ -1,58 +1,106 @@
-# Thesis: Hybrid Selectivity Estimation using CDF Learning
+# Query Optimizer Benchmark
 
-This project implements and benchmarks a **Hybrid Approach** for selectivity estimation in databases. It combines the speed and safety of **Equi-Width Histograms** with the precision of **Machine Learning** by learning the Cumulative Distribution Function (CDF) within individual histogram buckets.
+A comprehensive benchmarking framework for evaluating query selectivity estimation and cardinality estimation models. This project separates dataset generation, workload creation, and benchmark execution to ensure reproducible and isolated experiments.
 
-## 1. The Core Idea
+## 1. Overview
 
-Standard **Equi-Width Histograms** assume data is **Uniform** within a bucket. This fails catastrophically for skewed data (e.g., Zipfian frequency), leading to massive errors in query planning.
+The benchmark workflow consists of three distinct stages:
+1.  **Dataset Generation**: Creating synthetic datasets with specific distributions (Uniform, Normal, Zipf, etc.).
+2.  **Workload Generation**: Creating query workloads (range queries) completely independent of the dataset data.
+3.  **Benchmark Execution**: Running estimation models against the datasets using the generated workloads and saving detailed metrics.
 
-**Our Solution**:
-Instead of assuming uniformity, we train a lightweight **Machine Learning Model** (Ridge Regression) for *each bucket* to learn the actual 1D Cumulative Distribution Function ($F_b(x) \approx P(X \le x)$). This reduces complex non-linear estimation to a simple monotonic learning task.
+## 2. Setup
 
-## 2. Methodology
-
-- **Automated Binning**: Uses the **Freedman-Diaconis Rule** ($Width = 2 \cdot IQR \cdot n^{-1/3}$) to automatically determine the optimal number of bins based on data scale and variability.
-- **CDF Learning**: Ridge regressors learn the intra-bucket distribution, enabling precise range queries:
-  $$Count = \sum_{b \in full} Count(b) + (F_{start}(R) - F_{start}(L)) \cdot Count(start)$$
-- **Adaptive Drifting**: Includes an **EquiHist** implementation that updates in real-time as new data is inserted, and a **Hybrid Repair** mechanism that triggers retraining when Q-Error exceeds a safety threshold.
-
-## 3. Project Structure
-
-- `main.py`: Unified entry point for all benchmarks.
-- `datasets/`: Data generation, loading, and standardized statistics logic.
-- `models/`: Implementations of Equi-Width, Equi-Hist (Adaptive), and Hybrid (ML-based) estimators.
-- `plots/`: Automatically generated visualizations of dataset distributions.
-- `experiments/`: Legacy scripts and specialized research benchmarks.
-
-## 4. Usage
-
-The project uses `poetry` for dependency management.
-
-### Static Benchmark
-Runs a batch experiment across multiple distributions (Uniform, Normal, Zipf, Exponential, Lognormal) to evaluate peak accuracy.
+Ensure you have Python 3.9+ and Poetry installed.
 
 ```bash
-poetry run python main.py --mode static --rows 1000000 --eval-n 1000
+# Install dependencies
+poetry install
 ```
 
-### Drift Benchmark
-Simulates real-world data drift by starting with one distribution and "drifting" into another through high-volume inserts.
+## 3. Workflow Stages
 
+### Stage 1: Dataset Generation (`datasets.py`)
+This script generates the synthetic data used for benchmarks. It creates CSV files and statistics for various distributions and row counts.
+
+**Usage:**
 ```bash
-poetry run python main.py --mode drift --rows 1000000 --drift-rows 200000
+poetry run python datasets.py
+```
+*   **Output**: Creates `data/generated/{rows}/{distribution}/` directories containing `data.csv`, `meta.pkl`, `stats.json`, and distribution plots.
+*   **Distributions**: Uniform, Normal, Zipf, Sparse Cluster, Anti-Zipf.
+*   **Scales**: 1M, 10M, 60M rows (default).
+
+### Stage 2: Workload Generation (`workload.py`)
+This script generates independent workloads of range queries. These workloads are saved as CSV files and are domain-based (e.g., `[0, 200,000]`), ensuring they are not biased by the specific data values in the dataset.
+
+**Usage:**
+```bash
+poetry run python workload.py
+```
+*   **Output**: Creates `workload/` directory containing:
+    *   `1000.csv` (1k queries)
+    *   `100000.csv` (100k queries)
+    *   `1000000.csv` (1M queries)
+*   **Format**: CSV with `query_id`, `low`, `high`, `type`.
+
+### Stage 3: Benchmark Execution (`main.py`)
+The main entry point for running experiments. It loads a dataset and a workload, filters out invalid queries (0-selectivity), trains models, and evaluates accuracy.
+
+**Key Features:**
+*   **Runtime Filtering**: Automatically filters out queries that have 0 true result cardinality to avoid skewed Q-Error metrics.
+*   **Structured Output**: Saves detailed per-query results.
+
+**Usage:**
+```bash
+# Run a static benchmark (10k rows, uniform distribution, 1k workload)
+poetry run python main.py --mode static --rows 10000 --dist uniform --eval 1000
 ```
 
-### Configuration Options
-- `--rows`: Number of initial rows.
-- `--eval-n`: Number of range queries to evaluate.
-- `--recreate`: Force regenerate datasets (bypassing cache).
-- `--experiment-name`: Suffix for all output artifacts.
+**Common Arguments:**
+*   `--rows`: Number of rows in the dataset (must match a generated dataset size).
+*   `--dist`: Distribution to test (`uniform`, `normal`, `zipf`, `sparse_cluster`, `anti_zipf`, or `all`).
+*   `--eval`: Workload size to load (e.g., `1000`, `100000`).
+*   `--mode`: `static` (standard benchmark) or `drift` (drift benchmark).
 
-## 5. Outputs & Visualization
+## 4. Output Structure
 
-All benchmark runs generate structured artifacts in the `artifacts_optimizer/` directory (or your specified `--out-dir`):
+Results are saved in a hierarchical structure for easy analysis:
 
-- **Excel Reports**: `static_benchmark_results.xlsx` contains granular metrics including Medians, P95 Q-Errors, and Build Timings.
-- **Global Statistics**: `datasets/dataset_statistics.xlsx` is automatically refreshed with Skewness, Kurtosis, and NDV data.
-- **Distribution Plots**: `plots/{dist}.png` provides immediate visual feedback on the data being tested.
-- **Error Visualization**: `experiment_boxplots.png` visualizes the Q-Error distribution across all models.
+```
+results/
+├── {rows}/
+│   ├── {distribution}/
+│   │   ├── {workload_size}.csv        # Detailed results (Static)
+│   │   ├── {workload_size}_drift.csv  # Detailed results (Drift)
+│   │   └── summary.json               # Aggregated stats and timings
+```
+
+### Result CSV Columns
+The CSV files provide granular data for every query:
+*   `Query_ID`: Index of the query.
+*   `Phase`: Experiment phase (e.g., "Static", "Drift", "Repair").
+*   `Model`: Name of the model (e.g., "Equi-Width", "Hybrid", "EquiHist").
+*   `Prediction`: Estimated selectivity.
+*   `Truth`: True selectivity.
+*   `Q_Error`: Quality error metric (max(P/T, T/P)).
+
+## 5. Quick Start Example
+
+1.  **Generate Data** (if not already done):
+    ```bash
+    poetry run python datasets.py
+    ```
+
+2.  **Generate Workloads** (if not already done):
+    ```bash
+    poetry run python workload.py
+    ```
+
+3.  **Run a Test Experiment**:
+    ```bash
+    poetry run python main.py --rows 1000000 --dist zipf --eval 1000 --mode static
+    ```
+
+4.  **Analyze Results**:
+    Check `results/1000000/zipf/1000.csv` for the output.

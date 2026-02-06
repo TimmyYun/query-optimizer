@@ -214,20 +214,37 @@ def _run_experiment_internal(args):
     y_hybrid = np.array(y_hybrid)
     y_eh_init = np.array(y_eh_init)
     
+    # -----------------------------------------------------
+    # Save Results
+    # -----------------------------------------------------
+    result_dir = Path(f"results/{args.rows}/{args.dist}")
+    result_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save Detailed Results per Query
+    results_data = []
+    
+    # Helper to add results
+    def add_results(phase_name, model_name, pred_arr, truth_arr):
+        errors = q_error_vec(truth_arr, pred_arr)
+        for i, (pred, true, err) in enumerate(zip(pred_arr, truth_arr, errors)):
+            results_data.append({
+                "Query_ID": i,
+                "Phase": phase_name,
+                "Model": model_name,
+                "Prediction": float(pred),
+                "Truth": float(true),
+                "Q_Error": float(err)
+            })
+
+    # Phase 1 Results
+    add_results("Static", "Equi-Width", y_hist_width, y_true)
+    add_results("Static", "Hybrid", y_hybrid, y_true)
+    add_results("Static", "EquiHist", y_eh_init, y_true)
+    
+    # Calculate Phase 1 Summaries for Console
     m_hist_w = summarize(y_true, y_hist_width, "Equi-Width (Standard)")
     m_hyb = summarize(y_true, y_hybrid, "Hybrid")
     m_eh_init = summarize(y_true, y_eh_init, "EquiHist (Initial Learning)")
-    
-    # Collect Phase 1 Stats
-    for val in q_error_vec(y_true, y_hist_width):
-        raw_errors.append({'Distribution': args.dist, 'Model': 'Equi-Width (Initial)', 'QErr': val})
-        
-    for val in q_error_vec(y_true, y_hybrid):
-        raw_errors.append({'Distribution': args.dist, 'Model': 'Hybrid (Initial)', 'QErr': val})
-
-    for val in q_error_vec(y_true, y_eh_init):
-        # We label this EquiHist (Initial) - it tracks learning over the static workload
-        raw_errors.append({'Distribution': args.dist, 'Model': 'EquiHist (Initial)', 'QErr': val})
     
     # Calculate specialized training times
     t_eh_init_total = t_hist_build + t_eh_update_p1
@@ -236,38 +253,15 @@ def _run_experiment_internal(args):
     print(f"Equi-Width:  Median QErr={m_hist_w['QErr_median']:.4f}, Time={t_base_inf:.4f}s")
     print(f"Hybrid(FD):  Median QErr={m_hyb['QErr_median']:.4f}, Time={t_hyb_inf:.4f}s")
     print(f"EquiHist:    Median QErr={m_eh_init['QErr_median']:.4f}, InitTrain={t_eh_init_total:.4f}s, Inf={t_eh_inf_p1:.4f}s")
-    
-    summary = {
-        "bins": n_bins,
-        "dataset_stats": {
-            "Rows": int(N),
-            "Min": int(mn),
-            "Max": int(mx),
-            "NDV": 0,  # Will be loaded from stats.json if available
-            "Skewness": float(skew),
-            "Kurtosis": float(kurt),
-            "Bin Count (k)": int(n_bins),
-            "Bin Width (h)": float((mx - mn) / n_bins if n_bins > 0 else 0)
-        },
-        "hist_width_metrics": m_hist_w,
-        "hybrid_metrics": m_hyb,
-        "equihist_init_metrics": m_eh_init,
-        "timings": {
-            "equihist_init_train": t_eh_init_total,
-            "equihist_init_inf": t_eh_inf_p1
-        }
-    }
-    
-    # Load NDV from stats.json if available
-    stats_json_path = ds_dir / "stats.json"
-    if stats_json_path.exists():
-        with open(stats_json_path, "r") as f:
-            stats_data = json.load(f)
-            summary["dataset_stats"]["NDV"] = stats_data.get("NDV", 0)
-    
-    with open(Path(args.out_dir) / "summary.json", "w") as f:
-        json.dump(summary, f, indent=2)
-        
+
+    # If Static Mode, we stop here and save
+    if args.mode == "static":
+         df_results = pd.DataFrame(results_data)
+         result_file = result_dir / f"{args.eval_n}.csv"
+         df_results.to_csv(result_file, index=False)
+         print(f"Detailed results saved to {result_file}")
+         return
+
     # -----------------------------------------------------
     # Phase 2: Data Drift (Insert Data)
     # -----------------------------------------------------
@@ -285,14 +279,10 @@ def _run_experiment_internal(args):
     # --- Compare Approaches under Drift ---
     
     # 1. Static Equi-Width (STALE)
-    # This histogram is NOT updated and represents the degradation of a static statistic
-    # over time as new data arrives.
-    # Refactored: Create Stale Class Instance
     buckets_static = [Bucket(b.lo, b.hi, count=b.count) for b in buckets_eq_width]
     static_hist_stale = EquiWidthHistogram(buckets_static)
     
     # 2. EquiHist (Online Learning - CONTINUES)
-    # eh_learner is already active.
     
     print("Evaluating Drift Sequence...")
     y_true_seq = []
@@ -301,7 +291,6 @@ def _run_experiment_internal(args):
     y_hybrid_stale = []
     
     t_eh_update_p2 = 0.0
-    t_eh_inf_p2 = 0.0
     
     for q in queries:
         li, ri = q.low - mn_new, q.high - mn_new
@@ -312,15 +301,11 @@ def _run_experiment_internal(args):
         y_true_seq.append(actual_sel)
         
         # Static
-        # Refactored
         est_static = static_hist_stale.predict(q) 
         y_static.append(est_static / N) 
         
         # EquiHist (Predict then Update)
-        t0_inf = time.perf_counter()
         est_eh = eh_learner.predict(q)
-        t_eh_inf_p2 += (time.perf_counter() - t0_inf)
-        
         y_eh.append(est_eh / N) 
         
         t0_up = time.perf_counter()
@@ -328,38 +313,21 @@ def _run_experiment_internal(args):
         t_eh_update_p2 += (time.perf_counter() - t0_up)
         
         # Hybrid (Stale buckets + Old Models)
-        # Refactored: HybridEstimator holds the stale state
         est_hyb = hybrid_est.predict(q)
         y_hybrid_stale.append(est_hyb / N)
         
     y_true_arr = np.array(y_true_seq)
-    m_static = summarize(y_true_arr, np.array(y_static), "Static Equi-Width (Stale)")
-    m_eh = summarize(y_true_arr, np.array(y_eh), "EquiHist (Online Adaptive)")
-    m_hyb = summarize(y_true_arr, np.array(y_hybrid_stale), "Hybrid (Stale)")
     
-    # Collect Phase 2 Stats
-    # Static Stale
-    for val in q_error_vec(y_true_arr, np.array(y_static)):
-        raw_errors.append({'Distribution': args.dist, 'Model': 'Equi-Width (Stale)', 'QErr': val})
-        
-    # EquiHist Drift
-    for val in q_error_vec(y_true_arr, np.array(y_eh)):
-        raw_errors.append({'Distribution': args.dist, 'Model': 'EquiHist (Drift)', 'QErr': val})
-        
-    # Hybrid Stale
-    for val in q_error_vec(y_true_arr, np.array(y_hybrid_stale)):
-        raw_errors.append({'Distribution': args.dist, 'Model': 'Hybrid (Stale)', 'QErr': val})
-    
-    print(f"EquiHist Drift Update Time (Retrain): {t_eh_update_p2:.4f}s")
+    add_results("Drift", "Equi-Width (Stale)", y_static, y_true_arr)
+    add_results("Drift", "EquiHist (Online)", y_eh, y_true_arr)
+    add_results("Drift", "Hybrid (Stale)", y_hybrid_stale, y_true_arr)
     
     # -----------------------------------------------------
-    # Phase 3: Adaptive Repair (Hybrid) + EquiHist Final
+    # Phase 3: Adaptive Repair (Hybrid)
     # -----------------------------------------------------
     print(f"\n=== Phase 3: Hybrid Adaptive Repair ===")
     
     # Hybrid updates counts (Cheap)
-    # We first just update the counts in the buckets based on the new global frequency.
-    # This is a "metadata only" update, without retraining the ML models inside.
     for b in buckets_eq_width:
         li = b.lo - mn_new
         ri = b.hi - mn_new
@@ -370,242 +338,50 @@ def _run_experiment_internal(args):
     # Check error again with updated counts
     y_hyb_counts_only = []
     for q in queries:
-        # Refactored call
         y_hyb_counts_only.append(hybrid_est.predict(q) / N_real)
         
     bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_q=2.0)
     print(f"Identified {len(bad_indices)}/{len(buckets_eq_width)} buckets needing repair.")
     
-    t0_repair = time.perf_counter()
     if bad_indices:
         print("Retraining specific buckets...")
-        # Refactored: train method handles logic
         hybrid_est.train(freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
             
-    t_repair = time.perf_counter() - t0_repair
-    print(f"Repair Time: {t_repair:.4f}s")
-    
     # Final Hybrid Eval
     y_hyb_final = []
     for q in queries:
         y_hyb_final.append(hybrid_est.predict(q) / N_real)
-        
-    m_hyb_final = summarize(y_true_arr, np.array(y_hyb_final), "Hybrid (Repaired)")
     
-    for val in q_error_vec(y_true_arr, np.array(y_hyb_final)):
-        raw_errors.append({'Distribution': args.dist, 'Model': 'Hybrid (Repaired)', 'QErr': val})
+    add_results("Repair", "Hybrid (Repaired)", y_hyb_final, y_true_arr)
     
-    # Final EquiHist Eval (Static Check of Learner State)
-    y_eh_final = []
-    t_eh_inf_final = 0.0
-    for q in queries:
-        t0_inf = time.perf_counter()
-        est_eh = eh_learner.predict(q)
-        t_eh_inf_final += (time.perf_counter() - t0_inf)
-        y_eh_final.append(est_eh / N)
-        # No update here, just checking final state
-        
-    m_eh_final = summarize(y_true_arr, np.array(y_eh_final), "EquiHist (Final/Converged)")
-    
-    for val in q_error_vec(y_true_arr, np.array(y_eh_final)):
-        raw_errors.append({'Distribution': args.dist, 'Model': 'EquiHist (Final)', 'QErr': val})
-    
-    # -----------------------------------------------------
-    # Phase 4: Static Rebuild (Offline Baseline)
-    # -----------------------------------------------------
-    print(f"\n=== Phase 4: Static Rebuild (Full Scan) ===")
-    t0_rebuild = time.perf_counter()
-    mn_rb, mx_rb, N_rb = scan_min_max_count(ds_path)
-    freq_rb, _ = build_frequency_and_sample(ds_path, mn_rb, mx_rb, N_rb, 100_000, 42)
-    # Re-using previous bin settings or re-estimating? Let's keep bins constant for fairness or re-estimate?
-    # Standard static re-build usually re-estimates perfectly.
-    # Let's use the same suggested bins count but rebuilt boundaries.
-    
-    # Refactored: Rebuild using class
-    rebuilt_hist = EquiWidthHistogram.build(mn_rb, mx_rb, n_bins, freq_rb)
-    t_static_rebuild = time.perf_counter() - t0_rebuild
-    print(f"Static Rebuild Time: {t_static_rebuild:.4f}s")
-    
-    y_static_new = []
-    for q in queries:
-        est = rebuilt_hist.predict(q)
-        y_static_new.append(est / N_rb)
-        
-    m_static_new = summarize(y_true_arr, np.array(y_static_new), "Static Equi-Width (Rebuilt)")
-    
-    for val in q_error_vec(y_true_arr, np.array(y_static_new)):
-        raw_errors.append({'Distribution': args.dist, 'Model': 'Equi-Width (Rebuilt)', 'QErr': val})
-    
-    # --- Report Resources AND Save JSON ---
-    import os
-    disk_usage_bytes = os.path.getsize(ds_path)
-    
-    # Python object size approx
-    memory_buckets_bytes = len(pickle.dumps(buckets_eq_width))
-    # Refactored: Access models from hybrid_est
-    memory_models_bytes = len(pickle.dumps(hybrid_est.models))
-    memory_total_bytes = memory_buckets_bytes + memory_models_bytes
-    
-    print(f"\nResource Usage:")
-    print(f"Disk (CSV): {disk_usage_bytes/1024/1024:.2f} MB")
-    print(f"Memory (Model): {memory_total_bytes/1024:.2f} KB")
+    # Save Final CSV including Drift/Repair
+    df_results = pd.DataFrame(results_data)
+    result_file = result_dir / f"{args.eval_n}_drift.csv"
+    df_results.to_csv(result_file, index=False)
+    print(f"Detailed drift results saved to {result_file}")
 
-    drift_pkg = {
-        "metrics": {
-            "static_stale": m_static,
-            "equihist_online": m_eh,
-            "hybrid_stale": m_hyb,
-            "hybrid_repaired": m_hyb_final,
-            "equihist_final": m_eh_final,
-            "static_rebuilt": m_static_new
-        },
-        # Add initial metrics for static benchmark compatibility
-        "hist_width_metrics": m_hist_w,
-        "hybrid_metrics": m_hyb,
-        "equihist_init_metrics": m_eh_init,
-        "timings": {
-            "hist_build": t_hist_build,
-            "ml_train": t_ml_train,
-            "static_inf": t_base_inf,
-            "hybrid_inf": t_hyb_inf,
-            "repair": t_repair,
-            "static_rebuild": t_static_rebuild,
-            "equihist_retrain": t_eh_update_p2,
-            "equihist_drift_inf": t_eh_inf_p2,
-            "equihist_final_inf": t_eh_inf_final,
-            # Add initial timing for static benchmark compatibility
-            "equihist_init_train": t_eh_init_total
-        },
-        "resources": {
-            "disk_bytes": disk_usage_bytes,
-            "memory_buckets_bytes": memory_buckets_bytes,
-            "memory_models_bytes": memory_models_bytes,
-            "memory_total_bytes": memory_total_bytes
-        }
-    }
-    ndv = int(np.count_nonzero(freq))
-    bin_width = float((mx - mn) / n_bins) if n_bins > 0 else 0.0
-
-    dataset_stats = {
-        "Distribution": args.dist,
-        "Rows": args.rows,
-        "Min": mn,
-        "Max": mx,
-        "NDV": ndv,
-        "Skewness": skew,
-        "Kurtosis": kurt,
-        "Bin Count (k)": n_bins,
-        "Bin Width (h)": bin_width
-    }
-    
-    drift_pkg["dataset_stats"] = dataset_stats
-    drift_pkg["bins"] = n_bins
-    drift_pkg["bin_width"] = bin_width
-
-    with open(Path(args.out_dir) / "summary.json", "w") as f:
-        json.dump(drift_pkg, f, indent=2)
-        
-    # Save Raw Errors and Plot
-    csv_out = Path(args.out_dir) / "experiment_errors.csv"
-    print(f"Saving raw errors to {csv_out}...")
-    pd.DataFrame(raw_errors).to_csv(csv_out, index=False)
-    
-    plot_out = Path(args.out_dir) / "experiment_boxplots.png"
-    print(f"Generating boxplots at {plot_out}...")
-    plot_model_comparison(
-        csv_path=str(csv_out), 
-        output_path=str(plot_out), 
-        title=f"Q-Error Distribution ({args.dist}, {args.rows} rows)"
-    )
 
 def run_static_benchmark(args):
     """
-    Runs a batch of static experiments over multiple distributions.
-    Migrated from static_benchmark.py
+    Runs static benchmarks for all distributions or a specific one.
     """
-    distributions = ["uniform", "normal", "zipf", "sparse_cluster", "anti_zipf"]
-    all_results = []
-    raw_errors = []
-    
-    output_dir = Path(args.out_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    experiment_suffix = f"_{args.experiment_name}" if args.experiment_name else ""
-    excel_path = output_dir / f"static_benchmark_results{experiment_suffix}.xlsx"
-    csv_errors_path = output_dir / f"static_benchmark_errors{experiment_suffix}.csv"
-    
-    print(f"Starting Static Benchmark Batch (Rows: {args.rows}, Eval: {args.eval_n})")
-    
-    for dist in distributions:
-        print(f"\n>>> Processing Distribution: {dist} <<<")
-        # Create a copy of args to modify for each distribution
-        dist_args = copy.deepcopy(args)
-        dist_args.dist = dist
-        dist_args.out_dir = str(output_dir / dist)
+    if args.dist == "all":
+        distributions = ["uniform", "normal", "zipf", "sparse_cluster", "anti_zipf"]
+    else:
+        distributions = [args.dist]
         
-        # We need run_single_experiment to return something, or we collect from files
-        # Let's modify run_single_experiment to return results, or just read the summary it saves.
-        # For simplicity and to avoid deep refactoring of run_single_experiment, 
-        # let's just use it and then read its output.
+    for dist in distributions:
+        print(f"\n>>> Running for Distribution: {dist} <<<")
+        # Create a specific args object for this run
+        current_args = copy.deepcopy(args)
+        current_args.dist = dist
         
         try:
-            _run_experiment_internal(dist_args)
-            
-            # Read back summary
-            with open(Path(dist_args.out_dir) / "summary.json", "r") as f:
-                res = json.load(f)
-                
-            summary_row = {
-                "Distribution": dist,
-                "Rows": res["dataset_stats"]["Rows"],
-                "Min": res["dataset_stats"]["Min"],
-                "Max": res["dataset_stats"]["Max"],
-                "NDV": res["dataset_stats"]["NDV"],
-                "Skewness": res["dataset_stats"]["Skewness"],
-                "Kurtosis": res["dataset_stats"]["Kurtosis"],
-                "Bin Count": res["dataset_stats"]["Bin Count (k)"],
-                "Bin Width": res["dataset_stats"]["Bin Width (h)"],
-                "EW_Median_QErr": res["hist_width_metrics"]["QErr_median"],
-                "EW_P95_QErr": res["hist_width_metrics"]["QErr_p95"],
-                "Hybrid_Median_QErr": res["hybrid_metrics"]["QErr_median"],
-                "Hybrid_P95_QErr": res["hybrid_metrics"]["QErr_p95"],
-                "EH_Median_QErr": res["equihist_init_metrics"]["QErr_median"],
-                "EH_P95_QErr": res["equihist_init_metrics"]["QErr_p95"],
-                "EH_Train_Time": res["timings"]["equihist_init_train"]
-            }
-            all_results.append(summary_row)
-            
-            # Read back raw errors
-            dist_errors = pd.read_csv(Path(dist_args.out_dir) / "experiment_errors.csv")
-            # Only keep Initial models for static benchmark
-            dist_errors = dist_errors[dist_errors['Model'].str.contains('Initial')]
-            raw_errors.append(dist_errors)
-            
+            _run_experiment_internal(current_args)
         except Exception as e:
-            print(f"Error processing {dist}: {e}")
-            continue
-
-    # Final Save
-    df_summary = pd.DataFrame(all_results)
-    df_summary.to_excel(excel_path, index=False)
-    print(f"\nFinal Summary saved to {excel_path}")
-    
-    # Also refresh the global dataset statistics file
-    dataset_stats_df = df_summary[["Distribution", "Rows", "Min", "Max", "NDV", "Skewness", "Kurtosis", "Bin Count", "Bin Width"]].copy()
-    dataset_stats_file = Path("datasets/dataset_statistics.xlsx")
-    dataset_stats_df.to_excel(dataset_stats_file, index=False)
-    print(f"Dataset Statistics refreshed at {dataset_stats_file}")
-    
-    df_errors = pd.concat(raw_errors)
-    df_errors.to_csv(csv_errors_path, index=False)
-    
-    plot_path = output_dir / f"static_boxplots{experiment_suffix}.png"
-    print(f"Generating aggregated boxplots at {plot_path}...")
-    generate_boxplots(
-        csv_path=str(csv_errors_path),
-        output_path=str(plot_path),
-        title=f"Static Benchmark Q-Error ({args.rows} rows)"
-    )
+            print(f"Failed to run for {dist}: {e}")
+            import traceback
+            traceback.print_exc()
 
 def run_drift_benchmark(args):
     """
