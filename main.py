@@ -30,18 +30,17 @@ import numpy as np
 import pandas as pd
 
 # New Modular Imports
-from models.core import Bucket, RangeQuery
+from models import (
+    Bucket, RangeQuery, EquiWidthHistogram, 
+    EquiHistLearner, HybridEstimator,
+    identify_bad_buckets, summarize, q_error_vec
+)
 from datasets import (
     gen_values, save_csv_column, scan_min_max_count, 
     build_frequency_and_sample, freedman_diaconis_bins,
-    load_imdb_lengths, load_census_age, calculate_skew_kurt
+    load_imdb_lengths, load_census_age, calculate_skew_kurt,
+    generate_boxplots, plot_data_distribution
 )
-from models.equi_width import EquiWidthHistogram
-from models.equi_hist import EquiHistLearner
-from models.hybrid import HybridEstimator
-from models.evaluation import identify_bad_buckets, summarize, q_error_vec
-from datasets.plot_boxplots import generate_boxplots
-from datasets.plot_datasets import plot_data_distribution
 import copy
 
 def main():
@@ -530,13 +529,13 @@ def _run_experiment_internal(args):
     print(f"Saving raw errors to {csv_out}...")
     pd.DataFrame(raw_errors).to_csv(csv_out, index=False)
     
-    plot_out = Path(args.out_dir) / "experiment_boxplots.png"
-    print(f"Generating boxplots at {plot_out}...")
-    generate_boxplots(
-        csv_path=str(csv_out), 
-        output_path=str(plot_out), 
-        title=f"Q-Error Distribution ({args.dist}, {args.rows} rows)"
-    )
+    # plot_out = Path(args.out_dir) / "experiment_boxplots.png"
+    # print(f"Generating boxplots at {plot_out}...")
+    # generate_boxplots(
+    #     csv_path=str(csv_out), 
+    #     output_path=str(plot_out), 
+    #     title=f"Q-Error Distribution ({args.dist}, {args.rows} rows)"
+    # )
 
 def run_static_benchmark(args):
     """
