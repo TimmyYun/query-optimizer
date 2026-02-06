@@ -1,57 +1,58 @@
 # Thesis: Hybrid Selectivity Estimation using CDF Learning
 
-This project implements and benchmarks a **Hybrid Approach** for selectivity estimation in databases. It combines the speed and safety of **Equi-Width Histograms** with the precision of **Machine Learning**.
+This project implements and benchmarks a **Hybrid Approach** for selectivity estimation in databases. It combines the speed and safety of **Equi-Width Histograms** with the precision of **Machine Learning** by learning the Cumulative Distribution Function (CDF) within individual histogram buckets.
 
 ## 1. The Core Idea
 
-Standard **Equi-Width Histograms** divide data into $N$ buckets of equal width.
-*   **Pros**: Extremely fast to build ($O(1)$ updates), low memory.
-*   **Cons**: Within a bucket, they assume the data is **Uniform**. This fails catastrophically for skewed data (e.g., Zipfian frequency), leading to massive errors in query planning.
+Standard **Equi-Width Histograms** assume data is **Uniform** within a bucket. This fails catastrophically for skewed data (e.g., Zipfian frequency), leading to massive errors in query planning.
 
 **Our Solution**:
-Instead of assuming uniformity inside a bucket, we train a lightweight **Machine Learning Model** (Ridge Regression) for *each bucket* to learn the actual distribution.
+Instead of assuming uniformity, we train a lightweight **Machine Learning Model** (Ridge Regression) for *each bucket* to learn the actual 1D Cumulative Distribution Function ($F_b(x) \approx P(X \le x)$). This reduces complex non-linear estimation to a simple monotonic learning task.
 
 ## 2. Methodology
 
-### A. Binning Strategy
-We rely on standard, robust statistical methods:
-1.  **Equi-Width**: We keep the simple equi-width boundaries. This ensures $O(1)$ lookups and $O(N)$ build time.
-2.  **Freedman-Diaconis Rule**: We effectively automate the "number of bins" selection using the FD rule ($Width = 2 \cdot IQR \cdot n^{-1/3}$), removing the need for magic numbers.
+- **Automated Binning**: Uses the **Freedman-Diaconis Rule** ($Width = 2 \cdot IQR \cdot n^{-1/3}$) to automatically determine the optimal number of bins based on data scale and variability.
+- **CDF Learning**: Ridge regressors learn the intra-bucket distribution, enabling precise range queries:
+  $$Count = \sum_{b \in full} Count(b) + (F_{start}(R) - F_{start}(L)) \cdot Count(start)$$
+- **Adaptive Drifting**: Includes an **EquiHist** implementation that updates in real-time as new data is inserted, and a **Hybrid Repair** mechanism that triggers retraining when Q-Error exceeds a safety threshold.
 
-### B. The ML Difference: CDF Learning
-Previous approaches tried to predict "overlap percentage" from "query range features" (4 dimensions). This was noisy.
-We innovated by learning the **Cumulative Distribution Function (CDF)**:
-*   Inside each bucket $b$, we learn a function $F_b(x) \approx P(X \le x)$.
-*   This reduces the problem to learning a **1D monotonic function**, which is much easier for simple regressors.
-*   **Inference**: To estimate selectivity for range $[L, R]$, we simply compute:
-    $$Count = \sum_{b \in full} Count(b) + (F_{start}(R_{clipped}) - F_{start}(L_{clipped})) \cdot Count(start)$$
+## 3. Project Structure
 
-## 3. Key Results
-
-We extensively benchmarked this against standard histograms on **TPC-H** (Real-world Uniform) and **Zipf** (Synthetic Skewed) datasets.
-
-### A. Massive Accuracy on Skew
-On skewed data, when memory is limited (e.g., 20 bins), standard histograms fail.
-*   **Standard Histogram MAE**: 0.0230 (2.3% error per query)
-*   **Hybrid CDF MAE**: 0.000019 (0.0019% error per query)
-*   **Improvement**: **1,200x Better**
-
-### B. Safety on Uniformity
-On TPC-H (which is very uniform), simple histograms are already perfect. Our model successfully learns the linear CDF and introduces **zero regression**.
-*   **TPC-H Q-Error**: ~1.000 (Perfect) for both methods.
-
-### C. Low Overhead
-*   **Training**: Adds ~20-40ms to build time (negligible).
-*   **Inference**: Adds ~30$\mu$s per query. Still fast enough for query optimization.
+- `main.py`: Unified entry point for all benchmarks.
+- `datasets/`: Data generation, loading, and standardized statistics logic.
+- `models/`: Implementations of Equi-Width, Equi-Hist (Adaptive), and Hybrid (ML-based) estimators.
+- `plots/`: Automatically generated visualizations of dataset distributions.
+- `experiments/`: Legacy scripts and specialized research benchmarks.
 
 ## 4. Usage
-To replicate the benchmarks (including Drift and Adaptive Repair):
+
+The project uses `poetry` for dependency management.
+
+### Static Benchmark
+Runs a batch experiment across multiple distributions (Uniform, Normal, Zipf, Exponential, Lognormal) to evaluate peak accuracy.
 
 ```bash
-# 1. Run full experiment (Zipf + Destructive Drift + Repair)
-python main.py --dist zipf --rows 1000000 --drift-rows 1500000 --drift-dist anti_zipf --eval-n 1000
-
-# 2. View Results
-# Check artifacts_optimizer/drift_summary.json
+poetry run python main.py --mode static --rows 1000000 --eval-n 1000
 ```
 
+### Drift Benchmark
+Simulates real-world data drift by starting with one distribution and "drifting" into another through high-volume inserts.
+
+```bash
+poetry run python main.py --mode drift --rows 1000000 --drift-rows 200000
+```
+
+### Configuration Options
+- `--rows`: Number of initial rows.
+- `--eval-n`: Number of range queries to evaluate.
+- `--recreate`: Force regenerate datasets (bypassing cache).
+- `--experiment-name`: Suffix for all output artifacts.
+
+## 5. Outputs & Visualization
+
+All benchmark runs generate structured artifacts in the `artifacts_optimizer/` directory (or your specified `--out-dir`):
+
+- **Excel Reports**: `static_benchmark_results.xlsx` contains granular metrics including Medians, P95 Q-Errors, and Build Timings.
+- **Global Statistics**: `datasets/dataset_statistics.xlsx` is automatically refreshed with Skewness, Kurtosis, and NDV data.
+- **Distribution Plots**: `plots/{dist}.png` provides immediate visual feedback on the data being tested.
+- **Error Visualization**: `experiment_boxplots.png` visualizes the Q-Error distribution across all models.
