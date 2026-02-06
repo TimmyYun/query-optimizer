@@ -54,3 +54,26 @@ def prepare_workload(dataset_dir: Path, n_queries: int, force_regeneration: bool
         save_workload(queries, workload_path)
         
     return workload_path
+
+def main():
+    base_path = Path("data/generated")
+    if not base_path.exists():
+        print(f"No generated data found at {base_path}")
+        return
+
+    # Iterate over all generated datasets
+    # Structure: data/generated/{rows}/{dist}
+    for rows_dir in base_path.iterdir():
+        if not rows_dir.is_dir(): continue
+        
+        for dist_dir in rows_dir.iterdir():
+            if not dist_dir.is_dir(): continue
+            
+            print(f"Preparing workload for {rows_dir.name} / {dist_dir.name}...")
+            try:
+                prepare_workload(dist_dir, n_queries=1000)
+            except Exception as e:
+                print(f"Failed to generate workload for {dist_dir}: {e}")
+
+if __name__ == "__main__":
+    main()
