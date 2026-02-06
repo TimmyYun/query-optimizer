@@ -4,6 +4,8 @@ import time
 from typing import List, Dict, Tuple, Optional, Any, Set
 from dataclasses import dataclass
 from sklearn.linear_model import Ridge
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import make_pipeline
 
 # -----------------------------------------------------------------------------
 # Core Data Structures
@@ -232,7 +234,9 @@ class HybridEstimator:
             y = np.array([r.y_cdf for r in rlist])
             t0 = time.perf_counter()
             # Ridge Regression with positive constraint approximation
-            mdl = Ridge(alpha=1.0) 
+            # mdl = Ridge(alpha=1.0) 
+            # UPGRADE: Polynomial Regression (Degree 2) to capture curvature (Normal distribution)
+            mdl = make_pipeline(PolynomialFeatures(degree=2, include_bias=False), Ridge(alpha=1.0))
             mdl.fit(X, y)
             train_time += (time.perf_counter() - t0)
             models[i] = mdl
