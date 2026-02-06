@@ -185,18 +185,86 @@ class HybridEstimator:
     def __init__(self, buckets: List[Bucket], models: Dict[int, Any] = None):
         self.buckets = buckets
         self.models = models if models is not None else {}
+        self.mcv: Dict[int, int] = {} # Map value -> count
         self.last_train_time = 0.0
 
+    def _extract_mcv(self, freq: np.ndarray, mn: int, top_k: int = 50) -> Dict[int, int]:
+        # Identify top-K heavy hitters
+        indices = np.argsort(freq)[::-1][:top_k]
+        mcv = {}
+        for idx in indices:
+            count = freq[idx]
+            if count == 0: break
+            val = int(idx + mn)
+            mcv[val] = int(count)
+        return mcv
+
     def train(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> float:
-        rows = self._collect_cdf_training_rows(freq, mn, points_per_bucket, rng, bucket_indices)
-        new_models, t_train = self._train_cdf_models(rows)
+        # 1. Extract MCV (Adaptive Skew Detection)
+        t_start = time.perf_counter()
+        
+        total_rows = np.sum(freq)
+        temp_mcv = self._extract_mcv(freq, mn, top_k=500)
+        mcv_mass = sum(temp_mcv.values())
+        
+        # Only use MCV if it accounts for > 1% of data (avoids holes in Uniform/Normal)
+        if mcv_mass > 0.01 * total_rows:
+            self.mcv = temp_mcv
+            print(f"MCV Enabled: {len(self.mcv)} items, Mass={mcv_mass/total_rows:.2%}")
+        else:
+            self.mcv = {}
+            print(f"MCV Disabled: Mass={mcv_mass/total_rows:.2%} < 1%")
+        
+        # 2. Create Residual Frequency & Update Bucket Counts
+        residual_freq = freq.copy()
+        for val, count in self.mcv.items():
+            idx = val - mn
+            if 0 <= idx < len(residual_freq):
+                residual_freq[idx] -= count
+        
+        # CRITICAL FIX: Update bucket counts to reflect residual mass!
+        # Otherwise we double-count (MCV loop + Bucket loop)
+        # Note: We must update counts bucket-by-bucket
+        ps_residual = np.cumsum(residual_freq)
+        
+        for b in self.buckets:
+            # Re-calculate count from residual_freq
+            b_lo_idx = b.lo - mn
+            b_hi_idx = b.hi - mn
+            
+            # Clamp indices
+            if b_hi_idx < 0 or b_lo_idx >= len(ps_residual):
+                 b.count = 0
+                 continue
+                 
+            idx_start = max(0, b_lo_idx - 1)
+            idx_end = min(len(ps_residual) - 1, b_hi_idx)
+            
+            val_end = ps_residual[idx_end]
+            val_start = ps_residual[idx_start] if b_lo_idx > 0 else 0
+            
+            b.count = int(val_end - val_start)
+
+        # 3. Train models on Residual
+        rows = self._collect_cdf_training_rows(residual_freq, mn, points_per_bucket, rng, bucket_indices)
+        new_models, t_train_models = self._train_adaptive_models(rows) # Renamed to adaptive
+        
         for k, v in new_models.items():
             self.models[k] = v
-        self.last_train_time = t_train
-        return t_train
+            
+        t_total = time.perf_counter() - t_start
+        self.last_train_time = t_total
+        return t_total
 
     def predict(self, q: RangeQuery) -> float:
         total = 0.0
+        
+        # 1. MCV Contribution
+        for val, count in self.mcv.items():
+            if q.low <= val <= q.high:
+                total += count
+                
+        # 2. Residual Model Contribution
         for i, b in enumerate(self.buckets):
             if b.hi < q.low: continue
             if b.lo > q.high: break
@@ -211,7 +279,7 @@ class HybridEstimator:
             b = self.buckets[i]
             rows[i] = [] 
             if b.count == 0: continue
-            n_samples = max(points_per_bucket, 50) 
+            n_samples = max(points_per_bucket, 200) # Increased sample size for stability (was 50)
             xs = np.sort(rng.integers(b.lo, b.hi + 1, size=n_samples))
             width = b.hi - b.lo + 1
             b_lo_idx = b.lo - mn
@@ -223,24 +291,55 @@ class HybridEstimator:
                 rows[i].append(CDFTrainRow(x_norm=(x - b.lo) / width, y_cdf=y_cdf))
         return rows
 
-    def _train_cdf_models(self, rows: Dict[int, List[CDFTrainRow]]) -> Tuple[Dict[int, Any], float]:
+    def _train_adaptive_models(self, rows: Dict[int, List[CDFTrainRow]]) -> Tuple[Dict[int, Any], float]:
         models = {}
-        train_time = 0.0
+        t0 = time.perf_counter()
+        
         for i, rlist in rows.items():
             if not rlist:
-                models[i] = None
+                models[i] = None # Fallback to uniform (diagonal)
                 continue
+                
             X = np.array([r.x_norm for r in rlist]).reshape(-1, 1)
             y = np.array([r.y_cdf for r in rlist])
-            t0 = time.perf_counter()
-            # Ridge Regression with positive constraint approximation
-            # mdl = Ridge(alpha=1.0) 
-            # UPGRADE: Polynomial Regression (Degree 2) to capture curvature (Normal distribution)
-            mdl = make_pipeline(PolynomialFeatures(degree=2, include_bias=False), Ridge(alpha=1.0))
-            mdl.fit(X, y)
-            train_time += (time.perf_counter() - t0)
-            models[i] = mdl
-        return models, train_time
+            
+            # --- Adaptive Selection ---
+            candidates = []
+            
+            # 1. Constant (Zero Variance / Uniform assumption) - Baseline
+            # Equivalent to predicting y = x (since we model CDF of uniform as linear diagonal)
+            # We don't train a model for this, we just calculate error of "Identity" prediction x_norm
+            y_pred_identity = X.flatten() # Predict y = x
+            mse_identity = np.mean((y - y_pred_identity)**2)
+            
+            # Optimization: If Identity is perfect, skip others to prevent overfitting noise
+            if mse_identity < 1e-5:
+                models[i] = None
+                continue
+
+            candidates.append((mse_identity, "identity", None))
+            
+            # 2. Linear (Ridge)
+            mdl_linear = Ridge(alpha=1.0)
+            mdl_linear.fit(X, y)
+            y_pred_linear = mdl_linear.predict(X)
+            mse_linear = np.mean((y - y_pred_linear)**2)
+            # Penalty for complexity (AIC-like): MSE * (1 + p/n)
+            candidates.append((mse_linear * 1.1, "linear", mdl_linear))
+            
+            # 3. Polynomial (Degree 2)
+            mdl_poly = make_pipeline(PolynomialFeatures(degree=2, include_bias=False), Ridge(alpha=1.0))
+            mdl_poly.fit(X, y)
+            y_pred_poly = mdl_poly.predict(X)
+            mse_poly = np.mean((y - y_pred_poly)**2)
+             # Higher Penalty for poly
+            candidates.append((mse_poly * 1.2, "poly", mdl_poly))
+            
+            # Select Best
+            best_model = min(candidates, key=lambda x: x[0])[2]
+            models[i] = best_model
+            
+        return models, time.perf_counter() - t0
 
     def _predict_local_cdf(self, model, x_norm) -> float:
         if model is None: return max(0.0, min(1.0, x_norm))
