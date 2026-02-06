@@ -14,7 +14,6 @@ Models compared:
 - Hybrid Estimator (Combines Histograms with ML models like CDFs)
 
 Usage:
-    python main.py --mode single --dist zipf --rows 1000000
     python main.py --mode static --rows 10000000
     python main.py --mode drift --rows 10000000
 """
@@ -137,10 +136,32 @@ def _run_experiment_internal(args):
     if not workload_path.exists():
         raise FileNotFoundError(f"Workload file not found at {workload_path}. Run workload.py first.")
         
-    queries = load_workload_csv(workload_path)
+    all_queries = load_workload_csv(workload_path)
     
-    # Compute cumulative sum for ground truth calculation
+    # Compute cumulative sum for ground truth calculation and filtering
     ps = np.cumsum(freq)
+    
+    # Filter out queries with 0 true cardinality (selectivity)
+    print(f"Original Workload Size: {len(all_queries)}")
+    queries = []
+    skipped_count = 0
+    
+    for q in all_queries:
+        li, ri = q.low - mn, q.high - mn
+        if li < 0: li=0
+        if ri >= len(ps): ri = len(ps)-1
+        truth = int(ps[ri] - (ps[li-1] if li > 0 else 0))
+        
+        if truth > 0:
+            queries.append(q)
+        else:
+            skipped_count += 1
+            
+    print(f"Filtered Workload Size: {len(queries)} (Skipped {skipped_count} zero-result queries)")
+    
+    if not queries:
+        print("WARNING: All queries were filtered out! No benchmark will run.")
+        return
         
     y_true = []
     y_hist_width = []
