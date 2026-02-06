@@ -503,7 +503,7 @@ def run_static_benchmark(args):
     Runs a batch of static experiments over multiple distributions.
     Migrated from static_benchmark.py
     """
-    distributions = ["uniform", "normal", "zipf", "exponential", "lognormal", "imdb", "census"]
+    distributions = ["uniform", "normal", "zipf", "exponential", "lognormal"]
     all_results = []
     raw_errors = []
     
