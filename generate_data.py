@@ -1,5 +1,6 @@
 import argparse
 from datasets import DatasetManager
+import workload
 import time
 
 def main():
@@ -15,19 +16,16 @@ def main():
             print(f"\n>>> Generating Dataset: {rows} rows, {dist} <<<")
             start = time.time()
             try:
-                # Force regeneration to ensure fresh data if needed, 
-                # or just let it cache if allowed. The user asked to "generate", 
-                # implying creation. If they already exist, prepare_dataset handles check.
-                # Just in case, I'll pass force_regeneration=False to save time if they exist,
-                # unless users specifically asked to RE-generate. The prompt says "generate", 
-                # so I will assume if it exists it is fine, but if not it will create.
-                dm.prepare_dataset(rows, dist)
+                # 1. Generate Data
+                ds_dir = dm.prepare_dataset(rows, dist)
                 
-                # Also prepare a default workload for it so it's ready for benchmarks
-                dm.prepare_workload(rows, dist, 1000)
+                # 2. Generate Workload (Independent)
+                workload.prepare_workload(ds_dir, n_queries=1000)
                 
             except Exception as e:
                 print(f"Failed to generate {rows} / {dist}: {e}")
+                import traceback
+                traceback.print_exc()
             
             elapsed = time.time() - start
             print(f"Done in {elapsed:.2f}s")

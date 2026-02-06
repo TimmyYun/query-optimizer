@@ -31,7 +31,7 @@ import pandas as pd
 
 # New Modular Imports
 from models import (
-    Bucket, RangeQuery, EquiWidthHistogram, 
+    Bucket, EquiWidthHistogram, 
     EquiHistLearner, HybridEstimator,
     identify_bad_buckets, summarize, q_error_vec
 )
@@ -39,8 +39,9 @@ from datasets import (
     DatasetManager,
     scan_min_max_count, build_frequency_and_sample,
     generate_boxplots, plot_data_distribution, plot_model_comparison,
-    load_workload, gen_values, save_csv_column
+    gen_values, save_csv_column
 )
+from workload import RangeQuery, load_workload
 import copy
 
 def main():

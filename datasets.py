@@ -201,43 +201,6 @@ def plot_model_comparison(csv_path: str, output_path: str, title: str):
     plt.close()
     print(f"Single distribution boxplot saved to {output_path}")
 
-# ==========================================
-# Workload Utils
-# ==========================================
-
-class RangeQuery:
-    def __init__(self, low: int, high: int):
-        self.low = low
-        self.high = high
-
-    def to_dict(self):
-        return {"low": int(self.low), "high": int(self.high)}
-
-    @staticmethod
-    def from_dict(d):
-        return RangeQuery(d["low"], d["high"])
-
-def generate_workload(n: int, mn: int, mx: int, seed: int = 42) -> List[RangeQuery]:
-    rng = np.random.default_rng(seed)
-    queries = []
-    width = mx - mn
-    for _ in range(n):
-        l = rng.integers(mn, mx)
-        # Random width up to 5% of domain
-        w = rng.integers(1, max(10, width // 20)) 
-        r = min(mx, l + w)
-        queries.append(RangeQuery(l, r))
-    return queries
-
-def save_workload(queries: List[RangeQuery], output_path: Path):
-    data = [q.to_dict() for q in queries]
-    with open(output_path, "w") as f:
-        json.dump(data, f, indent=4)
-
-def load_workload(input_path: Path) -> List[RangeQuery]:
-    with open(input_path, "r") as f:
-        data = json.load(f)
-    return [RangeQuery.from_dict(d) for d in data]
 
 # ==========================================
 # Dataset Manager
@@ -261,9 +224,9 @@ class DatasetManager:
             print(f"Generating dataset: {rows} rows, {dist}...")
             rng = np.random.default_rng(42)
             if dist.lower() == "imdb":
-                vals = load_imdb_lengths(Path("datasets/files/imdb/IMDB Dataset.csv"))
+                vals = load_imdb_lengths(Path("data/imdb/IMDB Dataset.csv"))
             elif dist.lower() == "census":
-                vals = load_census_age(Path("datasets/files/census/USCensus1990.data.txt.csv"))
+                vals = load_census_age(Path("data/census/USCensus1990.data.txt.csv"))
             else:
                 vals = gen_values(rng, dist, rows, 0, 200_000)
             
@@ -300,18 +263,3 @@ class DatasetManager:
             
         print(f"Dataset ready at {ds_dir}")
         return ds_dir
-
-    def prepare_workload(self, rows: int, dist: str, n_queries: int, force_regeneration: bool = False):
-        ds_dir = self.get_dataset_dir(rows, dist)
-        workload_path = ds_dir / "workload.json"
-        
-        if not workload_path.exists() or force_regeneration:
-            # Load stats to get domain
-            with open(ds_dir / "stats.json", "r") as f:
-                stats = json.load(f)
-            
-            print(f"Generating workload: {n_queries} queries for {dist}...")
-            queries = generate_workload(n_queries, stats["Min"], stats["Max"])
-            save_workload(queries, workload_path)
-            
-        return workload_path
