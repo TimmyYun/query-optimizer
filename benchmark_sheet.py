@@ -10,6 +10,7 @@ from models.equi_hist import EquiHistLearner
 from models.hybrid import HybridEstimator
 from datasets import gen_values, save_csv_column, scan_min_max_count, build_frequency_and_sample, freedman_diaconis_bins
 from models.evaluation import summarize, q_error_vec
+from plot_boxplots import generate_boxplots
 
 def run_benchmark():
     distributions = ['uniform', 'normal', 'zipf', 'sparse_cluster', 'anti_zipf']
@@ -36,9 +37,12 @@ def run_benchmark():
         ds_path = cache_dir / f"bench_{dist}.csv"
         
         # Generate data
-        print(f"Generating data for {dist}...")
-        vals = gen_values(rnd, dist, rows, 0, 200_000)
-        save_csv_column(vals, ds_path)
+        if not ds_path.exists():
+            print(f"Generating data for {dist}...")
+            vals = gen_values(rnd, dist, rows, 0, 200_000)
+            save_csv_column(vals, ds_path)
+        else:
+            print(f"Using cached data for {dist}...")
         
         mn, mx, N = scan_min_max_count(ds_path)
         freq, sample = build_frequency_and_sample(ds_path, mn, mx, N, 100_000, seed)
@@ -162,10 +166,14 @@ def run_benchmark():
     print(f"\nResults saved to {out_file}")
     
     # Save raw errors
-    print("Saving raw errors to static_errors.parquet...")
+    print("Saving raw errors to static_errors.csv...")
     df_raw = pd.DataFrame(raw_errors)
-    df_raw.to_parquet("static_errors.parquet", index=False)
-    print("Raw errors saved to static_errors.parquet")
+    df_raw.to_csv("static_errors.csv", index=False)
+    print("Raw errors saved to static_errors.csv")
+    
+    # Generate Plots
+    print("\nGenerating Box Plots...")
+    generate_boxplots(csv_path="static_errors.csv", output_path="plots/static_boxplots.png")
 
 if __name__ == "__main__":
     run_benchmark()
