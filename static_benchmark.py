@@ -149,8 +149,7 @@ def run_benchmark():
                 "Build Time (s)": build_time,
                 "Inference Time (s)": inf_time,
                 "Median QErr": m['QErr_median'],
-                "95% QErr": m['QErr_p95'],
-                "Max QErr": m.get('QErr_max', 0)
+                "95% QErr": m['QErr_p95']
             }
             
         results.append(get_metrics(y_ew, "Equi-Width", t_build_ew, t_inf_ew))
