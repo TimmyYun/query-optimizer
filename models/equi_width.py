@@ -21,7 +21,7 @@ class EquiWidthHistogram:
         self.buckets = buckets
         
     @staticmethod
-    def build(mn: int, mx: int, bins: int, freq: np.ndarray, ndv_threshold: int = 200) -> 'EquiWidthHistogram':
+    def build(mn: int, mx: int, bins: int, freq: np.ndarray) -> 'EquiWidthHistogram':
         """
         Constructs an Equi-Width Histogram from a frequency array.
         
@@ -30,8 +30,7 @@ class EquiWidthHistogram:
             mx: Maximum domain value.
             bins: Number of buckets to create.
             freq: Frequency array where freq[i] is the count of value (mn + i).
-            ndv_threshold: Threshold for storing specific values (sparse bucket) logic.
-        
+
         Returns:
             A new EquiWidthHistogram instance.
         """
@@ -42,8 +41,6 @@ class EquiWidthHistogram:
         buckets = []
         # Pre-calculate cumulative sum for fast count aggregation
         ps = np.cumsum(freq)
-        
-        EXACT_STORAGE_THRESHOLD = ndv_threshold
         
         cur = mn
         for _ in range(bins):
@@ -57,20 +54,7 @@ class EquiWidthHistogram:
             # Calculate total count in this bucket using prefix sums
             cnt = int(ps[ri] - (ps[li-1] if li > 0 else 0))
             
-            # Determine NDV (Number of Distinct Values) in this bucket
-            freq_slice = freq[li : ri+1]
-            ndv = np.count_nonzero(freq_slice)
-            
-            b = Bucket(lo, hi, count=cnt, ndv=ndv)
-            
-            # Hybrid Logic: If NDV is low, store exact values for 100% accuracy
-            if ndv > 0 and ndv <= EXACT_STORAGE_THRESHOLD:
-                rel_indices = np.nonzero(freq_slice)[0]
-                vals_with_counts = []
-                for idx in rel_indices:
-                     vals_with_counts.append((int(idx + lo), int(freq_slice[idx])))
-                b.exact_values = vals_with_counts
-                
+            b = Bucket(lo, hi, count=cnt)
             buckets.append(b)
             
             cur = hi + 1

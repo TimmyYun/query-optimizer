@@ -57,7 +57,6 @@ def main():
     parser.add_argument("--recreate", action="store_true", help="Force regeneration of the dataset even if cached")
     
     # Ablation Hyperparams
-    parser.add_argument("--ndv-threshold", type=int, default=200, help="Threshold for Exact Storage")
     parser.add_argument("--eh-lr", type=float, default=0.5, help="EquiHist Learning Rate")
     
     args = parser.parse_args()
@@ -138,7 +137,7 @@ def main():
     # This represents a traditional database histogram.
     t0_hist = time.perf_counter()
     # Refactored: Use Class Builder to create the histogram
-    ew_hist = EquiWidthHistogram.build(mn, mx, n_bins, freq, ndv_threshold=args.ndv_threshold)
+    ew_hist = EquiWidthHistogram.build(mn, mx, n_bins, freq)
     buckets_eq_width = ew_hist.buckets # Access buckets for other models to use as a base
     t_hist_build = time.perf_counter() - t0_hist
     
@@ -154,9 +153,6 @@ def main():
     t_ml_train = hybrid_est.train(freq, mn, 20, rng)
     print(f"Hist Build (Width): {t_hist_build:.4f}s, ML Train: {t_ml_train:.4f}s")
     
-    n_exact = sum(1 for b in buckets_eq_width if b.exact_values is not None)
-    n_ml = sum(1 for b in buckets_eq_width if b.exact_values is None)
-    print(f"Bucket Strategy: {n_exact} Exact (Sparse), {n_ml} ML (Dense)")
     
     # 4. Evaluation (Initial)
     print("Generating Evaluation Workload...")
@@ -220,7 +216,7 @@ def main():
     y_eh_init = np.array(y_eh_init)
     
     m_hist_w = summarize(y_true, y_hist_width, "Equi-Width (Standard)")
-    m_hyb = summarize(y_true, y_hybrid, "Hybrid + NDV Smart")
+    m_hyb = summarize(y_true, y_hybrid, "Hybrid")
     m_eh_init = summarize(y_true, y_eh_init, "EquiHist (Initial Learning)")
     
     # Calculate specialized training times
@@ -264,7 +260,7 @@ def main():
     # This histogram is NOT updated and represents the degradation of a static statistic
     # over time as new data arrives.
     # Refactored: Create Stale Class Instance
-    buckets_static = [Bucket(b.lo, b.hi, count=b.count, ndv=b.ndv, exact_values=b.exact_values) for b in buckets_eq_width]
+    buckets_static = [Bucket(b.lo, b.hi, count=b.count) for b in buckets_eq_width]
     static_hist_stale = EquiWidthHistogram(buckets_static)
     
     # 2. EquiHist (Online Learning - CONTINUES)
@@ -379,7 +375,7 @@ def main():
     # Let's use the same suggested bins count but rebuilt boundaries.
     
     # Refactored: Rebuild using class
-    rebuilt_hist = EquiWidthHistogram.build(mn_rb, mx_rb, n_bins, freq_rb, ndv_threshold=args.ndv_threshold)
+    rebuilt_hist = EquiWidthHistogram.build(mn_rb, mx_rb, n_bins, freq_rb)
     t_static_rebuild = time.perf_counter() - t0_rebuild
     print(f"Static Rebuild Time: {t_static_rebuild:.4f}s")
     

@@ -21,8 +21,7 @@ def identify_bad_buckets(queries: List[RangeQuery], y_true: np.ndarray, y_pred: 
                  if b.lo > q.high: break
                  
                  # Only mark if not exact?
-                 if b.exact_values is None: 
-                     bad_buckets.add(b_idx)
+                 bad_buckets.add(b_idx)
     
     return list(bad_buckets)
 

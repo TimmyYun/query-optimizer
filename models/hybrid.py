@@ -9,7 +9,6 @@ class HybridEstimator:
     Implements a Hybrid Selectivity Estimator.
     
     This approach combines Equi-Width buckets with Machine Learning models.
-    - Sparse Buckets (Low NDV): Use exact frequency storage (100% accurate).
     - Dense Buckets (High NDV): Use Isotonic Regression models to approximate the CDF.
     """
     
@@ -74,8 +73,6 @@ class HybridEstimator:
             b = self.buckets[i]
             rows[i] = [] 
             if b.count == 0: continue
-            # Skip sparse buckets as they use exact storage, no model needed
-            if b.exact_values is not None: continue 
             
             n_samples = max(points_per_bucket, 50) 
             
@@ -142,14 +139,6 @@ class HybridEstimator:
         lo = max(q_lo, b.lo)
         hi = min(q_hi, b.hi)
         if lo > hi: return 0.0
-        
-        # Strategy 1: Exact Values (Sparse)
-        if b.exact_values is not None:
-             c_sum = 0
-             for v, cnt in b.exact_values:
-                 if lo <= v <= hi:
-                     c_sum += cnt
-             return float(c_sum)
         
         # Strategy 2: Learned CDF (Dense)
         w = b.hi - b.lo + 1
