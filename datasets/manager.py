@@ -15,11 +15,11 @@ from .workload_utils import generate_workload, save_workload, load_workload, Ran
 from .plot_utils import plot_data_distribution
 
 class DatasetManager:
-    def __init__(self, base_path: str = "datasets"):
+    def __init__(self, base_path: str = "data"):
         self.base_path = Path(base_path)
 
     def get_dataset_dir(self, rows: int, dist: str) -> Path:
-        return self.base_path / f"{rows}_{dist}"
+        return self.base_path / "generated" / str(rows) / dist
 
     def prepare_dataset(self, rows: int, dist: str, force_regeneration: bool = False):
         ds_dir = self.get_dataset_dir(rows, dist)
