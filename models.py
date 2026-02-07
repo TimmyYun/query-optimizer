@@ -6,6 +6,21 @@ from dataclasses import dataclass
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
+from sklearn.neural_network import MLPRegressor
+
+class LogModelWrapper:
+    """
+    Wraps a model (like MLP) to predict in Log-Space.
+    Trained on log1p(y), so predict must return expm1(pred).
+    """
+    def __init__(self, model):
+        self.model = model
+    
+    def predict(self, X):
+        pred_log = self.model.predict(X)
+        pred = np.expm1(pred_log)
+        return np.maximum(pred, 0) # Clamp negative values
+
 
 # -----------------------------------------------------------------------------
 # Core Data Structures
@@ -185,69 +200,14 @@ class HybridEstimator:
     def __init__(self, buckets: List[Bucket], models: Dict[int, Any] = None):
         self.buckets = buckets
         self.models = models if models is not None else {}
-        self.mcv: Dict[int, int] = {} # Map value -> count
         self.last_train_time = 0.0
 
-    def _extract_mcv(self, freq: np.ndarray, mn: int, top_k: int = 50) -> Dict[int, int]:
-        # Identify top-K heavy hitters
-        indices = np.argsort(freq)[::-1][:top_k]
-        mcv = {}
-        for idx in indices:
-            count = freq[idx]
-            if count == 0: break
-            val = int(idx + mn)
-            mcv[val] = int(count)
-        return mcv
-
     def train(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> float:
-        # 1. Extract MCV (Adaptive Skew Detection)
         t_start = time.perf_counter()
         
-        total_rows = np.sum(freq)
-        temp_mcv = self._extract_mcv(freq, mn, top_k=500)
-        mcv_mass = sum(temp_mcv.values())
-        
-        # Only use MCV if it accounts for > 1% of data (avoids holes in Uniform/Normal)
-        if mcv_mass > 0.01 * total_rows:
-            self.mcv = temp_mcv
-            print(f"MCV Enabled: {len(self.mcv)} items, Mass={mcv_mass/total_rows:.2%}")
-        else:
-            self.mcv = {}
-            print(f"MCV Disabled: Mass={mcv_mass/total_rows:.2%} < 1%")
-        
-        # 2. Create Residual Frequency & Update Bucket Counts
-        residual_freq = freq.copy()
-        for val, count in self.mcv.items():
-            idx = val - mn
-            if 0 <= idx < len(residual_freq):
-                residual_freq[idx] -= count
-        
-        # CRITICAL FIX: Update bucket counts to reflect residual mass!
-        # Otherwise we double-count (MCV loop + Bucket loop)
-        # Note: We must update counts bucket-by-bucket
-        ps_residual = np.cumsum(residual_freq)
-        
-        for b in self.buckets:
-            # Re-calculate count from residual_freq
-            b_lo_idx = b.lo - mn
-            b_hi_idx = b.hi - mn
-            
-            # Clamp indices
-            if b_hi_idx < 0 or b_lo_idx >= len(ps_residual):
-                 b.count = 0
-                 continue
-                 
-            idx_start = max(0, b_lo_idx - 1)
-            idx_end = min(len(ps_residual) - 1, b_hi_idx)
-            
-            val_end = ps_residual[idx_end]
-            val_start = ps_residual[idx_start] if b_lo_idx > 0 else 0
-            
-            b.count = int(val_end - val_start)
-
-        # 3. Train models on Residual
-        rows = self._collect_cdf_training_rows(residual_freq, mn, points_per_bucket, rng, bucket_indices)
-        new_models, t_train_models = self._train_adaptive_models(rows) # Renamed to adaptive
+        # Train models directly on the raw frequency distribution (No MCV removal)
+        rows = self._collect_cdf_training_rows(freq, mn, points_per_bucket, rng, bucket_indices)
+        new_models, t_train_models = self._train_adaptive_models(rows)
         
         for k, v in new_models.items():
             self.models[k] = v
@@ -259,12 +219,7 @@ class HybridEstimator:
     def predict(self, q: RangeQuery) -> float:
         total = 0.0
         
-        # 1. MCV Contribution
-        for val, count in self.mcv.items():
-            if q.low <= val <= q.high:
-                total += count
-                
-        # 2. Residual Model Contribution
+        # Model Contribution only (No MCV)
         for i, b in enumerate(self.buckets):
             if b.hi < q.low: continue
             if b.lo > q.high: break
@@ -335,8 +290,45 @@ class HybridEstimator:
              # Higher Penalty for poly
             candidates.append((mse_poly * 1.2, "poly", mdl_poly))
             
+            # 4. Neural Network (MLP) - Standard
+            mdl_mlp = MLPRegressor(hidden_layer_sizes=(16, 8), activation='relu', solver='lbfgs', max_iter=500, random_state=42)
+            try:
+                mdl_mlp.fit(X, y)
+                y_pred_mlp = mdl_mlp.predict(X)
+                mse_mlp = np.mean((y - y_pred_mlp)**2)
+                candidates.append((mse_mlp * 1.5, "mlp", mdl_mlp))
+            except Exception:
+                pass 
+            
+            # 5. Log-Space Neural Network (Deep Learning for Power Laws)
+            mdl_log_mlp = MLPRegressor(hidden_layer_sizes=(16, 8), activation='relu', solver='lbfgs', max_iter=500, random_state=42)
+            try:
+                # Transform targets to Log-Space: y -> log(y + 1)
+                y_log = np.log1p(y)
+                mdl_log_mlp.fit(X, y_log)
+                
+                # Predict in Log-Space
+                y_pred_log = mdl_log_mlp.predict(X)
+                
+                # Inverse Transform: y_pred -> exp(y_log) - 1
+                y_pred_log_mlp = np.expm1(y_pred_log)
+                y_pred_log_mlp = np.maximum(y_pred_log_mlp, 0)
+                
+                mse_log_mlp = np.mean((y - y_pred_log_mlp)**2)
+                candidates.append((mse_log_mlp * 1.5, "log_mlp", mdl_log_mlp))
+            except Exception:
+                pass
+            
             # Select Best
-            best_model = min(candidates, key=lambda x: x[0])[2]
+            best_candidate = min(candidates, key=lambda x: x[0])
+            best_model_name = best_candidate[1]
+            best_model_obj = best_candidate[2]
+            
+            if best_model_name == "log_mlp":
+                best_model = LogModelWrapper(best_model_obj)
+            else:
+                best_model = best_model_obj
+                
             models[i] = best_model
             
         return models, time.perf_counter() - t0
