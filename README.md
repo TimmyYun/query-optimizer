@@ -69,11 +69,12 @@ Results are saved in a hierarchical structure for easy analysis:
 
 ```
 results/
-├── {rows}/
-│   ├── {distribution}/
-│   │   ├── {workload_size}.csv        # Detailed results (Static)
-│   │   ├── {workload_size}_drift.csv  # Detailed results (Drift)
-│   │   └── summary.json               # Aggregated stats and timings
+├── {experiment_id}/           # Timestamped directory (e.g., 20231027_123045)
+│   ├── {rows}/
+│   │   ├── {distribution}/
+│   │   │   ├── {workload_size}.csv        # Detailed results (Static)
+│   │   │   ├── {workload_size}_drift.csv  # Detailed results (Drift)
+│   │   │   └── summary.json               # Aggregated stats and timings
 ```
 
 ### Result CSV Columns
@@ -103,4 +104,4 @@ The CSV files provide granular data for every query:
     ```
 
 4.  **Analyze Results**:
-    Check `results/1000000/zipf/1000.csv` for the output.
+    Check `results/{experiment_id}/1000000/zipf/1000.csv` for the output. The script will print the exact path with the experiment ID.

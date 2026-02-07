@@ -107,6 +107,18 @@ def main():
     
     args = parser.parse_args()
     
+    # Auto-generate Experiment ID if not provided
+    if args.experiment_name is None:
+        from datetime import datetime
+        args.experiment_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+    print(f"=== Experiment ID: {args.experiment_name} ===")
+    
+    # Update Output Directory to include Experiment ID
+    # This ensures results/{experiment_id}/{rows}/{dist} structure
+    args.out_dir = str(Path(args.out_dir) / args.experiment_name)
+    print(f"Results will be saved to: {args.out_dir}")
+    
     if args.mode == "static":
         run_static_benchmark(args)
     elif args.mode == "drift":
