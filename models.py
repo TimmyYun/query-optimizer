@@ -7,19 +7,53 @@ from sklearn.linear_model import Ridge
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import make_pipeline
 from sklearn.neural_network import MLPRegressor
+from sklearn.tree import DecisionTreeRegressor
 
-class LogModelWrapper:
+class FourierFeatureMapper:
     """
-    Wraps a model (like MLP) to predict in Log-Space.
-    Trained on log1p(y), so predict must return expm1(pred).
+    Maps scalar input x to high-frequency sinusoids (Positional Encoding).
+    Allows MLP to learn sharp transitions/spikes.
     """
-    def __init__(self, model):
+    def __init__(self, num_bands: int = 10, max_freq: float = 1024.0):
+        self.num_bands = num_bands
+        # Log-spaced frequencies from 1 to max_freq
+        self.freqs = np.logspace(0, np.log10(max_freq), num=num_bands, base=10)
+        
+    def transform(self, X: np.ndarray) -> np.ndarray:
+        # X shape: (N, 1)
+        # Ensure X is numpy array
+        X = np.asarray(X, dtype=np.float64)
+        
+        # log(x) feature to help with power law distributions (Zipf)
+        # Use log(x + eps) to expand the "head" of the distribution.
+        # x=0 -> log(1e-7) ~ -16. x=0.0002 -> log(2e-4) ~ -8.
+        # This gives the MLP ~8 units of space to fit the jump between x=0 and x=1.
+        X_log = np.log(X + 1e-7)
+        
+        # Output shape: (N, 2 + 2 * num_bands)
+        
+        # 1. Original X and Log X
+        features = [X, X_log]
+        
+        # 2. Sin/Cos for each band
+        for freq in self.freqs:
+            scaled = X * freq * np.pi 
+            features.append(np.sin(scaled))
+            features.append(np.cos(scaled))
+            
+        return np.hstack(features)
+
+class FourierModelWrapper:
+    """
+    Wraps an MLP to auto-encode inputs using Fourier Features before prediction.
+    """
+    def __init__(self, model, mapper):
         self.model = model
-    
+        self.mapper = mapper
+        
     def predict(self, X):
-        pred_log = self.model.predict(X)
-        pred = np.expm1(pred_log)
-        return np.maximum(pred, 0) # Clamp negative values
+        X_fourier = self.mapper.transform(X)
+        return self.model.predict(X_fourier)
 
 
 # -----------------------------------------------------------------------------
@@ -234,8 +268,23 @@ class HybridEstimator:
             b = self.buckets[i]
             rows[i] = [] 
             if b.count == 0: continue
-            n_samples = max(points_per_bucket, 200) # Increased sample size for stability (was 50)
-            xs = np.sort(rng.integers(b.lo, b.hi + 1, size=n_samples))
+            if b.count == 0: continue
+            
+            # Start with random uniform samples
+            n_samples = max(points_per_bucket, 200) 
+            xs = rng.integers(b.lo, b.hi + 1, size=n_samples)
+            
+            # CRITICAL: Always include boundaries and near-boundary points
+            # For Zipf/Skewed data, the CDF jumps massively at lo, lo+1, etc.
+            # If we don't sample these, the model learns a smooth line that misses the jump.
+            edge_points = np.array([
+                b.lo, min(b.hi, b.lo + 1), min(b.hi, b.lo + 2), min(b.hi, b.lo + 3), # Top heavy hitters
+                b.hi, max(b.lo, b.hi - 1), max(b.lo, b.hi - 2)
+            ])
+            xs = np.concatenate([xs, edge_points])
+            xs = np.unique(xs) # Remove duplicates
+            xs = np.sort(xs)
+            
             width = b.hi - b.lo + 1
             b_lo_idx = b.lo - mn
             base_cnt = ps[b_lo_idx - 1] if b_lo_idx > 0 else 0
@@ -257,6 +306,8 @@ class HybridEstimator:
                 
             X = np.array([r.x_norm for r in rlist]).reshape(-1, 1)
             y = np.array([r.y_cdf for r in rlist])
+            
+
             
             # --- Adaptive Selection ---
             candidates = []
@@ -300,22 +351,32 @@ class HybridEstimator:
             except Exception:
                 pass 
             
-            # 5. Log-Space Neural Network (Deep Learning for Power Laws)
-            mdl_log_mlp = MLPRegressor(hidden_layer_sizes=(16, 8), activation='relu', solver='lbfgs', max_iter=500, random_state=42)
+            # 5. Fourier Neural Network (Positional Encoding for High Frequency)
+            # ... (Existing code kept below, but I will insert Tree before or after)
+            
+
+            
+
+
+
+            # 5. Fourier Neural Network (Positional Encoding for High Frequency)
+            # Solves the Zipf problem by mapping input x to high-freq sinusoids
+            # Gamma(x) = [sin(2^0 pi x), cos(2^0 pi x), ..., sin(2^k pi x), cos(2^k pi x)]
             try:
-                # Transform targets to Log-Space: y -> log(y + 1)
-                y_log = np.log1p(y)
-                mdl_log_mlp.fit(X, y_log)
+                # B = 10 frequency bands (up to 2048x frequency)
+                # Max freq increased to better catch sharp edges
+                mapper = FourierFeatureMapper(num_bands=12, max_freq=2048.0)
+                X_fourier = mapper.transform(X)
                 
-                # Predict in Log-Space
-                y_pred_log = mdl_log_mlp.predict(X)
+                # Larger network to allow "memorization" of the sharp step
+                mdl_fourier_mlp = MLPRegressor(hidden_layer_sizes=(64, 32), activation='relu', solver='lbfgs', max_iter=1000, random_state=42, alpha=0.00001)
+                mdl_fourier_mlp.fit(X_fourier, y)
                 
-                # Inverse Transform: y_pred -> exp(y_log) - 1
-                y_pred_log_mlp = np.expm1(y_pred_log)
-                y_pred_log_mlp = np.maximum(y_pred_log_mlp, 0)
+                y_pred_f = mdl_fourier_mlp.predict(X_fourier)
+                mse_f = np.mean((y - y_pred_f)**2)
                 
-                mse_log_mlp = np.mean((y - y_pred_log_mlp)**2)
-                candidates.append((mse_log_mlp * 1.5, "log_mlp", mdl_log_mlp))
+                # Reduced penalty for Fourier MLP to encourage its selection on difficult buckets
+                candidates.append((mse_f * 1.05, "fourier_mlp", (mdl_fourier_mlp, mapper)))
             except Exception:
                 pass
             
@@ -324,8 +385,10 @@ class HybridEstimator:
             best_model_name = best_candidate[1]
             best_model_obj = best_candidate[2]
             
-            if best_model_name == "log_mlp":
-                best_model = LogModelWrapper(best_model_obj)
+            if best_model_name == "fourier_mlp":
+                # Tuple (model, mapper)
+                model, mapper = best_model_obj
+                best_model = FourierModelWrapper(model, mapper)
             else:
                 best_model = best_model_obj
                 
@@ -348,6 +411,7 @@ class HybridEstimator:
         cdf_hi = self._predict_local_cdf(self.models.get(b_idx), (hi - b.lo) / w)
         prev = lo - 1
         cdf_lo = 0.0 if prev < b.lo else self._predict_local_cdf(self.models.get(b_idx), (prev - b.lo) / w)
+        
         return max(0.0, cdf_hi - cdf_lo) * b.count
 
 # -----------------------------------------------------------------------------
