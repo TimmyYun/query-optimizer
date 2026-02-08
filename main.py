@@ -45,7 +45,6 @@ from datasets import (
 )
 from workload import RangeQuery, load_workload_csv
 import copy
-from aggregate_results import aggregate_summaries
 
 def plot_q_error_boxplots(result_csv_path, output_dir):
     """
@@ -74,6 +73,118 @@ def plot_q_error_boxplots(result_csv_path, output_dir):
         
     except Exception as e:
         print(f"Error plotting Q-Error: {e}")
+
+def aggregate_summaries(results_dir="results"):
+    root = Path(results_dir)
+    if not root.exists():
+        print(f"Results directory '{results_dir}' does not exist.")
+        return
+
+    # Iterate over experiment IDs (e.g., results/1, results/2)
+    for experiment_dir in root.iterdir():
+        if not experiment_dir.is_dir():
+            continue
+        
+        # Skip if not a number (e.g. results/plots)
+        if not experiment_dir.name.isdigit():
+             continue
+
+        experiment_id = experiment_dir.name
+        print(f"Processing Experiment {experiment_id}...")
+        
+        all_data = []
+
+        # Iterate over Rows (e.g., results/1/1000)
+        for row_dir in experiment_dir.iterdir():
+            if not row_dir.is_dir() or not row_dir.name.isdigit():
+                continue
+            
+            rows = int(row_dir.name)
+            
+            # Iterate over Distributions (e.g., results/1/1000/uniform)
+            for dist_dir in row_dir.iterdir():
+                if not dist_dir.is_dir():
+                    continue
+                
+                dist_name = dist_dir.name
+                
+                # Load summary.json for timing data
+                summary_json_path = dist_dir / "summary.json"
+                timing_data = {}
+                if summary_json_path.exists():
+                    try:
+                        with open(summary_json_path, "r") as f:
+                            summary_json = json.load(f)
+                            # structure: metrics -> ModelName -> { build_time, infer_time, ... }
+                            if "metrics" in summary_json:
+                                timing_data = summary_json["metrics"]
+                    except Exception as e:
+                        print(f"  Warning: Could not read {summary_json_path}: {e}")
+
+                # Find result CSVs (e.g. 1000.csv)
+                for res_file in dist_dir.glob("*.csv"):
+                    if "drift" in res_file.name or "summary" in res_file.name:
+                        continue
+                    
+                    workload_name = res_file.stem
+                    
+                    try:
+                        df = pd.read_csv(res_file)
+                        if "Q_Error" not in df.columns or "Model" not in df.columns:
+                            continue
+                        
+                        models = df["Model"].unique()
+                        
+                        for model in models:
+                            subset = df[df["Model"] == model]
+                            q_errs = subset["Q_Error"]
+                            
+                            med_q = q_errs.median()
+                            p95_q = q_errs.quantile(0.95)
+                            avg_q = q_errs.mean()
+                            
+                            train_time = None
+                            infer_time = None
+                            
+                            # Attempt match with timing data
+                            if model in timing_data:
+                                m_metrics = timing_data[model]
+                                train_time = m_metrics.get("build_time")
+                                infer_time = m_metrics.get("infer_time")
+                            
+                            all_data.append({
+                                "Distribution": dist_name,
+                                "Rows": rows,
+                                "Workload": workload_name,
+                                "Model": model,
+                                "Avg Q-Error": avg_q,
+                                "95% Q-Error": p95_q,
+                                "Median Q-Error": med_q,
+                                "Training Time (s)": train_time,
+                                "Inference Time (s)": infer_time
+                            })
+
+                    except Exception as e:
+                        print(f"  Error processing {res_file}: {e}")
+
+        if not all_data:
+            print(f"  No data found for Experiment {experiment_id}.")
+            continue
+
+        # Create DataFrame
+        df_summary = pd.DataFrame(all_data)
+        
+        # Sort for readability
+        df_summary = df_summary.sort_values(by=["Rows", "Distribution", "Workload", "Model"])
+        
+        # Save to CSV in the experiment directory
+        output_path = experiment_dir / "summary.csv"
+        try:
+            df_summary.to_csv(output_path, index=False)
+            print(f"  Saved summary to {output_path}")
+            print(df_summary.head().to_string())
+        except Exception as e:
+            print(f"  Failed to save CSV file: {e}")
 
 def main():
 
@@ -519,7 +630,7 @@ def run_static_benchmark(args):
             
     # Auto-aggregate results at the end of the batch
     print("\n>>> Aggregating All Results <<<")
-    aggregate_summaries(args.out_dir)
+    aggregate_summaries(str(Path(args.out_dir).parent))
 
 def run_drift_benchmark(args):
     """

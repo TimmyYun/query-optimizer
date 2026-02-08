@@ -240,8 +240,8 @@ class HybridEstimator:
         t_start = time.perf_counter()
         
         # Train models directly on the raw frequency distribution (No MCV removal)
-        rows = self._collect_cdf_training_rows(freq, mn, points_per_bucket, rng, bucket_indices)
-        new_models, t_train_models = self._train_adaptive_models(rows)
+        rows_data = self._collect_cdf_training_rows(freq, mn, points_per_bucket, rng, bucket_indices)
+        new_models, t_train_models = self._train_adaptive_models(rows_data)
         
         for k, v in new_models.items():
             self.models[k] = v
@@ -261,26 +261,30 @@ class HybridEstimator:
             total += self._get_bucket_overlap_count(i, q.low, q.high)
         return total
         
-    def _collect_cdf_training_rows(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> Dict[int, List[CDFTrainRow]]:
+    def _collect_cdf_training_rows(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]:
         ps = np.cumsum(freq)
         target_indices = bucket_indices if bucket_indices is not None else range(len(self.buckets))
-        rows = {}
+        rows_data = {}
+        
         for i in target_indices:
             b = self.buckets[i]
-            rows[i] = [] 
+            rows_data[i] = ([], []) # Train, Val
             if b.count == 0: continue
+            
+            width = b.hi - b.lo + 1
+            b_lo_idx = b.lo - mn
+            base_cnt = ps[b_lo_idx - 1] if b_lo_idx > 0 else 0
 
+            # --- Sample Generation ---
+            # Training: Dense sampling + Edges
+            n_train = max(points_per_bucket * 5, 1000)
+            xs_train = rng.integers(b.lo, b.hi + 1, size=n_train)
             
-            # Start with random uniform samples
-            n_samples = max(points_per_bucket * 5, 1000) 
-            xs = rng.integers(b.lo, b.hi + 1, size=n_samples)
-            
-            # CRITICAL: Always include boundaries and near-boundary points
-            # For Zipf/Skewed data, the CDF jumps massively at lo, lo+1, etc.
-            # If we don't sample these, the model learns a smooth line that misses the jump.
-            # Expanded to first 50 points to cover the "head" of the distribution where curvature is highest.
-            # Also adding log-spaced points to cover the body/tail to prevent oscillation gaps.
-            # Also adding log-spaced points to cover the body/tail to prevent oscillation gaps.
+            # Validation: Random sampling (Pure generalization check)
+            n_val = max(points_per_bucket, 200)
+            xs_val = rng.integers(b.lo, b.hi + 1, size=n_val)
+
+            # CRITICAL: Always include boundaries and near-boundary points in TRAINING
             log_points = np.array([], dtype=int)
             if b.hi > b.lo:
                 try:
@@ -295,102 +299,100 @@ class HybridEstimator:
                 log_points,                                 # Log spaced points
                 np.array([b.hi, max(b.lo, b.hi - 1), max(b.lo, b.hi - 2)]) # End points
             ])
-            xs = np.concatenate([xs, edge_points])
-            xs = np.unique(xs) # Remove duplicates
-            xs = np.sort(xs)
+            xs_train = np.concatenate([xs_train, edge_points])
+            xs_train = np.unique(xs_train)
+            xs_train = np.sort(xs_train)
             
-            width = b.hi - b.lo + 1
-            b_lo_idx = b.lo - mn
-            base_cnt = ps[b_lo_idx - 1] if b_lo_idx > 0 else 0
-            for x in xs:
-                x_idx = x - mn
-                if x_idx < 0 or x_idx >= len(ps): continue
-                y_cdf = (ps[x_idx] - base_cnt) / b.count
-                rows[i].append(CDFTrainRow(x_norm=(x - b.lo) / width, y_cdf=y_cdf))
-        return rows
+            # Helper to build rows
+            def build_rows(xs_arr):
+                res = []
+                for x in xs_arr:
+                    x_idx = x - mn
+                    if x_idx < 0 or x_idx >= len(ps): continue
+                    y_cdf = (ps[x_idx] - base_cnt) / b.count
+                    res.append(CDFTrainRow(x_norm=(x - b.lo) / width, y_cdf=y_cdf))
+                return res
 
-    def _train_adaptive_models(self, rows: Dict[int, List[CDFTrainRow]]) -> Tuple[Dict[int, Any], float]:
+            rows_data[i] = (build_rows(xs_train), build_rows(xs_val))
+            
+        return rows_data
+
+    def _train_adaptive_models(self, rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]) -> Tuple[Dict[int, Any], float]:
         models = {}
         t0 = time.perf_counter()
         
-        for i, rlist in rows.items():
-            if not rlist:
+        for i, (train_rows, val_rows) in rows_data.items():
+            if not train_rows:
                 models[i] = None # Fallback to uniform (diagonal)
                 continue
-                
-            X = np.array([r.x_norm for r in rlist]).reshape(-1, 1)
-            y = np.array([r.y_cdf for r in rlist])
             
+            # Prepare Training Data
+            X_train = np.array([r.x_norm for r in train_rows]).reshape(-1, 1)
+            y_train = np.array([r.y_cdf for r in train_rows])
+            
+            # Prepare Validation Data (or fallback to Train if empty)
+            if val_rows:
+                X_val = np.array([r.x_norm for r in val_rows]).reshape(-1, 1)
+                y_val = np.array([r.y_cdf for r in val_rows])
+            else:
+                X_val, y_val = X_train, y_train
 
             
             # --- Adaptive Selection ---
             candidates = []
             
-            # 1. Constant (Zero Variance / Uniform assumption) - Baseline
-            # Equivalent to predicting y = x (since we model CDF of uniform as linear diagonal)
-            # We don't train a model for this, we just calculate error of "Identity" prediction x_norm
-            y_pred_identity = X.flatten() # Predict y = x
-            mse_identity = np.mean((y - y_pred_identity)**2)
+            # 1. Constant (Identity / Uniform assumption)
+            # Evaluate on Validation Set
+            y_pred_identity_val = X_val.flatten() 
+            mse_identity_val = np.mean((y_val - y_pred_identity_val)**2)
             
-            # Optimization: If Identity is perfect, skip others to prevent overfitting noise
-            if mse_identity < 1e-5:
+            # Relaxed Threshold: If Identity is "good enough", use it.
+            # 1e-4 corresponds to roughly 1% avg error in CDF space
+            if mse_identity_val < 1e-4: 
                 models[i] = None
                 continue
 
-            candidates.append((mse_identity, "identity", None))
+            candidates.append((mse_identity_val, "identity", None))
             
             # 2. Linear (Ridge)
             mdl_linear = Ridge(alpha=1.0)
-            mdl_linear.fit(X, y)
-            y_pred_linear = mdl_linear.predict(X)
-            mse_linear = np.mean((y - y_pred_linear)**2)
-            # Penalty for complexity (AIC-like): MSE * (1 + p/n)
-            candidates.append((mse_linear * 1.1, "linear", mdl_linear))
+            mdl_linear.fit(X_train, y_train)
+            y_pred_linear_val = mdl_linear.predict(X_val)
+            mse_linear_val = np.mean((y_val - y_pred_linear_val)**2)
+            candidates.append((mse_linear_val * 1.1, "linear", mdl_linear))
             
             # 3. Polynomial (Degree 2)
             mdl_poly = make_pipeline(PolynomialFeatures(degree=2, include_bias=False), Ridge(alpha=1.0))
-            mdl_poly.fit(X, y)
-            y_pred_poly = mdl_poly.predict(X)
-            mse_poly = np.mean((y - y_pred_poly)**2)
-             # Higher Penalty for poly
-            candidates.append((mse_poly * 1.2, "poly", mdl_poly))
+            mdl_poly.fit(X_train, y_train)
+            y_pred_poly_val = mdl_poly.predict(X_val)
+            mse_poly_val = np.mean((y_val - y_pred_poly_val)**2)
+            candidates.append((mse_poly_val * 1.2, "poly", mdl_poly))
             
-            # 4. Neural Network (MLP) - Standard
+            # 4. Neural Network (MLP)
             mdl_mlp = MLPRegressor(hidden_layer_sizes=(16, 8), activation='relu', solver='lbfgs', max_iter=500, random_state=42)
             try:
-                mdl_mlp.fit(X, y)
-                y_pred_mlp = mdl_mlp.predict(X)
-                mse_mlp = np.mean((y - y_pred_mlp)**2)
-                candidates.append((mse_mlp * 1.5, "mlp", mdl_mlp))
+                mdl_mlp.fit(X_train, y_train)
+                y_pred_mlp_val = mdl_mlp.predict(X_val)
+                mse_mlp_val = np.mean((y_val - y_pred_mlp_val)**2)
+                candidates.append((mse_mlp_val * 1.5, "mlp", mdl_mlp))
             except Exception:
                 pass 
             
-            # 5. Fourier Neural Network (Positional Encoding for High Frequency)
-            # ... (Existing code kept below, but I will insert Tree before or after)
-            
-
-            
-
-
-
-            # 5. Fourier Neural Network (Positional Encoding for High Frequency)
-            # Solves the Zipf problem by mapping input x to high-freq sinusoids
-            # Gamma(x) = [sin(2^0 pi x), cos(2^0 pi x), ..., sin(2^k pi x), cos(2^k pi x)]
+            # 5. Fourier Neural Network
             try:
-                # B = 32 frequency bands
-                # Tuned to 20k to resolve head (Period ~0.25 units) with high regularization to prevent tail oscillation
                 mapper = FourierFeatureMapper(num_bands=32, max_freq=20000.0)
-                X_fourier = mapper.transform(X)
+                # Fit transform on train, transform only on val
+                X_fourier_train = mapper.transform(X_train)
+                X_fourier_val = mapper.transform(X_val)
                 
-                # Relu for sharpness, alpha=0.001 to dampen oscillations
                 mdl_fourier_mlp = MLPRegressor(hidden_layer_sizes=(128, 64), activation='relu', solver='lbfgs', max_iter=1000, random_state=42, alpha=0.001)
-                mdl_fourier_mlp.fit(X_fourier, y)
+                mdl_fourier_mlp.fit(X_fourier_train, y_train)
                 
-                y_pred_f = mdl_fourier_mlp.predict(X_fourier)
-                mse_f = np.mean((y - y_pred_f)**2)
+                y_pred_f_val = mdl_fourier_mlp.predict(X_fourier_val)
+                mse_f_val = np.mean((y_val - y_pred_f_val)**2)
                 
-                # Reduced penalty for Fourier MLP to encourage its selection on difficult buckets
-                candidates.append((mse_f * 1.05, "fourier_mlp", (mdl_fourier_mlp, mapper)))
+                # Increased Penalty: 1.5x (was 1.05x) to discourage overfitting noise
+                candidates.append((mse_f_val * 1.5, "fourier_mlp", (mdl_fourier_mlp, mapper)))
             except Exception:
                 pass
             
@@ -400,7 +402,6 @@ class HybridEstimator:
             best_model_obj = best_candidate[2]
             
             if best_model_name == "fourier_mlp":
-                # Tuple (model, mapper)
                 model, mapper = best_model_obj
                 models[i] = FourierModelWrapper(model, mapper)
             else:
@@ -430,7 +431,7 @@ class HybridEstimator:
         # This guards against non-monotonicity or gaps in FourierMLP
         if b.count > 0 and w > 0:
             uniform_pred = ((hi - lo + 1) / w) * b.count
-            return max(model_pred, uniform_pred * 0.001) # Min 0.1% of uniform
+            return max(model_pred, uniform_pred * 0.01) # Min 1% of uniform
             
         return model_pred
 
@@ -462,4 +463,3 @@ def summarize(y_true, y_pred, name="Model"):
     avg = float(np.mean(qe))
     print(f"[{name}] Median QErr={med:.4f}, P95 QErr={p95:.4f}, Avg QErr={avg:.4f}")
     return {"name": name, "QErr_median": med, "QErr_p95": p95, "QErr_avg": avg}
-
