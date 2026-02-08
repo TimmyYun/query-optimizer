@@ -110,6 +110,7 @@ def main():
     args = parser.parse_args()
     
     # Auto-generate Experiment ID if not provided
+    if args.experiment_name is None:
         # Auto-incrementing Experiment ID
         base_dir = Path(args.out_dir)
         base_dir.mkdir(parents=True, exist_ok=True)
