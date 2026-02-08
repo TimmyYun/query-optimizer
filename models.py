@@ -231,10 +231,16 @@ class HybridEstimator:
     """
     Implements a Hybrid Selectivity Estimator combining histograms and ML models.
     """
-    def __init__(self, buckets: List[Bucket], models: Dict[int, Any] = None):
+    def __init__(self, buckets: List[Bucket], models: Dict[int, Any] = None, 
+                 identity_threshold: float = 1e-4, 
+                 mlp_penalty: float = 1.5, 
+                 fourier_penalty: float = 1.5):
         self.buckets = buckets
         self.models = models if models is not None else {}
         self.last_train_time = 0.0
+        self.identity_threshold = identity_threshold
+        self.mlp_penalty = mlp_penalty
+        self.fourier_penalty = fourier_penalty
 
     def train(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> float:
         t_start = time.perf_counter()
@@ -348,7 +354,7 @@ class HybridEstimator:
             
             # Relaxed Threshold: If Identity is "good enough", use it.
             # 1e-4 corresponds to roughly 1% avg error in CDF space
-            if mse_identity_val < 1e-4: 
+            if mse_identity_val < self.identity_threshold: 
                 models[i] = None
                 continue
 
@@ -374,7 +380,7 @@ class HybridEstimator:
                 mdl_mlp.fit(X_train, y_train)
                 y_pred_mlp_val = mdl_mlp.predict(X_val)
                 mse_mlp_val = np.mean((y_val - y_pred_mlp_val)**2)
-                candidates.append((mse_mlp_val * 1.5, "mlp", mdl_mlp))
+                candidates.append((mse_mlp_val * self.mlp_penalty, "mlp", mdl_mlp))
             except Exception:
                 pass 
             
@@ -391,8 +397,8 @@ class HybridEstimator:
                 y_pred_f_val = mdl_fourier_mlp.predict(X_fourier_val)
                 mse_f_val = np.mean((y_val - y_pred_f_val)**2)
                 
-                # Increased Penalty: 1.5x (was 1.05x) to discourage overfitting noise
-                candidates.append((mse_f_val * 1.5, "fourier_mlp", (mdl_fourier_mlp, mapper)))
+                # Increased Penalty: discourage overfitting noise
+                candidates.append((mse_f_val * self.fourier_penalty, "fourier_mlp", (mdl_fourier_mlp, mapper)))
             except Exception:
                 pass
             

@@ -209,6 +209,7 @@ def main():
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--eval-n", dest="eval_n", type=str, default="1000", help="Workload name/size to evaluate (e.g. 1000 or 1000_narrow)")
     parser.add_argument("--bins", type=int, default=100, help="Number of bins for Equi-Width Histogram (Default: 100)")
+    parser.add_argument("--bin-method", type=str, choices=["fixed", "fd"], default="fixed", help="Method to calculate bins: 'fixed' (uses --bins) or 'fd' (Freedman-Diaconis). Default: fixed")
     parser.add_argument("--skewed", action="store_true", help="Use skewed workload for Head heavy evaluation")
     parser.add_argument("--recreate", action="store_true", help="Force regeneration of the dataset even if cached")
     
@@ -217,6 +218,11 @@ def main():
     
     # Ablation Hyperparams
     parser.add_argument("--eh-lr", type=float, default=0.5, help="EquiHist Learning Rate")
+    
+    # Hybrid Specific Hyperparams
+    parser.add_argument("--hybrid-points", type=int, default=20, help="Hybrid points per bucket")
+    parser.add_argument("--hybrid-ident", type=float, default=1e-4, help="Hybrid identity MSE threshold")
+    parser.add_argument("--hybrid-penalty", type=float, default=1.5, help="Hybrid model selection penalty")
     
     args = parser.parse_args()
     
@@ -267,7 +273,22 @@ def _run_experiment_internal(args):
     shutil.copy2(ds_path, working_ds_path)
     ds_path = working_ds_path
 
-    print(f"Using Bins: {args.bins} (User Specified/Default)")
+    # Option to use FD Rule for Bin Count
+    if args.bin_method == 'fd':
+        if n_bins and n_bins > 0:
+             print(f"FD Rule: Using pre-calculated {n_bins} bins from dataset metadata.")
+             args.bins = n_bins
+        else:
+             print("Using Freedman-Diaconis (FD) Rule for Bin Calculation (No pre-calculated value found)...")
+             try:
+                  # Use numpy's robust FD implementation on the sample
+                  bin_edges = np.histogram_bin_edges(sample, bins='fd')
+                  args.bins = len(bin_edges) - 1
+                  print(f"FD Rule: Calculated {args.bins} bins.")
+             except Exception as e:
+                  print(f"FD Rule Failed: {e}. Fallback to {args.bins} bins.")
+
+    print(f"Using Bins: {args.bins} (Method: {args.bin_method})")
     
     # 2a. Equi-Width Histogram (Standard Baseline)
     # This represents a traditional database histogram.
@@ -286,8 +307,13 @@ def _run_experiment_internal(args):
     # while keeping exact counts for low-NDV buckets.
     print("Training CDF models (Skipping buckets with low NDV)...")
     # Refactored: Use Hybrid Class
-    hybrid_est = HybridEstimator(buckets_eq_width)
-    t_ml_train = hybrid_est.train(freq, mn, 20, rng)
+    hybrid_est = HybridEstimator(
+        buckets_eq_width, 
+        identity_threshold=args.hybrid_ident,
+        mlp_penalty=args.hybrid_penalty,
+        fourier_penalty=args.hybrid_penalty
+    )
+    t_ml_train = hybrid_est.train(freq, mn, args.hybrid_points, rng)
     print(f"Hist Build (Width): {t_hist_build:.4f}s, ML Train: {t_ml_train:.4f}s")
     
     
@@ -438,7 +464,7 @@ def _run_experiment_internal(args):
     
     print("\n--- Results ---")
     print(f"Equi-Width:  Median QErr={m_hist_w['QErr_median']:.4f}, Time={t_base_inf:.4f}s")
-    print(f"Hybrid(FD):  Median QErr={m_hyb['QErr_median']:.4f}, Time={t_hyb_inf:.4f}s")
+    print(f"Hybrid:      Median QErr={m_hyb['QErr_median']:.4f}, Time={t_hyb_inf:.4f}s")
     print(f"EquiHist:    Median QErr={m_eh_init['QErr_median']:.4f}, InitTrain={t_eh_init_total:.4f}s, Inf={t_eh_inf_p1:.4f}s")
 
     # If Static Mode, we stop here and save
@@ -457,6 +483,7 @@ def _run_experiment_internal(args):
                  "Equi-Width": {
                      "build_time": t_hist_build,
                      "infer_time": t_base_inf,
+                     "median_q_error": m_hist_w['QErr_median'],
                      "avg_q_error": m_hist_w['QErr_avg'],
                      "p95_q_error": m_hist_w['QErr_p95']
                  },
@@ -467,12 +494,14 @@ def _run_experiment_internal(args):
                                                # Usually Hybrid Build = Hist Build + ML Train.
                      "build_time_total": t_hist_build + t_ml_train,
                      "infer_time": t_hyb_inf,
+                     "median_q_error": m_hyb['QErr_median'],
                      "avg_q_error": m_hyb['QErr_avg'],
                      "p95_q_error": m_hyb['QErr_p95']
                  },
                  "EquiHist": {
                      "build_time": t_eh_init_total,
                      "infer_time": t_eh_inf_p1,
+                     "median_q_error": m_eh_init['QErr_median'],
                      "avg_q_error": m_eh_init['QErr_avg'],
                      "p95_q_error": m_eh_init['QErr_p95']
                  }
@@ -587,21 +616,47 @@ def _run_experiment_internal(args):
         hybrid_est.train(freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
             
     # Final Hybrid Eval
-    y_hyb_final = []
+    y_hyb_repaired = []
     for q in queries:
-        y_hyb_final.append(hybrid_est.predict(q) / N_real)
+        y_hyb_repaired.append(hybrid_est.predict(q) / N_real)
     
-    add_results("Repair", "Hybrid (Repaired)", y_hyb_final, y_true_arr)
+    # Baseline: Rebuilt Static Histogram (for comparison)
+    print("Building Rebuilt Static Baseline...")
+    static_rebuilt = EquiWidthHistogram.build_from_sample(mn_new, mx_new, args.bins, freq_new, N_real)
+    y_static_rebuilt = []
+    for q in queries:
+        y_static_rebuilt.append(static_rebuilt.predict(q) / N_real)
+
+    add_results("Repair", "Hybrid (Repaired)", y_hyb_repaired, y_true_arr)
+    add_results("Repair", "Static (Rebuilt)", y_static_rebuilt, y_true_arr)
     
+    # Calculate Summaries for summary.json
+    m_static_stale = summarize(y_true_arr, y_static, "Static (Stale)")
+    m_static_rebuilt = summarize(y_true_arr, y_static_rebuilt, "Static (Rebuilt)")
+    m_eh_online = summarize(y_true_arr, y_eh, "EquiHist (Online)")
+    m_hyb_stale = summarize(y_true_arr, y_hybrid_stale, "Hybrid (Stale)")
+    m_hyb_repaired = summarize(y_true_arr, y_hyb_repaired, "Hybrid (Repaired)")
+
     # Save Final CSV including Drift/Repair
     df_results = pd.DataFrame(results_data)
     result_file = result_dir / f"{args.eval_n}_drift.csv"
     df_results.to_csv(result_file, index=False)
     print(f"Detailed drift results saved to {result_file}")
     
-    # Generate Plot
-    plot_q_error_boxplots(result_file, result_dir)
-    
+    # Save Summary JSON for run_drift_benchmark
+    summary_data_drift = {
+        "metrics": {
+            "static_stale": m_static_stale,
+            "static_rebuilt": m_static_rebuilt,
+            "equihist_online": m_eh_online,
+            "hybrid_stale": m_hyb_stale,
+            "hybrid_repaired": m_hyb_repaired
+        }
+    }
+    with open(result_dir / "summary.json", "w") as f:
+        json.dump(summary_data_drift, f, indent=4)
+    print(f"Drift summary stats saved to {result_dir / 'summary.json'}")
+
     # Generate Plot
     plot_q_error_boxplots(result_file, result_dir)
 
@@ -666,7 +721,9 @@ def run_drift_benchmark(args):
         try:
             _run_experiment_internal(scenario_args)
             
-            with open(Path(scenario_args.out_dir) / "summary.json", "r") as f:
+            # Fix: summary.json is saved in Path(out_dir) / rows / dist
+            summary_path = Path(scenario_args.out_dir) / str(args.rows) / init_dist / "summary.json"
+            with open(summary_path, "r") as f:
                 res = json.load(f)
                 
             metrics = res["metrics"]

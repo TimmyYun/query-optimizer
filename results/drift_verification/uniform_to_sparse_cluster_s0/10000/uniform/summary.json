@@ -1,0 +1,34 @@
+{
+    "metrics": {
+        "static_stale": {
+            "name": "Static (Stale)",
+            "QErr_median": 14.889,
+            "QErr_p95": 38.49685,
+            "QErr_avg": 18.036070386496846
+        },
+        "static_rebuilt": {
+            "name": "Static (Rebuilt)",
+            "QErr_median": 14285.714285714284,
+            "QErr_p95": 38095.23809523809,
+            "QErr_avg": 147053.01604057627
+        },
+        "equihist_online": {
+            "name": "EquiHist (Online)",
+            "QErr_median": 14.298375,
+            "QErr_p95": 37.18373749999999,
+            "QErr_avg": 17.53818329907482
+        },
+        "hybrid_stale": {
+            "name": "Hybrid (Stale)",
+            "QErr_median": 14.681168198040254,
+            "QErr_p95": 38.242009026218255,
+            "QErr_avg": 17.89366074844543
+        },
+        "hybrid_repaired": {
+            "name": "Hybrid (Repaired)",
+            "QErr_median": 1.5835392415241167,
+            "QErr_p95": 6.639967875754971,
+            "QErr_avg": 7.62116295801068
+        }
+    }
+}
