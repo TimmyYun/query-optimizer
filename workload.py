@@ -65,38 +65,7 @@ def generate_workload(n: int, mn: int, mx: int, seed: int = 42, max_width: int =
         queries.append(RangeQuery(l, r))
     return queries
 
-def generate_skewed_workload(n: int, mn: int, mx: int, seed: int = 42, max_width: int = 500, alpha: float = 1.0) -> List[RangeQuery]:
-    """
-    Generates a list of skewed range queries focusing on the 'Head' of a Zipf distribution (low values).
-    
-    Args:
-        n (int): Number of queries.
-        mn (int): Minimum value.
-        mx (int): Maximum value.
-        seed (int): Seed.
-        max_width (int): Max width.
-        alpha (float): Zipf parameter for center selection.
-        
-    Returns:
-        List[RangeQuery]
-    """
-    rng = np.random.default_rng(seed)
-    queries = []
-    
-    # Generate centers using Zipf-like distribution
-    # Using exponential distribution for 'start' positions to heavily favor the left side (Head)
-    
-    scale = (mx - mn) * 0.1 # 10% of domain as scale
-    starts = rng.exponential(scale=scale, size=n)
-    starts = np.clip(starts, 0, mx - mn).astype(int) + mn
-    
-    for l in starts:
-        w = rng.integers(1, max(2, max_width))
-        r = min(mx, l + w)
-        l = min(l, mx) # Ensure l is within bounds
-        queries.append(RangeQuery(l, r))
-        
-    return queries
+
 
 def save_workload_csv(queries: List[RangeQuery], output_path: Path):
     """
@@ -137,7 +106,6 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Generate workload queries.")
     parser.add_argument("--count", type=int, help="Number of queries to generate.")
-    parser.add_argument("--type", choices=["standard", "narrow", "skewed"], default="standard", help="Type of workload (default: standard).")
     parser.add_argument("--domain-max", type=int, default=200000, help="Max domain value (default: 200000).")
     parser.add_argument("--all", action="store_true", help="Generate all default workloads (1k, 100k, 1M).")
     
@@ -152,22 +120,12 @@ def main():
         print("Generating ALL default workloads...")
         counts = [1000, 100000, 1000000]
         
-        # Standard
+        # Standard (Now Narrow by default)
         for c in counts:
-            print(f"Generating standard workload: {c} queries...")
-            queries = generate_workload(c, MN, MX)
+            print(f"Generating workload: {c} queries (narrow)...")
+            queries = generate_workload(c, MN, MX, max_width=100)
             save_workload_csv(queries, workload_dir / f"{c}.csv")
             
-        # Narrow
-        for c in counts:
-            print(f"Generating narrow workload: {c} queries...")
-            queries = generate_workload(c, MN, MX, max_width=100)
-            save_workload_csv(queries, workload_dir / f"{c}_narrow.csv")
-            
-        # Skewed
-        print(f"Generating skewed workload: 100000 queries...")
-        queries = generate_skewed_workload(100000, MN, MX, max_width=100)
-        save_workload_csv(queries, workload_dir / "100000_skewed.csv")
         return
 
     if args.count is None:
@@ -176,18 +134,11 @@ def main():
         return
 
     # Single generation
-    label = args.type.upper()
+    label = "NARROW"
     suffix = ""
-    # Default behavior for single generation
-    if args.type == "narrow":
-        suffix = "_narrow"
-        max_w = 100
-        queries = generate_workload(args.count, MN, MX, max_width=max_w)
-    elif args.type == "skewed":
-        suffix = "_skewed"
-        queries = generate_skewed_workload(args.count, MN, MX, max_width=100)
-    else: # standard
-        queries = generate_workload(args.count, MN, MX)
+    # Default behavior is now NARROW
+    max_w = 100
+    queries = generate_workload(args.count, MN, MX, max_width=max_w)
     
     out_filename = f"{args.count}{suffix}.csv"
     out_path = workload_dir / out_filename
