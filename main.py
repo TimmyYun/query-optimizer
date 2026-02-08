@@ -110,9 +110,12 @@ def main():
     args = parser.parse_args()
     
     # Auto-generate Experiment ID if not provided
-    if args.experiment_name is None:
-        from datetime import datetime
-        args.experiment_name = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Auto-incrementing Experiment ID
+        base_dir = Path(args.out_dir)
+        base_dir.mkdir(parents=True, exist_ok=True)
+        existing_ids = [int(d.name) for d in base_dir.iterdir() if d.is_dir() and d.name.isdigit()]
+        next_id = max(existing_ids) + 1 if existing_ids else 1
+        args.experiment_name = str(next_id)
         
     print(f"=== Experiment ID: {args.experiment_name} ===")
     
