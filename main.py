@@ -97,7 +97,7 @@ def main():
     parser.add_argument("--drift-shift", type=int, default=50_000, help="Shift magnitude for drift data")
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--eval-n", dest="eval_n", type=str, default="1000", help="Workload name/size to evaluate (e.g. 1000 or 1000_narrow)")
-    parser.add_argument("--bins", type=int, default=500, help="Number of bins for Equi-Width Histogram (Default: 500)")
+    parser.add_argument("--bins", type=int, default=100, help="Number of bins for Equi-Width Histogram (Default: 100)")
     parser.add_argument("--skewed", action="store_true", help="Use skewed workload for Head heavy evaluation")
     parser.add_argument("--recreate", action="store_true", help="Force regeneration of the dataset even if cached")
     
