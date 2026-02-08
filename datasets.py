@@ -186,22 +186,7 @@ def load_census_age(csv_path: Path) -> np.ndarray:
 # Stats Utils
 # ==========================================
 
-def freedman_diaconis_bins(sample: np.ndarray, mn: int, mx: int, n_rows: int, bins_max: int = 2000) -> int:
-    """
-    Calculates the optimal number of bins for a histogram using the Freedman-Diaconis rule.
-    
-    The rule uses the Interquartile Range (IQR) to be robust to outliers.
-    """
-    if sample.size < 10: return 10
-    q25, q75 = np.quantile(sample, [0.25, 0.75])
-    iqr = q75 - q25
-    if iqr <= 0: return 10
-    
-    bin_width = 2 * iqr / (n_rows ** (1/3))
-    total_width = mx - mn
-    
-    if bin_width <= 0: return 10
-    return max(1, min(int(total_width / bin_width), bins_max))
+# freedman_diaconis_bins REMOVED
 
 def calculate_skew_kurt(csv_path: Path) -> Tuple[float, float]:
     """Calculates skewness and kurtosis of the dataset."""
@@ -359,9 +344,21 @@ class DatasetManager:
             ndv = calculate_ndv(data_path)
             skew, kurt = calculate_skew_kurt(data_path)
             
-            # For FD bins, we need a frequency map and sample
+            # For FD bins - REMOVED (User request: bins is a hyperparam now)
+            # freq, sample = build_frequency_and_sample(data_path, mn, mx, N, 100_000, 42)
+            # k = freedman_diaconis_bins(sample, mn, mx, N)
+            
+            # We still need freq for some stats perhaps? No, freq is expensive to build here.
+            # If we remove freq build, we save time.
+            
+            # Wait, meta.pkl requires freq and sample.
+            # "freq" and "sample" are used in main.py for Hybrid estimator?
+            # Yes, HybridEstimator uses valid buckets built from "freq".
+            # So we MUST build freq.
             freq, sample = build_frequency_and_sample(data_path, mn, mx, N, 100_000, 42)
-            k = freedman_diaconis_bins(sample, mn, mx, N)
+            
+            # k is now irrelevant, set to 0 or None
+            k = 0 
             
             stats = {
                 "Rows": int(N),
@@ -371,7 +368,7 @@ class DatasetManager:
                 "Skewness": float(skew),
                 "Kurtosis": float(kurt),
                 "Bin Count (k)": int(k),
-                "Bin Width (h)": float((mx - mn) / k if k > 0 else 0)
+                "Bin Width (h)": 0.0
             }
             save_stats(stats, stats_path)
             

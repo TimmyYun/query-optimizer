@@ -257,6 +257,7 @@ class HybridEstimator:
         for i, b in enumerate(self.buckets):
             if b.hi < q.low: continue
             if b.lo > q.high: break
+            
             total += self._get_bucket_overlap_count(i, q.low, q.high)
         return total
         
@@ -268,18 +269,31 @@ class HybridEstimator:
             b = self.buckets[i]
             rows[i] = [] 
             if b.count == 0: continue
-            if b.count == 0: continue
+
             
             # Start with random uniform samples
-            n_samples = max(points_per_bucket, 200) 
+            n_samples = max(points_per_bucket * 5, 1000) 
             xs = rng.integers(b.lo, b.hi + 1, size=n_samples)
             
             # CRITICAL: Always include boundaries and near-boundary points
             # For Zipf/Skewed data, the CDF jumps massively at lo, lo+1, etc.
             # If we don't sample these, the model learns a smooth line that misses the jump.
-            edge_points = np.array([
-                b.lo, min(b.hi, b.lo + 1), min(b.hi, b.lo + 2), min(b.hi, b.lo + 3), # Top heavy hitters
-                b.hi, max(b.lo, b.hi - 1), max(b.lo, b.hi - 2)
+            # Expanded to first 50 points to cover the "head" of the distribution where curvature is highest.
+            # Also adding log-spaced points to cover the body/tail to prevent oscillation gaps.
+            # Also adding log-spaced points to cover the body/tail to prevent oscillation gaps.
+            log_points = np.array([], dtype=int)
+            if b.hi > b.lo:
+                try:
+                    start_val = max(1, b.lo)
+                    if start_val < b.hi:
+                        log_points = np.unique(np.geomspace(start_val, b.hi, num=50, dtype=int))
+                except Exception:
+                    pass
+            
+            edge_points = np.concatenate([
+                np.arange(b.lo, min(b.hi, b.lo + 50) + 1), # First 50 points dense
+                log_points,                                 # Log spaced points
+                np.array([b.hi, max(b.lo, b.hi - 1), max(b.lo, b.hi - 2)]) # End points
             ])
             xs = np.concatenate([xs, edge_points])
             xs = np.unique(xs) # Remove duplicates
@@ -363,13 +377,13 @@ class HybridEstimator:
             # Solves the Zipf problem by mapping input x to high-freq sinusoids
             # Gamma(x) = [sin(2^0 pi x), cos(2^0 pi x), ..., sin(2^k pi x), cos(2^k pi x)]
             try:
-                # B = 10 frequency bands (up to 2048x frequency)
-                # Max freq increased to better catch sharp edges
-                mapper = FourierFeatureMapper(num_bands=12, max_freq=2048.0)
+                # B = 32 frequency bands
+                # Tuned to 20k to resolve head (Period ~0.25 units) with high regularization to prevent tail oscillation
+                mapper = FourierFeatureMapper(num_bands=32, max_freq=20000.0)
                 X_fourier = mapper.transform(X)
                 
-                # Larger network to allow "memorization" of the sharp step
-                mdl_fourier_mlp = MLPRegressor(hidden_layer_sizes=(64, 32), activation='relu', solver='lbfgs', max_iter=1000, random_state=42, alpha=0.00001)
+                # Relu for sharpness, alpha=0.001 to dampen oscillations
+                mdl_fourier_mlp = MLPRegressor(hidden_layer_sizes=(128, 64), activation='relu', solver='lbfgs', max_iter=1000, random_state=42, alpha=0.001)
                 mdl_fourier_mlp.fit(X_fourier, y)
                 
                 y_pred_f = mdl_fourier_mlp.predict(X_fourier)
@@ -388,11 +402,9 @@ class HybridEstimator:
             if best_model_name == "fourier_mlp":
                 # Tuple (model, mapper)
                 model, mapper = best_model_obj
-                best_model = FourierModelWrapper(model, mapper)
+                models[i] = FourierModelWrapper(model, mapper)
             else:
-                best_model = best_model_obj
-                
-            models[i] = best_model
+                models[i] = best_model_obj
             
         return models, time.perf_counter() - t0
 
@@ -412,7 +424,15 @@ class HybridEstimator:
         prev = lo - 1
         cdf_lo = 0.0 if prev < b.lo else self._predict_local_cdf(self.models.get(b_idx), (prev - b.lo) / w)
         
-        return max(0.0, cdf_hi - cdf_lo) * b.count
+        model_pred = max(0.0, cdf_hi - cdf_lo) * b.count
+        
+        # Safety Floor: Prevent zero prediction if bucket is populated
+        # This guards against non-monotonicity or gaps in FourierMLP
+        if b.count > 0 and w > 0:
+            uniform_pred = ((hi - lo + 1) / w) * b.count
+            return max(model_pred, uniform_pred * 0.001) # Min 0.1% of uniform
+            
+        return model_pred
 
 # -----------------------------------------------------------------------------
 # Evaluation Utilities

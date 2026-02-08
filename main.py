@@ -97,6 +97,8 @@ def main():
     parser.add_argument("--drift-shift", type=int, default=50_000, help="Shift magnitude for drift data")
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--eval-n", dest="eval_n", type=str, default="1000", help="Workload name/size to evaluate (e.g. 1000 or 1000_narrow)")
+    parser.add_argument("--bins", type=int, default=500, help="Number of bins for Equi-Width Histogram (Default: 500)")
+    parser.add_argument("--skewed", action="store_true", help="Use skewed workload for Head heavy evaluation")
     parser.add_argument("--recreate", action="store_true", help="Force regeneration of the dataset even if cached")
     
     # Batch specific params
@@ -150,14 +152,14 @@ def _run_experiment_internal(args):
     shutil.copy2(ds_path, working_ds_path)
     ds_path = working_ds_path
 
-    print(f"FD Suggested Bins: {n_bins}")
+    print(f"Using Bins: {args.bins} (User Specified/Default)")
     
     # 2a. Equi-Width Histogram (Standard Baseline)
     # This represents a traditional database histogram.
     t0_hist = time.perf_counter()
     # Refactored: Use Class Builder to create the histogram
     # Using Sample-Based Construction (Postgres-like)
-    ew_hist = EquiWidthHistogram.build_from_sample(mn, mx, n_bins, sample, N)
+    ew_hist = EquiWidthHistogram.build_from_sample(mn, mx, args.bins, sample, N)
     buckets_eq_width = ew_hist.buckets # Access buckets for other models to use as a base
     t_hist_build = time.perf_counter() - t0_hist
     
@@ -178,7 +180,12 @@ def _run_experiment_internal(args):
     print("Generating Evaluation Workload...")
     
     # Use load_workload_csv for independent workloads
-    workload_path = Path(f"workload/{args.eval_n}.csv")
+    wl_name = args.eval_n
+    if args.skewed:
+        wl_name = f"{args.eval_n}_skewed"
+        print(f"Using Skewed Workload: {wl_name}")
+        
+    workload_path = Path(f"workload/{wl_name}.csv")
     if not workload_path.exists():
         raise FileNotFoundError(f"Workload file not found at {workload_path}. Run workload.py first.")
         

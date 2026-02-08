@@ -64,6 +64,46 @@ def generate_workload(n: int, mn: int, mx: int, seed: int = 42, max_width: int =
         queries.append(RangeQuery(l, r))
     return queries
 
+def generate_skewed_workload(n: int, mn: int, mx: int, seed: int = 42, max_width: int = 500, alpha: float = 1.0) -> List[RangeQuery]:
+    """
+    Generates a list of skewed range queries focusing on the 'Head' of a Zipf distribution (low values).
+    
+    Args:
+        n (int): Number of queries.
+        mn (int): Minimum value.
+        mx (int): Maximum value.
+        seed (int): Seed.
+        max_width (int): Max width.
+        alpha (float): Zipf parameter for center selection.
+        
+    Returns:
+        List[RangeQuery]
+    """
+    rng = np.random.default_rng(seed)
+    queries = []
+    
+    # Generate centers using Zipf-like distribution
+    # Zipf generates values >= 1. We map 1 -> mn.
+    # Higher alpha = more skew towards mn.
+    
+    # Using geometric or exponential decay to simulate head-heavy queries might be cleaner and more controllable
+    # Let's use exponential distribution for 'start' positions to heavily favor the left side (Head)
+    
+    scale = (mx - mn) * 0.1 # 10% of domain as scale
+    starts = rng.exponential(scale=scale, size=n)
+    starts = np.clip(starts, 0, mx - mn).astype(int) + mn
+    
+    # Standard: uniform starts
+    # Skewed: starts concentrate near mn
+    
+    for l in starts:
+        w = rng.integers(1, max(2, max_width))
+        r = min(mx, l + w)
+        l = min(l, mx) # Ensure l is within bounds
+        queries.append(RangeQuery(l, r))
+        
+    return queries
+
 def save_workload_csv(queries: List[RangeQuery], output_path: Path):
     """
     Saves a list of RangeQuery objects to a CSV file.
@@ -119,7 +159,7 @@ def main():
     query_counts = [1000, 100000, 1000000]
     
     for count in query_counts:
-        max_w = 500 if args.narrow else None
+        max_w = 100 if args.narrow else None
         label = "NARROW" if args.narrow else "standard"
         suffix = "_narrow" if args.narrow else ""
         
@@ -128,6 +168,13 @@ def main():
         out_path = workload_dir / f"{count}{suffix}.csv"
         save_workload_csv(queries, out_path)
         print(f"Saved to {out_path}")
+        
+    # Generate Skewed Workload (100k, default narrow width for precision)
+    print(f"Generating SKEWED workload: 100000 queries...")
+    skew_queries = generate_skewed_workload(100000, MN, MX, max_width=100) # Very narrow queries for Head
+    out_path = workload_dir / "100000_skewed.csv"
+    save_workload_csv(skew_queries, out_path)
+    print(f"Saved to {out_path}")
 
 if __name__ == "__main__":
     main()
