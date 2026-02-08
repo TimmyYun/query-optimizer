@@ -347,71 +347,52 @@ class HybridEstimator:
             # --- Adaptive Selection ---
             candidates = []
             
+            # Waterfall Meta-Selector Logic
+            
             # 1. Constant (Identity / Uniform assumption)
-            # Evaluate on Validation Set
+            # This is the cheapest check: is it essentially a straight line from (0,0) to (1,1)?
             y_pred_identity_val = X_val.flatten() 
             mse_identity_val = np.mean((y_val - y_pred_identity_val)**2)
             
-            # Relaxed Threshold: If Identity is "good enough", use it.
-            # 1e-4 corresponds to roughly 1% avg error in CDF space
             if mse_identity_val < self.identity_threshold: 
-                models[i] = None
+                models[i] = None # Use Identity
                 continue
 
-            candidates.append((mse_identity_val, "identity", None))
-            
-            # 2. Linear (Ridge)
+            # 2. Linear Check (Ridge)
             mdl_linear = Ridge(alpha=1.0)
             mdl_linear.fit(X_train, y_train)
             y_pred_linear_val = mdl_linear.predict(X_val)
             mse_linear_val = np.mean((y_val - y_pred_linear_val)**2)
-            candidates.append((mse_linear_val * 1.1, "linear", mdl_linear))
             
-            # 3. Polynomial (Degree 2)
+            # If Linear is good enough (relative to identity or absolute threshold)
+            if mse_linear_val < self.identity_threshold * 0.5:
+                models[i] = mdl_linear
+                continue
+            
+            # 3. Simple Non-Linear Check (Polynomial Degree 2)
             mdl_poly = make_pipeline(PolynomialFeatures(degree=2, include_bias=False), Ridge(alpha=1.0))
             mdl_poly.fit(X_train, y_train)
             y_pred_poly_val = mdl_poly.predict(X_val)
             mse_poly_val = np.mean((y_val - y_pred_poly_val)**2)
-            candidates.append((mse_poly_val * 1.2, "poly", mdl_poly))
             
-            # 4. Neural Network (MLP)
-            mdl_mlp = MLPRegressor(hidden_layer_sizes=(16, 8), activation='relu', solver='lbfgs', max_iter=500, random_state=42)
-            try:
-                mdl_mlp.fit(X_train, y_train)
-                y_pred_mlp_val = mdl_mlp.predict(X_val)
-                mse_mlp_val = np.mean((y_val - y_pred_mlp_val)**2)
-                candidates.append((mse_mlp_val * self.mlp_penalty, "mlp", mdl_mlp))
-            except Exception:
-                pass 
+            if mse_poly_val < self.identity_threshold * 0.1:
+                models[i] = mdl_poly
+                continue
             
-            # 5. Fourier Neural Network
+            # 4. Fallback: Complex Model (Fourier MLP)
+            # If all simple models fail, we assume the data has spiky/high-frequency patterns.
             try:
                 mapper = FourierFeatureMapper(num_bands=32, max_freq=20000.0)
-                # Fit transform on train, transform only on val
                 X_fourier_train = mapper.transform(X_train)
                 X_fourier_val = mapper.transform(X_val)
                 
                 mdl_fourier_mlp = MLPRegressor(hidden_layer_sizes=(128, 64), activation='relu', solver='lbfgs', max_iter=1000, random_state=42, alpha=0.001)
                 mdl_fourier_mlp.fit(X_fourier_train, y_train)
                 
-                y_pred_f_val = mdl_fourier_mlp.predict(X_fourier_val)
-                mse_f_val = np.mean((y_val - y_pred_f_val)**2)
-                
-                # Increased Penalty: discourage overfitting noise
-                candidates.append((mse_f_val * self.fourier_penalty, "fourier_mlp", (mdl_fourier_mlp, mapper)))
+                models[i] = FourierModelWrapper(mdl_fourier_mlp, mapper)
             except Exception:
-                pass
-            
-            # Select Best
-            best_candidate = min(candidates, key=lambda x: x[0])
-            best_model_name = best_candidate[1]
-            best_model_obj = best_candidate[2]
-            
-            if best_model_name == "fourier_mlp":
-                model, mapper = best_model_obj
-                models[i] = FourierModelWrapper(model, mapper)
-            else:
-                models[i] = best_model_obj
+                # Absolute Fallback to Linear if MLP fails
+                models[i] = mdl_linear
             
         return models, time.perf_counter() - t0
 
