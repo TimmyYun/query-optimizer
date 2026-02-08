@@ -1,0 +1,26 @@
+{
+    "row_count": 1000,
+    "distribution": "normal",
+    "workload_size": "1000",
+    "metrics": {
+        "Equi-Width": {
+            "build_time": 0.00023312500161409844,
+            "infer_time": 0.0016675839997333242,
+            "avg_q_error": 4.581353425123726,
+            "p95_q_error": 9.134013605442174
+        },
+        "Hybrid": {
+            "build_time": 13.288416167000833,
+            "build_time_total": 13.288649292002447,
+            "infer_time": 0.029610040999614284,
+            "avg_q_error": 593.1559928214825,
+            "p95_q_error": 1583.5721820373717
+        },
+        "EquiHist": {
+            "build_time": 0.004106939990379033,
+            "infer_time": 0.001930420998178306,
+            "avg_q_error": 4.592104034272582,
+            "p95_q_error": 9.134013605442174
+        }
+    }
+}
