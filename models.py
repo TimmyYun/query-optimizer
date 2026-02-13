@@ -183,16 +183,28 @@ class EquiWidthHistogram:
             
         return EquiWidthHistogram(buckets)
 
-    def predict(self, q: RangeQuery) -> float:
-        total = 0.0
+    def predict_batch(self, queries: List[RangeQuery]) -> np.ndarray:
+        """
+        Vectorized bulk inference for Equi-Width Histogram.
+        """
+        if not self.buckets: return np.zeros(len(queries))
+        q_lo = np.array([q.low for q in queries], dtype=np.float64)
+        q_hi = np.array([q.high for q in queries], dtype=np.float64)
+        total = np.zeros(len(queries))
+        
         for b in self.buckets:
-            ov_lo = max(q.low, b.lo)
-            ov_hi = min(q.high, b.hi)
-            if ov_lo <= ov_hi:
-                w = b.hi - b.lo + 1
-                frac = (ov_hi - ov_lo + 1) / w
-                total += frac * b.count
+            # Overlap logic
+            lo = np.maximum(q_lo, b.lo)
+            hi = np.minimum(q_hi, b.hi)
+            overlap_width = np.maximum(0, hi - lo + 1)
+            b_width = b.hi - b.lo + 1
+            total += (overlap_width / b_width) * b.count
         return total
+
+    def predict(self, q: RangeQuery) -> float:
+        """Scalar fallback."""
+        return float(self.predict_batch([q])[0])
+
 
 class EquiHistLearner:
     """
@@ -241,6 +253,16 @@ class HybridEstimator:
         self.identity_threshold = identity_threshold
         self.mlp_penalty = mlp_penalty
         self.fourier_penalty = fourier_penalty
+        
+        # Vectorized Data Storage
+        self.b_lo = None
+        self.b_hi = None
+        self.b_count = None
+        self.b_width = None
+        self.mod_types = None # 0: identity, 1: linear, 2: poly, 3: complex (loop fallback)
+        self.lin_params = None # (N, 2) -> [coef, intercept]
+        self.poly_params = None # (N, 3) -> [coef1, coef2, intercept]
+        self.complex_models = {} # dict for fallback
 
     def train(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> float:
         t_start = time.perf_counter()
@@ -252,20 +274,107 @@ class HybridEstimator:
         for k, v in new_models.items():
             self.models[k] = v
             
+        self._bake_vectorized_data()
+            
         t_total = time.perf_counter() - t_start
         self.last_train_time = t_total
         return t_total
 
-    def predict(self, q: RangeQuery) -> float:
-        total = 0.0
-        
-        # Model Contribution only (No MCV)
-        for i, b in enumerate(self.buckets):
-            if b.hi < q.low: continue
-            if b.lo > q.high: break
+
+    def predict_batch(self, queries: List[RangeQuery]) -> np.ndarray:
+        """
+        Vectorized bulk inference for Hybrid model.
+        Uses query masking and array operations to avoid Python loops for CDF calculation.
+        """
+        if self.b_lo is None:
+            self._bake_vectorized_data()
             
-            total += self._get_bucket_overlap_count(i, q.low, q.high)
-        return total
+        n_queries = len(queries)
+        q_lo = np.array([q.low for q in queries], dtype=np.float64)
+        q_hi = np.array([q.high for q in queries], dtype=np.float64)
+        total_counts = np.zeros(n_queries)
+
+        for i in range(len(self.buckets)):
+            b_count = self.b_count[i]
+            if b_count == 0: continue
+            
+            b_lo = self.b_lo[i]
+            b_hi = self.b_hi[i]
+            b_width = self.b_width[i]
+            
+            # Mask: Only queries that touch this bucket
+            mask = (q_hi >= b_lo) & (q_lo <= b_hi)
+            if not np.any(mask): continue
+            
+            # Intersection boundaries (only for masked queries)
+            lo_clamped = np.maximum(q_lo[mask], b_lo)
+            hi_clamped = np.minimum(q_hi[mask], b_hi)
+            
+            # Norm points for CDF (shifted by 1 for low edge to handle discrete inclusion)
+            x_hi = np.clip((hi_clamped - b_lo) / b_width, 0.0, 1.0)
+            x_lo_prev = (lo_clamped - 1 - b_lo) / b_width
+            
+            # Model Selection
+            m_type = self.mod_types[i]
+            
+            def get_cdf_vec(x_arr):
+                # Ensure input is array
+                xa = np.clip(x_arr, 0.0, 1.0)
+                if m_type == 0: # Identity
+                    return xa
+                elif m_type == 1: # Linear
+                    p = self.lin_params[i]
+                    return np.clip(xa * p[0] + p[1], 0.0, 1.0)
+                elif m_type == 2: # Poly
+                    p = self.poly_params[i]
+                    return np.clip(p[2] + p[0]*xa + p[1]*(xa**2), 0.0, 1.0)
+                else: # Complex (MLP)
+                    mdl = self.complex_models[i]
+                    # Vectorized predict call (sklearn handles batch X)
+                    return np.clip(mdl.predict(xa.reshape(-1, 1)).flatten(), 0.0, 1.0)
+
+            cdf_hi = get_cdf_vec(x_hi)
+            # Handle x_lo_prev < 0 (points outside lower bound of bucket)
+            lo_mask = x_lo_prev >= 0
+            cdf_lo = np.zeros_like(cdf_hi)
+            if np.any(lo_mask):
+                cdf_lo[lo_mask] = get_cdf_vec(x_lo_prev[lo_mask])
+            
+            # Final count for this bucket with safety floor
+            model_pred = np.maximum(0.0, cdf_hi - cdf_lo) * b_count
+            uniform_pred = ((hi_clamped - lo_clamped + 1) / b_width) * b_count
+            
+            total_counts[mask] += np.maximum(model_pred, uniform_pred * 0.01)
+
+        return total_counts
+
+    def _bake_vectorized_data(self):
+        n = len(self.buckets)
+        self.b_lo = np.array([b.lo for b in self.buckets], dtype=np.float64)
+        self.b_hi = np.array([b.hi for b in self.buckets], dtype=np.float64)
+        self.b_count = np.array([b.count for b in self.buckets], dtype=np.float64)
+        self.b_width = self.b_hi - self.b_lo + 1
+        
+        self.mod_types = np.zeros(n, dtype=np.int8)
+        self.lin_params = np.zeros((n, 2))
+        self.poly_params = np.zeros((n, 3))
+        self.complex_models = {}
+
+        for i in range(n):
+            model = self.models.get(i)
+            if model is None:
+                self.mod_types[i] = 0 # Identity
+            elif isinstance(model, tuple):
+                if model[0] == "linear":
+                    self.mod_types[i] = 1
+                    self.lin_params[i] = [model[1], model[2]] # coef, intercept
+                elif model[0] == "poly":
+                    self.mod_types[i] = 2
+                    # model: ("poly", coefs, intercept) -> coefs is [a, b]
+                    self.poly_params[i] = [model[1][0], model[1][1], model[2]]
+            else:
+                self.mod_types[i] = 3 # Complex
+                self.complex_models[i] = model
         
     def _collect_cdf_training_rows(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]:
         ps = np.cumsum(freq)
@@ -344,61 +453,65 @@ class HybridEstimator:
                 X_val, y_val = X_train, y_train
 
             
-            # --- Adaptive Selection ---
-            candidates = []
-            
-            # Waterfall Meta-Selector Logic
-            
-            # 1. Constant (Identity / Uniform assumption)
-            # This is the cheapest check: is it essentially a straight line from (0,0) to (1,1)?
+            # --- Adaptive Selection (Waterfall) ---
+            # 1. Identity Check (Uniform assumption)
             y_pred_identity_val = X_val.flatten() 
             mse_identity_val = np.mean((y_val - y_pred_identity_val)**2)
-            
             if mse_identity_val < self.identity_threshold: 
                 models[i] = None # Use Identity
                 continue
 
             # 2. Linear Check (Ridge)
-            mdl_linear = Ridge(alpha=1.0)
-            mdl_linear.fit(X_train, y_train)
-            y_pred_linear_val = mdl_linear.predict(X_val)
-            mse_linear_val = np.mean((y_val - y_pred_linear_val)**2)
-            
-            # If Linear is good enough (relative to identity or absolute threshold)
+            mdl_linear = Ridge(alpha=1.0).fit(X_train, y_train)
+            mse_linear_val = np.mean((y_val - mdl_linear.predict(X_val))**2)
             if mse_linear_val < self.identity_threshold * 0.5:
-                models[i] = mdl_linear
+                # Store as (type, coef, intercept)
+                models[i] = ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)
                 continue
             
             # 3. Simple Non-Linear Check (Polynomial Degree 2)
-            mdl_poly = make_pipeline(PolynomialFeatures(degree=2, include_bias=False), Ridge(alpha=1.0))
-            mdl_poly.fit(X_train, y_train)
-            y_pred_poly_val = mdl_poly.predict(X_val)
-            mse_poly_val = np.mean((y_val - y_pred_poly_val)**2)
-            
+            poly_calc = PolynomialFeatures(degree=2, include_bias=False)
+            X_poly_train = poly_calc.fit_transform(X_train)
+            X_poly_val = poly_calc.transform(X_val)
+            mdl_poly = Ridge(alpha=1.0).fit(X_poly_train, y_train)
+            mse_poly_val = np.mean((y_val - mdl_poly.predict(X_poly_val))**2)
             if mse_poly_val < self.identity_threshold * 0.1:
-                models[i] = mdl_poly
+                # Store as (type, coefs, intercept) where coefs is [a, b] for ax + bx^2
+                models[i] = ("poly", mdl_poly.coef_, mdl_poly.intercept_)
                 continue
-            
+
             # 4. Fallback: Complex Model (Fourier MLP)
-            # If all simple models fail, we assume the data has spiky/high-frequency patterns.
             try:
                 mapper = FourierFeatureMapper(num_bands=32, max_freq=20000.0)
-                X_fourier_train = mapper.transform(X_train)
-                X_fourier_val = mapper.transform(X_val)
-                
-                mdl_fourier_mlp = MLPRegressor(hidden_layer_sizes=(128, 64), activation='relu', solver='lbfgs', max_iter=1000, random_state=42, alpha=0.001)
-                mdl_fourier_mlp.fit(X_fourier_train, y_train)
-                
-                models[i] = FourierModelWrapper(mdl_fourier_mlp, mapper)
+                X_f_train = mapper.transform(X_train)
+                X_f_val = mapper.transform(X_val)
+                mdl_f_mlp = MLPRegressor(hidden_layer_sizes=(128, 64), activation='relu', solver='lbfgs', max_iter=1000, random_state=42, alpha=0.001)
+                mdl_f_mlp.fit(X_f_train, y_train)
+                models[i] = FourierModelWrapper(mdl_f_mlp, mapper)
             except Exception:
-                # Absolute Fallback to Linear if MLP fails
-                models[i] = mdl_linear
+                # Absolute Fallback to Linear
+                models[i] = ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)
             
         return models, time.perf_counter() - t0
 
     def _predict_local_cdf(self, model, x_norm) -> float:
-        if model is None: return max(0.0, min(1.0, x_norm))
-        # Ensure prediction is within [0, 1]
+        if model is None:
+            return max(0.0, min(1.0, x_norm))
+        
+        # Fast Math for Linear/Poly
+        if isinstance(model, tuple):
+            type_ = model[0]
+            if type_ == "linear":
+                coef, intercept = model[1], model[2]
+                pred = x_norm * coef + intercept
+                return max(0.0, min(1.0, float(pred)))
+            elif type_ == "poly":
+                coefs, intercept = model[1], model[2]
+                # coefs is [a, b] for ax + bx^2 because include_bias=False
+                pred = intercept + coefs[0]*x_norm + coefs[1]*(x_norm**2)
+                return max(0.0, min(1.0, float(pred)))
+        
+        # Fallback for Wrapper (Fourier MLP) or others
         pred = model.predict([[x_norm]])[0]
         return max(0.0, min(1.0, float(pred)))
 

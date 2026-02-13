@@ -58,7 +58,7 @@ def plot_q_error_boxplots(result_csv_path, output_dir):
         # but boxplots usually handle outliers. 
         # We plot log scale as Q-Error is multiplicative.
         
-        sns.boxplot(data=df, x='Model', y='Q_Error', hue='Phase')
+        sns.boxplot(data=df, x='Model', y='Q_Error', hue='Phase', showfliers=False)
         plt.yscale('log')
         plt.title('Q-Error Distribution by Model')
         plt.ylabel('Q-Error (Log Scale)')
@@ -85,8 +85,8 @@ def aggregate_summaries(results_dir="results"):
         if not experiment_dir.is_dir():
             continue
         
-        # Skip if not a number (e.g. results/plots)
-        if not experiment_dir.name.isdigit():
+        # Skip hidden directories or files
+        if experiment_dir.name.startswith("."):
              continue
 
         experiment_id = experiment_dir.name
@@ -374,19 +374,15 @@ def _run_experiment_internal(args):
     
     # Measure Baseline Inference
     t0_base = time.perf_counter()
-    for q in queries:
-        # Refactored: Class method
-        h = ew_hist.predict(q)
-        y_hist_width.append(h / N)
+    y_hist_width_counts = ew_hist.predict_batch(queries)
+    y_hist_width = (y_hist_width_counts / N).tolist()
     t_base_inf = time.perf_counter() - t0_base
     
     
     # Measure Hybrid Inference
     t0_hyb = time.perf_counter()
-    for q in queries:
-        # Refactored: Class method
-        c = hybrid_est.predict(q)
-        y_hybrid.append(c / N)
+    y_hybrid_counts = hybrid_est.predict_batch(queries)
+    y_hybrid = (y_hybrid_counts / N).tolist()
     t_hyb_inf = time.perf_counter() - t0_hyb
 
 
@@ -580,7 +576,7 @@ def _run_experiment_internal(args):
         eh_learner.update(q, float(truth)) 
         t_eh_update_p2 += (time.perf_counter() - t0_up)
         
-        # Hybrid (Stale buckets + Old Models)
+        # Hybrid (Stale buckets + Old Models) - Using scalar predict for online loop
         est_hyb = hybrid_est.predict(q)
         y_hybrid_stale.append(est_hyb / N)
         
@@ -604,9 +600,7 @@ def _run_experiment_internal(args):
         b.count = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
         
     # Check error again with updated counts
-    y_hyb_counts_only = []
-    for q in queries:
-        y_hyb_counts_only.append(hybrid_est.predict(q) / N_real)
+    y_hyb_counts_only = (hybrid_est.predict_batch(queries) / N_real).tolist()
         
     bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_q=2.0)
     print(f"Identified {len(bad_indices)}/{len(buckets_eq_width)} buckets needing repair.")
@@ -616,9 +610,7 @@ def _run_experiment_internal(args):
         hybrid_est.train(freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
             
     # Final Hybrid Eval
-    y_hyb_repaired = []
-    for q in queries:
-        y_hyb_repaired.append(hybrid_est.predict(q) / N_real)
+    y_hyb_repaired = (hybrid_est.predict_batch(queries) / N_real).tolist()
     
     # Baseline: Rebuilt Static Histogram (for comparison)
     print("Building Rebuilt Static Baseline...")
