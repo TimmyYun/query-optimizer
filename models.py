@@ -262,6 +262,7 @@ class HybridEstimator:
         self.mod_types = None # 0: identity, 1: linear, 2: poly, 3: complex (loop fallback)
         self.lin_params = None # (N, 2) -> [coef, intercept]
         self.poly_params = None # (N, 3) -> [coef1, coef2, intercept]
+        self.log_params = None # (N, 2) -> [coef, intercept] for a*log(x+e) + b
         self.complex_models = {} # dict for fallback
 
     def train(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> float:
@@ -280,6 +281,13 @@ class HybridEstimator:
         self.last_train_time = t_total
         return t_total
 
+
+    def predict(self, q: RangeQuery) -> float:
+        total = 0.0
+        for i in range(len(self.buckets)):
+             if self.buckets[i].count == 0: continue
+             total += self._get_bucket_overlap_count(i, q.low, q.high)
+        return total
 
     def predict_batch(self, queries: List[RangeQuery]) -> np.ndarray:
         """
@@ -328,6 +336,11 @@ class HybridEstimator:
                 elif m_type == 2: # Poly
                     p = self.poly_params[i]
                     return np.clip(p[2] + p[0]*xa + p[1]*(xa**2), 0.0, 1.0)
+                elif m_type == 4: # Log-Linear
+                    p = self.log_params[i]
+                    # y = a * log(x + eps) + b. 
+                    # We use eps=1e-7 to avoid log(0)
+                    return np.clip(p[0] * np.log(xa + 1e-7) + p[1], 0.0, 1.0)
                 else: # Complex (MLP)
                     mdl = self.complex_models[i]
                     # Vectorized predict call (sklearn handles batch X)
@@ -358,6 +371,7 @@ class HybridEstimator:
         self.mod_types = np.zeros(n, dtype=np.int8)
         self.lin_params = np.zeros((n, 2))
         self.poly_params = np.zeros((n, 3))
+        self.log_params = np.zeros((n, 2))
         self.complex_models = {}
 
         for i in range(n):
@@ -372,6 +386,9 @@ class HybridEstimator:
                     self.mod_types[i] = 2
                     # model: ("poly", coefs, intercept) -> coefs is [a, b]
                     self.poly_params[i] = [model[1][0], model[1][1], model[2]]
+                elif model[0] == "log_linear":
+                    self.mod_types[i] = 4
+                    self.log_params[i] = [model[1], model[2]]
             else:
                 self.mod_types[i] = 3 # Complex
                 self.complex_models[i] = model
@@ -391,9 +408,30 @@ class HybridEstimator:
             base_cnt = ps[b_lo_idx - 1] if b_lo_idx > 0 else 0
 
             # --- Sample Generation ---
-            # Training: Dense sampling + Edges
+            # Training: Mixed Sampling (Uniform + Log-Uniform for Head)
             n_train = max(points_per_bucket * 5, 1000)
-            xs_train = rng.integers(b.lo, b.hi + 1, size=n_train)
+            
+            # 50% Uniform Random
+            n_unif = n_train // 2
+            xs_unif = rng.integers(b.lo, b.hi + 1, size=n_unif)
+            
+            # 50% Log-Uniform (to catch the head of Zipf)
+            # Create points like base^k, spread across range
+            n_log = n_train - n_unif
+            if b.hi > b.lo:
+                # Generate log-spaced float points and round
+                # Avoid log(0) issue by offsetting if b.lo=0
+                start_log = max(1, b.lo) if b.lo > 0 else 1
+                end_log = max(start_log + 1, b.hi)
+                log_space = np.geomspace(start_log, end_log, num=n_log).astype(int)
+                # If b.lo was 0, some points might be < b.lo (impossible here due to max(1))
+                # but we need to map back if b.lo > 0 range logic differs.
+                # Actually geomspace from low to high is fine.
+                xs_log = np.clip(log_space, b.lo, b.hi)
+            else:
+                xs_log = np.array([b.lo] * n_log)
+                
+            xs_train = np.concatenate([xs_unif, xs_log])
             
             # Validation: Random sampling (Pure generalization check)
             n_val = max(points_per_bucket, 200)
@@ -480,6 +518,21 @@ class HybridEstimator:
                 models[i] = ("poly", mdl_poly.coef_, mdl_poly.intercept_)
                 continue
 
+            # 3.5 Log-Linear Check (y = a*log(x+e) + b)
+            # Feature transform: X' = log(X + 1e-7)
+            # Clip X to avoid log(0) issues just in case
+            X_log_train = np.log(np.clip(X_train, 0.0, 1.0) + 1e-7)
+            X_log_val = np.log(np.clip(X_val, 0.0, 1.0) + 1e-7)
+            
+            mdl_log = Ridge(alpha=1.0).fit(X_log_train, y_train)
+            mse_log_val = np.mean((y_val - mdl_log.predict(X_log_val))**2)
+            
+            # If Log-Linear is significantly better than Linear (e.g. 50% better MSE)
+            # or just generally good enough
+            if mse_log_val < mse_linear_val * 0.5 or mse_log_val < self.identity_threshold * 0.2:
+                 models[i] = ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)
+                 continue
+
             # 4. Fallback: Complex Model (Fourier MLP)
             try:
                 mapper = FourierFeatureMapper(num_bands=32, max_freq=20000.0)
@@ -509,6 +562,10 @@ class HybridEstimator:
                 coefs, intercept = model[1], model[2]
                 # coefs is [a, b] for ax + bx^2 because include_bias=False
                 pred = intercept + coefs[0]*x_norm + coefs[1]*(x_norm**2)
+                return max(0.0, min(1.0, float(pred)))
+            elif type_ == "log_linear":
+                coef, intercept = model[1], model[2]
+                pred = coef * np.log(x_norm + 1e-7) + intercept
                 return max(0.0, min(1.0, float(pred)))
         
         # Fallback for Wrapper (Fourier MLP) or others
