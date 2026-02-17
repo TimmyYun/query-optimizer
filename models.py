@@ -531,9 +531,24 @@ class HybridEstimator:
                 
             xs_train = np.concatenate([xs_unif, xs_log])
             
-            # Validation: Random sampling (Pure generalization check)
+            # Validation: Mixed Sampling (Uniform + Random Log-Use for Generalization)
             n_val = max(points_per_bucket, 200)
-            xs_val = rng.integers(b.lo, b.hi + 1, size=n_val)
+            n_val_unif = n_val // 2
+            xs_val_unif = rng.integers(b.lo, b.hi + 1, size=n_val_unif)
+            
+            # Add log-spaced validation points to test head fit
+            n_val_log = n_val - n_val_unif
+            if b.hi > b.lo:
+                start_log = max(1, b.lo) if b.lo > 0 else 1
+                end_log = max(start_log + 1, b.hi)
+                log_space_val = np.geomspace(start_log, end_log, num=n_val_log).astype(int)
+                # Jitter the log points slightly for validation to avoid testing on exact train points
+                jitter = rng.integers(-1, 2, size=len(log_space_val)) 
+                xs_val_log = np.clip(log_space_val + jitter, b.lo, b.hi)
+            else:
+                xs_val_log = np.array([b.lo] * n_val_log)
+                
+            xs_val = np.concatenate([xs_val_unif, xs_val_log])
 
             # CRITICAL: Always include boundaries and near-boundary points in TRAINING
             log_points = np.array([], dtype=int)
@@ -568,14 +583,73 @@ class HybridEstimator:
             
         return rows_data
 
-    def _train_adaptive_models(self, rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]) -> Tuple[Dict[int, Any], float]:
+    def _generate_bucket_queries(self, b: Bucket, n_queries: int, rng, freq: np.ndarray, mn: int) -> List[RangeQuery]:
+        """
+        Generate synthetic range queries for Q-Error evaluation.
+        Uses uniform sampling to match the benchmark's query workload generation strategy.
+        """
+        queries = []
+        for _ in range(n_queries):
+            lo = rng.integers(b.lo, b.hi + 1)
+            hi = rng.integers(lo, b.hi + 1)
+            queries.append(RangeQuery(lo, hi))
+        return queries
+
+    def _eval_model_q_error(self, model, queries: List[RangeQuery], bucket: Bucket, 
+                           freq: np.ndarray, mn: int) -> float:
+        """
+        Evaluate median Q-Error for a model on a query set.
+        
+        Args:
+            model: Model to evaluate (tuple format or FourierModelWrapper)
+            queries: List of range queries
+            bucket: Bucket being evaluated
+            freq: Frequency array for ground truth
+            mn: Minimum value of dataset
+            
+        Returns:
+            Median Q-Error across all queries
+        """
+        q_errors = []
+        width = bucket.hi - bucket.lo + 1
+        
+        for q in queries:
+            # Ground truth from frequency array
+            idx_lo = q.low - mn
+            idx_hi = q.high - mn
+            act_count = np.sum(freq[idx_lo:idx_hi + 1])
+            
+            # Prediction from model
+            lo_norm = (q.low - bucket.lo) / width
+            hi_norm = (q.high - bucket.lo) / width
+            
+            val_hi = self._predict_local_cdf(model, hi_norm)
+            val_lo = self._predict_local_cdf(model, lo_norm)
+            pred_count = (val_hi - val_lo) * bucket.count
+            
+            # Q-Error (avoid division by zero)
+            act = max(1, act_count)
+            pred = max(1, pred_count)
+            q_err = max(act / pred, pred / act)
+            q_errors.append(q_err)
+        
+        return np.median(q_errors)
+
+
+    def _train_adaptive_models(self, rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]], 
+                              freq: np.ndarray, mn: int, rng: np.random.Generator) -> Tuple[Dict[int, Any], float]:
         models = {}
         t0 = time.perf_counter()
+        
+        # Q-Error threshold for "good enough" - if a model achieves this, stop early
+        q_error_threshold = 2.0
         
         for i, (train_rows, val_rows) in rows_data.items():
             if not train_rows:
                 models[i] = None # Fallback to uniform (diagonal)
                 continue
+            
+            bucket = self.buckets[i]
             
             # Prepare Training Data
             X_train = np.array([r.x_norm for r in train_rows]).reshape(-1, 1)
@@ -587,9 +661,12 @@ class HybridEstimator:
                 y_val = np.array([r.y_cdf for r in val_rows])
             else:
                 X_val, y_val = X_train, y_train
-
             
-            # --- Adaptive Selection (Waterfall) ---
+            # Generate validation queries for Q-Error evaluation
+            val_queries = self._generate_bucket_queries(bucket, n_queries=200, rng=rng, freq=freq, mn=mn)
+            
+            # --- WATERFALL: Try simple models first, stop early if good enough ---
+            
             # 1. Identity Check (Uniform assumption)
             y_pred_identity_val = X_val.flatten() 
             mse_identity_val = np.mean((y_val - y_pred_identity_val)**2)
@@ -597,53 +674,105 @@ class HybridEstimator:
                 models[i] = None # Use Identity
                 continue
 
-            # 2. Linear Check (Ridge)
+            # 2. Linear Model
             mdl_linear = Ridge(alpha=1.0).fit(X_train, y_train)
-            mse_linear_val = np.mean((y_val - mdl_linear.predict(X_val))**2)
-            if mse_linear_val < self.identity_threshold * 0.5:
-                # Store as (type, coef, intercept)
+            q_err_linear = self._eval_model_q_error(
+                ("linear", mdl_linear.coef_[0], mdl_linear.intercept_),
+                val_queries, bucket, freq, mn
+            )
+            
+            if i < 3:  # Debug first few buckets
+                print(f"[DEBUG] Bucket {i}: Linear Q-Error={q_err_linear:.2f}")
+            
+            if q_err_linear < q_error_threshold:
                 models[i] = ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)
+                if i < 3:
+                    print(f"[DEBUG] Bucket {i}: Selected Linear (early stop)")
                 continue
             
-            # 3. Simple Non-Linear Check (Polynomial Degree 2)
+            # 3. Polynomial Model (Degree 2)
             poly_calc = PolynomialFeatures(degree=2, include_bias=False)
             X_poly_train = poly_calc.fit_transform(X_train)
-            X_poly_val = poly_calc.transform(X_val)
             mdl_poly = Ridge(alpha=1.0).fit(X_poly_train, y_train)
-            mse_poly_val = np.mean((y_val - mdl_poly.predict(X_poly_val))**2)
-            if mse_poly_val < self.identity_threshold * 0.1:
-                # Store as (type, coefs, intercept) where coefs is [a, b] for ax + bx^2
+            q_err_poly = self._eval_model_q_error(
+                ("poly", mdl_poly.coef_, mdl_poly.intercept_),
+                val_queries, bucket, freq, mn
+            )
+            
+            if i < 3:
+                print(f"[DEBUG] Bucket {i}: Poly Q-Error={q_err_poly:.2f}")
+            
+            if q_err_poly < q_error_threshold:
                 models[i] = ("poly", mdl_poly.coef_, mdl_poly.intercept_)
+                if i < 3:
+                    print(f"[DEBUG] Bucket {i}: Selected Poly (early stop)")
                 continue
 
-            # 3.5 Log-Linear Check (y = a*log(x+e) + b)
-            # Feature transform: X' = log(X + 1e-7)
-            # Clip X to avoid log(0) issues just in case
+            # 4. Log-Linear Model  
             X_log_train = np.log(np.clip(X_train, 0.0, 1.0) + 1e-7)
-            X_log_val = np.log(np.clip(X_val, 0.0, 1.0) + 1e-7)
-            
             mdl_log = Ridge(alpha=1.0).fit(X_log_train, y_train)
-            mse_log_val = np.mean((y_val - mdl_log.predict(X_log_val))**2)
+            q_err_log = self._eval_model_q_error(
+                ("log_linear", mdl_log.coef_[0], mdl_log.intercept_),
+                val_queries, bucket, freq, mn
+            )
             
-            # If Log-Linear is significantly better than Linear (e.g. 50% better MSE)
-            # or just generally good enough
-            if mse_log_val < mse_linear_val * 0.5 or mse_log_val < self.identity_threshold * 0.2:
-                 models[i] = ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)
-                 continue
+            if i < 3:
+                print(f"[DEBUG] Bucket {i}: Log-Linear Q-Error={q_err_log:.2f}")
+            
+            if q_err_log < q_error_threshold:
+                models[i] = ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)
+                if i < 3:
+                    print(f"[DEBUG] Bucket {i}: Selected Log-Linear (early stop)")
+                continue
 
-            # 4. Fallback: Complex Model (Fourier MLP)
+            # 5. Fallback: Complex Model (Fourier MLP) - only trained if simpler models aren't good enough
             try:
                 mapper = FourierFeatureMapper(num_bands=32, max_freq=20000.0)
                 X_f_train = mapper.transform(X_train)
-                X_f_val = mapper.transform(X_val)
-                mdl_f_mlp = MLPRegressor(hidden_layer_sizes=(128, 64), activation='relu', solver='lbfgs', max_iter=1000, random_state=42, alpha=0.001)
+                mdl_f_mlp = MLPRegressor(
+                    hidden_layer_sizes=(128, 64), 
+                    activation='relu', 
+                    solver='lbfgs', 
+                    max_iter=1000, 
+                    random_state=42, 
+                    alpha=0.001
+                )
                 mdl_f_mlp.fit(X_f_train, y_train)
-                models[i] = FourierModelWrapper(mdl_f_mlp, mapper)
+                mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
+                
+                q_err_fourier = self._eval_model_q_error(mdl_fourier, val_queries, bucket, freq, mn)
+                
+                if i < 3:
+                    print(f"[DEBUG] Bucket {i}: Fourier Q-Error={q_err_fourier:.2f}")
+                
+                # Select the best model among ALL candidates (including Fourier)
+                best_model = min(
+                    (q_err_linear, ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)),
+                    (q_err_poly, ("poly", mdl_poly.coef_, mdl_poly.intercept_)),
+                    (q_err_log, ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)),
+                    (q_err_fourier, mdl_fourier)
+                )
+                
+                models[i] = best_model[1]
+                
+                if i < 3:
+                    model_name = best_model[1][0] if isinstance(best_model[1], tuple) else "Fourier"
+                    print(f"[DEBUG] Bucket {i}: Selected {model_name} with Q-Error={best_model[0]:.2f}")
+                
             except Exception:
-                # Absolute Fallback to Linear
-                models[i] = ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)
+                # Absolute Fallback: pick best of the simple models
+                best_simple = min(
+                    (q_err_linear, ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)),
+                    (q_err_poly, ("poly", mdl_poly.coef_, mdl_poly.intercept_)),
+                    (q_err_log, ("log_linear", mdl_log.coef_[0], mdl_log.intercept_))
+                )
+                models[i] = best_simple[1]
+                if i < 3:
+                    print(f"[DEBUG] Bucket {i}: Selected best simple model (Fourier failed)")
+
             
         return models, time.perf_counter() - t0
+
 
     def _predict_local_cdf(self, model, x_norm) -> float:
         if model is None:
