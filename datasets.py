@@ -543,32 +543,32 @@ def main():
     and row counts (1M, 10M, 60M).
     """
     parser = argparse.ArgumentParser(description="Generate benchmark datasets.")
-    parser.add_argument("--rows", type=int, help="Number of rows to generate.")
+    parser.add_argument("--rows", type=int, nargs='+', help="List of row counts to generate (e.g. 10000 1000000).")
     parser.add_argument("--dist", type=str, help="Distribution to generate (uniform, normal, zipf, etc).")
-    parser.add_argument("--all", action="store_true", help="Generate all default datasets (1M, 10M, 60M).")
     
     args = parser.parse_args()
     
     dm = DatasetManager()
     total_start = time.time()
 
-    if args.rows and args.dist:
-        # Single generation
-        rows_list = [args.rows]
+    # Determine rows to generate
+    rows_list = []
+    if args.rows:
+        rows_list = args.rows
+    elif args.all:
+        rows_list = [1_000_000, 10_000_000, 60_000_000]
+
+    # Determine distributions
+    if args.dist:
         distributions = [args.dist]
     elif args.all:
-        # Default full generation
-        rows_list = [1_000_000, 10_000_000, 60_000_000]
         distributions = ["uniform", "normal", "zipf", "sparse_cluster", "anti_zipf"]
     else:
-        # Default if no args provided (backward compatibility or just print help)
-        # Check if user wants default behavior or help
-        # For now, let's default to help if no args, or maybe just run default?
-        # The script originally ran default. Let's keep it running default if no args, 
-        # or perhaps print help to avoid accidental long runs.
-        # Given "analyze datasets.py...", usually scripts run default if executed.
-        # But 60M rows is a lot. Let's print help.
+        distributions = []
+
+    if not rows_list or not distributions:
         parser.print_help()
+        print("\nError: --rows and --dist are required (or --all).")
         return
 
     for rows in rows_list:

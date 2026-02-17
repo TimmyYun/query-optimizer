@@ -330,9 +330,14 @@ def _run_experiment_internal(args):
         wl_name = f"{args.eval_n}_skewed"
         print(f"Using Skewed Workload: {wl_name}")
         
-    workload_path = Path(f"workload/{wl_name}.csv")
+    workload_path = Path(f"workload/{wl_name}/workload.csv")
     if not workload_path.exists():
-        raise FileNotFoundError(f"Workload file not found at {workload_path}. Run workload.py first.")
+        # Fallback to old path for backward compatibility or if user provided a direct file stem
+        workload_path_old = Path(f"workload/{wl_name}.csv")
+        if workload_path_old.exists():
+             workload_path = workload_path_old
+        else:
+             raise FileNotFoundError(f"Workload file not found at {workload_path} or {workload_path_old}. Run workload.py first.")
         
     all_queries = load_workload_csv(workload_path)
     

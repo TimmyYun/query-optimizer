@@ -196,14 +196,17 @@ def main():
     Supports dynamic generation via CLI arguments.
     """
     parser = argparse.ArgumentParser(description="Generate workload queries.")
-    parser.add_argument("--count", type=int, help="Number of queries to generate.")
-    parser.add_argument("--domain-max", type=int, default=200000, help="Max domain value (default: 200000).")
-    parser.add_argument("--all", action="store_true", help="Generate all default workloads (1k, 100k, 1M).")
+    parser.add_argument("--count", type=int, help="Single workload count (deprecated, use --counts).")
+    parser.add_argument("--counts", type=int, nargs='+', help="List of workload counts to generate (e.g. 1000 10000).")
+    parser.add_argument("--domain-max", type=int, default=200_000, help="Maximum value of the domain (default: 200,000).")
     parser.add_argument("--plot-buckets", type=str, help="Path to histogram_buckets.csv. If provided, plots the generated workload distribution.")
     parser.add_argument("--rows", type=int, help="Dataset size (e.g. 60000000). If provided, plots histograms for ALL distributions of this size.")
     
     args = parser.parse_args()
 
+    workload_dir = Path("workload")
+    workload_dir.mkdir(parents=True, exist_ok=True)
+    
     workload_dir = Path("workload")
     workload_dir.mkdir(parents=True, exist_ok=True)
     
@@ -234,45 +237,32 @@ def main():
                     print(f"Generating batch plot for {dist} to {plot_path}...")
                     plot_workload_distribution(queries, bucket_csv, plot_path, title=f"Workload {c} on {dist}")
 
-    if args.all:
-        print("Generating ALL default workloads...")
-        counts = [1000, 100000, 1000000]
+    # Consolidate counts
+    counts_to_gen = []
+    if args.counts:
+        counts_to_gen.extend(args.counts)
+    if args.count:
+        counts_to_gen.append(args.count)
         
-        for c in counts:
-            print(f"Generating workload: {c} queries (narrow)...")
-            queries = generate_workload(c, MN, MX, max_width=100)
-            
-            # Subfolder for count
-            count_dir = workload_dir / str(c)
-            count_dir.mkdir(parents=True, exist_ok=True)
-            
-            csv_path = count_dir / "workload.csv"
-            save_workload_csv(queries, csv_path)
-            
-            handle_plotting(queries, c, count_dir)
-            
-        return
-
-    if args.count is None:
+    if not counts_to_gen:
         parser.print_help()
-        print("\nError: --count is required unless --all is specified.")
+        print("\nError: --counts or --count is required.")
         return
 
-    # Single generation
-    max_w = 100
-    queries = generate_workload(args.count, MN, MX, max_width=max_w)
-    
-    # Subfolder for count
-    count_dir = workload_dir / str(args.count)
-    count_dir.mkdir(parents=True, exist_ok=True)
-    
-    out_path = count_dir / "workload.csv"
-    
-    print(f"Generating workload: {args.count} queries for domain [{MN}, {MX}]...")
-    save_workload_csv(queries, out_path)
-    print(f"Saved to {out_path}")
-    
-    handle_plotting(queries, args.count, count_dir)
+    # Generation Loop
+    for c in counts_to_gen:
+        print(f"Generating workload: {c} queries (narrow)...")
+        queries = generate_workload(c, MN, MX, max_width=100)
+        
+        # Subfolder for count
+        count_dir = workload_dir / str(c)
+        count_dir.mkdir(parents=True, exist_ok=True)
+        
+        out_path = count_dir / "workload.csv"
+        save_workload_csv(queries, out_path)
+        print(f"Saved to {out_path}")
+        
+        handle_plotting(queries, c, count_dir)
 
 if __name__ == "__main__":
     main()
