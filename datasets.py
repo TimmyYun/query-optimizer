@@ -545,6 +545,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate benchmark datasets.")
     parser.add_argument("--rows", type=int, nargs='+', help="List of row counts to generate (e.g. 10000 1000000).")
     parser.add_argument("--dist", type=str, help="Distribution to generate (uniform, normal, zipf, etc).")
+    parser.add_argument("--all", action="store_true", help="Generate all default datasets (1M, 10M, 60M).")
     
     args = parser.parse_args()
     
