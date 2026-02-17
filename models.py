@@ -21,7 +21,7 @@ class FourierFeatureMapper:
         
     def transform(self, X: np.ndarray) -> np.ndarray:
         # X shape: (N, 1)
-        # Ensure X is numpy array
+        # Ensure X is numpy array   
         X = np.asarray(X, dtype=np.float64)
         
         # log(x) feature to help with power law distributions (Zipf)
@@ -371,7 +371,7 @@ class HybridEstimator:
         
         # Train models directly on the raw frequency distribution (No MCV removal)
         rows_data = self._collect_cdf_training_rows(freq, mn, points_per_bucket, rng, bucket_indices)
-        new_models, t_train_models = self._train_adaptive_models(rows_data)
+        new_models, t_train_models = self._train_adaptive_models(rows_data, freq, mn, rng)
         
         for k, v in new_models.items():
             self.models[k] = v
@@ -492,7 +492,7 @@ class HybridEstimator:
                     self.log_params[i] = [model[1], model[2]]
             else:
                 self.mod_types[i] = 3 # Complex
-                self.complex_models[i] = model.model if hasattr(model, 'model') else model
+                self.complex_models[i] = model
 
 
 
@@ -520,17 +520,11 @@ class HybridEstimator:
             xs_unif = rng.integers(b.lo, b.hi + 1, size=n_unif)
             
             # 50% Log-Uniform (to catch the head of Zipf)
-            # Create points like base^k, spread across range
             n_log = n_train - n_unif
             if b.hi > b.lo:
-                # Generate log-spaced float points and round
-                # Avoid log(0) issue by offsetting if b.lo=0
                 start_log = max(1, b.lo) if b.lo > 0 else 1
                 end_log = max(start_log + 1, b.hi)
                 log_space = np.geomspace(start_log, end_log, num=n_log).astype(int)
-                # If b.lo was 0, some points might be < b.lo (impossible here due to max(1))
-                # but we need to map back if b.lo > 0 range logic differs.
-                # Actually geomspace from low to high is fine.
                 xs_log = np.clip(log_space, b.lo, b.hi)
             else:
                 xs_log = np.array([b.lo] * n_log)
