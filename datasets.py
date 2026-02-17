@@ -301,6 +301,106 @@ def generate_boxplots(csv_path, output_path, title="Q-Error Distribution"):
     plt.close()
     print(f"Faceted boxplot saved to {output_path}")
 
+
+def plot_workload_distribution(queries: list, bucket_csv_path: Path, output_path: Path, title: str = "Workload Distribution"):
+    """
+    Plots a histogram of query counts per dataset bucket.
+    Only counts queries that are passed in (caller should filter for >0 selectivity).
+    
+    Args:
+        queries: List of objects with .low and .high attributes (or dicts).
+        bucket_csv_path: Path to histogram_buckets.csv.
+        output_path: Path to save the plot.
+        title: Plot title.
+    """
+    if not bucket_csv_path.exists():
+        print(f"Bucket CSV not found at {bucket_csv_path}. Skipping workload plot.")
+        return
+
+    try:
+        df_buckets = pd.read_csv(bucket_csv_path)
+        if df_buckets.empty:
+            print("Bucket CSV is empty.")
+            return
+
+        # Prepare bin edges
+        # Assuming contiguous bins from sorted start
+        starts = df_buckets['bin_start'].values
+        ends = df_buckets['bin_end'].values
+        
+        # robust edges: use starts and the last end
+        # But bins might have gaps? FD bins covers min to max.
+        # Let's assume contiguous.
+        edges = np.concatenate([starts, [ends[-1]]])
+        
+        # Vectorize queries
+        # Handle objects or dicts
+        target_queries = queries
+        if not target_queries:
+             print("No queries to plot.")
+             return
+             
+        if isinstance(target_queries[0], dict):
+             ls = np.array([q['low'] for q in target_queries])
+             rs = np.array([q['high'] for q in target_queries])
+        else:
+             ls = np.array([q.low for q in target_queries])
+             rs = np.array([q.high for q in target_queries])
+
+        # Find start and end bucket indices for each query
+        # searchsorted returns index where value would be inserted to maintain order.
+        # side='right' ensures that if value equals edge, it goes to next bucket (consistent with [a, b))?
+        # Actually standard hist is [a, b). 
+        # If L = edge[i], it belongs to bucket i. index -> i+1. so -1 gives i.
+        # If L = edge[i] + eps, it belongs to bucket i. index -> i+1. so -1 gives i.
+        
+        idx_start = np.searchsorted(edges, ls, side='right') - 1
+        idx_end = np.searchsorted(edges, rs, side='right') - 1
+        
+        # Clamp indices to valid buckets [0, len(buckets)-1]
+        # If query is outside domain, clamp to nearest.
+        idx_start = np.clip(idx_start, 0, len(df_buckets) - 1)
+        idx_end = np.clip(idx_end, 0, len(df_buckets) - 1)
+        
+        # Use difference array to compute counts
+        # counts[i] increments if query covers bucket i.
+        # Query covers [idx_start, idx_end] inclusive.
+        # diff[idx_start] += 1
+        # diff[idx_end + 1] -= 1
+        
+        diff = np.zeros(len(df_buckets) + 1, dtype=int)
+        np.add.at(diff, idx_start, 1)
+        np.add.at(diff, idx_end + 1, -1)
+        
+        counts = np.cumsum(diff)[:-1] # drop last logic element
+        
+        # Plot
+        plt.figure(figsize=(12, 6))
+        
+        # Use simple bar plot
+        # x-axis is bucket index
+        x = np.arange(len(counts))
+        plt.bar(x, counts, width=1.0, color='orange', edgecolor='black', alpha=0.7)
+        
+        plt.title(f"{title} (Total Queries: {len(target_queries)})")
+        plt.xlabel("Bucket Index (FD Bins)")
+        plt.ylabel("Workload Count (Queries Intersecting)")
+        plt.grid(axis='y', alpha=0.3)
+        
+        # Add a text annotation for total bins
+        plt.text(0.98, 0.95, f"Bins: {len(counts)}", transform=plt.gca().transAxes, 
+                 ha='right', va='top', bbox=dict(facecolor='white', alpha=0.8))
+        
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=150)
+        plt.close()
+        print(f"Workload distribution plot saved to {output_path}")
+
+    except Exception as e:
+        print(f"Error plotting workload distribution: {e}")
+        import traceback
+        traceback.print_exc()
+
 def plot_model_comparison(csv_path: str, output_path: str, title: str):
     """
     Generates a single boxplot comparing models for a specific experiment scenario.
