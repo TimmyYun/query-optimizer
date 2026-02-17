@@ -268,16 +268,76 @@ class EquiHistLearner:
     def update(self, q: RangeQuery, actual: float):
         pred = self.predict(q)
         if pred == 0: return
-        ratio = max(0.1, min(10.0, actual / pred))
+        # Adaptive learning rate based on error
+        ratio = actual / pred
+        
+        # Limit ratio to avoid explosions
+        ratio = max(0.1, min(10.0, ratio))
         
         for b in self.buckets:
+            # Overlap logic
             ov_lo = max(q.low, b.lo)
             ov_hi = min(q.high, b.hi)
+            
             if ov_lo <= ov_hi:
+                # Update bucket count based on overlap contribution
                 w = b.hi - b.lo + 1
-                overlap = (ov_hi - ov_lo + 1) / w
-                factor = ratio ** (self.lr * overlap)
-                b.count = int(max(1, b.count * factor))
+                overlap_frac = (ov_hi - ov_lo + 1) / w
+                
+                # Formula: new_count = old_count * (ratio ^ (lr * overlap))
+                # If overlap is 1.0 (full bucket inside query), it gets full update
+                # If overlap is small, it gets small update
+                factor = ratio ** (self.lr * overlap_frac)
+                b.count = max(1.0, b.count * factor)
+
+        # Invalidate vector cache
+        self.b_lo = None
+
+    def predict_batch(self, queries: List[RangeQuery]) -> np.ndarray:
+        """
+        Vectorized bulk inference.
+        """
+        # Auto-bake if needed or stale (simple check: if b_lo is None)
+        # Note: If called in a loop without updates, this is fast. 
+        # If called interleaved with updates, it will re-bake often (overhead).
+        if not hasattr(self, 'b_lo') or self.b_lo is None:
+            self._bake_vectorized_data()
+            
+        n_queries = len(queries)
+        if n_queries == 0: return np.array([])
+        
+        q_lo = np.array([q.low for q in queries], dtype=np.float64)
+        q_hi = np.array([q.high for q in queries], dtype=np.float64)
+        total = np.zeros(n_queries)
+        
+        # Vectorized Bucket Loop
+        for i in range(len(self.buckets)):
+             # b properties from arrays
+             b_lo = self.b_lo[i]
+             b_hi = self.b_hi[i]
+             b_cnt = self.b_count[i]
+             b_width = self.b_width[i]
+
+             # Overlap: lo = max(q_lo, b_lo), hi = min(q_hi, b_hi)
+             # Mask: q_hi >= b_lo & q_lo <= b_hi
+             
+             mask = (q_hi >= b_lo) & (q_lo <= b_hi)
+             if not np.any(mask): continue
+             
+             lo = np.maximum(q_lo[mask], b_lo)
+             hi = np.minimum(q_hi[mask], b_hi)
+             
+             overlap_width = hi - lo + 1
+             total[mask] += (overlap_width / b_width) * b_cnt
+             
+        return total
+
+    def _bake_vectorized_data(self):
+        self.b_lo = np.array([b.lo for b in self.buckets], dtype=np.float64)
+        self.b_hi = np.array([b.hi for b in self.buckets], dtype=np.float64)
+        self.b_count = np.array([b.count for b in self.buckets], dtype=np.float64)
+        self.b_width = self.b_hi - self.b_lo + 1
+
 
 class HybridEstimator:
     """
@@ -305,6 +365,7 @@ class HybridEstimator:
         self.log_params = None # (N, 2) -> [coef, intercept] for a*log(x+e) + b
         self.complex_models = {} # dict for fallback
 
+
     def train(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> float:
         t_start = time.perf_counter()
         
@@ -331,10 +392,10 @@ class HybridEstimator:
 
     def predict_batch(self, queries: List[RangeQuery]) -> np.ndarray:
         """
-        Vectorized bulk inference for Hybrid model.
+        Vectorized bulk inference for HybridEstimator.
         Uses query masking and array operations to avoid Python loops for CDF calculation.
         """
-        if self.b_lo is None:
+        if self.b_lo is None or len(self.b_lo) != len(self.buckets):
             self._bake_vectorized_data()
             
         n_queries = len(queries)
@@ -431,7 +492,10 @@ class HybridEstimator:
                     self.log_params[i] = [model[1], model[2]]
             else:
                 self.mod_types[i] = 3 # Complex
-                self.complex_models[i] = model
+                self.complex_models[i] = model.model if hasattr(model, 'model') else model
+
+
+
         
     def _collect_cdf_training_rows(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]:
         ps = np.cumsum(freq)
