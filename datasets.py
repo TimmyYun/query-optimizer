@@ -249,7 +249,10 @@ def plot_data_distribution(vals, dist_name, output_path):
     use_log = (dist_name.lower() == 'zipf')
     
     # Use Freedman-Diaconis estimator for bins
-    counts, bin_edges, _ = plt.hist(plot_vals, bins='fd', color='skyblue', edgecolor='black', alpha=0.7, log=use_log)
+    # Calculate number of bins using FD rule, capped at 2000
+    n_bins = freedman_diaconis_bins(plot_vals, int(plot_vals.min()), int(plot_vals.max()), len(plot_vals), bins_max=2000)
+    
+    counts, bin_edges, _ = plt.hist(plot_vals, bins=n_bins, color='skyblue', edgecolor='black', alpha=0.7, log=use_log)
     
     # Save bucket details to CSV
     try:
