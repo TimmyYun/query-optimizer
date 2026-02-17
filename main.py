@@ -213,7 +213,7 @@ def main():
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--eval-n", dest="eval_n", type=str, default="1000", help="Workload name/size to evaluate (e.g. 1000 or 1000_narrow)")
     parser.add_argument("--bins", type=int, default=100, help="Number of bins for Equi-Width Histogram (Default: 100)")
-    parser.add_argument("--bin-method", type=str, choices=["fixed", "fd"], default="fixed", help="Method to calculate bins: 'fixed' (uses --bins) or 'fd' (Freedman-Diaconis). Default: fixed")
+    parser.add_argument("--bin-method", type=str, choices=["fixed", "fd"], default="fd", help="Method to calculate bins: 'fixed' (uses --bins) or 'fd' (Freedman-Diaconis). Default: fd")
     parser.add_argument("--skewed", action="store_true", help="Use skewed workload for Head heavy evaluation")
 
     # Batch specific params
