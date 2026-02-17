@@ -233,7 +233,7 @@ def save_stats(stats: dict, output_path: Path):
 
 def plot_data_distribution(vals, dist_name, output_path):
     """
-    Plots a histogram of the data distribution.
+    Plots a histogram of the data distribution and saves bucket info.
     
     Args:
         vals (np.ndarray): The full dataset or a large sample.
@@ -247,8 +247,29 @@ def plot_data_distribution(vals, dist_name, output_path):
 
     plt.figure(figsize=(10, 6))
     use_log = (dist_name.lower() == 'zipf')
-    plt.hist(plot_vals, bins=100, color='skyblue', edgecolor='black', alpha=0.7, log=use_log)
-    plt.title(f"Distribution: {dist_name}")
+    
+    # Use Freedman-Diaconis estimator for bins
+    counts, bin_edges, _ = plt.hist(plot_vals, bins='fd', color='skyblue', edgecolor='black', alpha=0.7, log=use_log)
+    
+    # Save bucket details to CSV
+    try:
+        bucket_data = []
+        for i, count in enumerate(counts):
+            if count > 0:
+                bucket_data.append({
+                    "bin_id": i,
+                    "bin_start": bin_edges[i],
+                    "bin_end": bin_edges[i+1],
+                    "count": int(count)
+                })
+        
+        hist_csv_path = Path(output_path).parent / "histogram_buckets.csv"
+        pd.DataFrame(bucket_data).to_csv(hist_csv_path, index=False)
+        print(f"Saved histogram bucket details to {hist_csv_path}")
+    except Exception as e:
+        print(f"Failed to save histogram buckets: {e}")
+
+    plt.title(f"Distribution: {dist_name} (FD Bins: {len(counts)})")
     plt.xlabel("Value")
     plt.ylabel("Frequency" + (" (Log Scale)" if use_log else ""))
     plt.grid(axis='y', alpha=0.3)
