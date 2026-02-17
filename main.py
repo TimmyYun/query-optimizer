@@ -41,7 +41,7 @@ from datasets import (
     DatasetManager,
     scan_min_max_count, build_frequency_and_sample,
     generate_boxplots, plot_data_distribution, plot_model_comparison,
-    gen_values, save_csv_column, plot_workload_distribution
+    gen_values, save_csv_column
 )
 from workload import RangeQuery, load_workload_csv
 import copy
@@ -377,22 +377,7 @@ def _run_experiment_internal(args):
     y_hybrid = []
     y_eh_init = []
     
-    # --- Visualization: Workload Distribution ---
-    # Plot histogram of filtered queries against dataset buckets
-    try:
-        dist_dir = dm.get_dataset_dir(N, args.dist)
-        csv_path = dist_dir / "histogram_buckets.csv"
-        plot_path = Path(args.out_dir) / f"{wl_name}_workload_dist.png"
-        
-        print(f"Generating workload distribution plot to {plot_path}...")
-        # Need to import plot_workload_distribution first
-        # Doing dynamic import or assuming it's imported at top
-        # It's better to update imports at the top, but for now assuming it's available or I'll patch imports
-        plot_workload_distribution(queries, csv_path, plot_path, title=f"Workload: {wl_name} on {args.dist}")
-        
-    except Exception as e:
-        print(f"Failed to plot workload distribution: {e}")
-    # ---------------------------------------------
+
 
     
     # Measure Baseline Inference
