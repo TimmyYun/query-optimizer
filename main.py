@@ -41,7 +41,7 @@ from datasets import (
     DatasetManager,
     scan_min_max_count, build_frequency_and_sample,
     generate_boxplots, plot_data_distribution, plot_model_comparison,
-    gen_values, save_csv_column
+    generate_drift_data, append_to_dataset
 )
 from workload import RangeQuery, load_workload_csv
 import copy
@@ -215,8 +215,7 @@ def main():
     parser.add_argument("--bins", type=int, default=100, help="Number of bins for Equi-Width Histogram (Default: 100)")
     parser.add_argument("--bin-method", type=str, choices=["fixed", "fd"], default="fixed", help="Method to calculate bins: 'fixed' (uses --bins) or 'fd' (Freedman-Diaconis). Default: fixed")
     parser.add_argument("--skewed", action="store_true", help="Use skewed workload for Head heavy evaluation")
-    parser.add_argument("--recreate", action="store_true", help="Force regeneration of the dataset even if cached")
-    
+
     # Batch specific params
     parser.add_argument("--experiment-name", type=str, default=None, help="Suffix for output files")
     
@@ -265,7 +264,8 @@ def _run_experiment_internal(args):
     
     # Use DatasetManager for Stage 1 (Dataset + Stats)
     dm = DatasetManager()
-    ds_dir = dm.prepare_dataset(args.rows, args.dist, force_regeneration=args.recreate)
+    # Phase 1: Ensure dataset exists (modified to not generate)
+    ds_dir = dm.ensure_dataset_exists(args.rows, args.dist)
     
     # Load dataset metadata
     ds_path = ds_dir / "data.csv"
@@ -535,8 +535,8 @@ def _run_experiment_internal(args):
     # Phase 2: Data Drift (Insert Data)
     # -----------------------------------------------------
     print(f"\n=== Phase 2: Data Drift (Inserting {args.drift_rows} rows of {args.drift_dist}, shift={args.drift_shift}) ===")
-    drift_vals = gen_values(rng, args.drift_dist, args.drift_rows, 0, 200_000, shift=args.drift_shift)
-    save_csv_column(drift_vals, ds_path, mode='a')
+    drift_vals = generate_drift_data(rng, args.drift_dist, args.drift_rows, shift=args.drift_shift)
+    append_to_dataset(drift_vals, ds_path)
     
     # Update Ground Truth Frequencies
     N_new = N + args.drift_rows

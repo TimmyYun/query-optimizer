@@ -79,6 +79,13 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
     v = np.vectorize(lambda x: clamp_int(x, 0, 200_000))(v)
     return v.astype(np.int64)
 
+def generate_drift_data(rng: np.random.Generator, dist: str, n: int, shift: int = 0) -> np.ndarray:
+    """
+    Generates data for drift simulation.
+    Wrapper around gen_values with fixed domain [0, 200_000].
+    """
+    return gen_values(rng, dist, n, 0, 200_000, shift=shift)
+
 def save_csv_column(values: np.ndarray, path: Path, mode='w'):
     """
     Saves a numpy array as a single-column CSV file without a header.
@@ -91,6 +98,12 @@ def save_csv_column(values: np.ndarray, path: Path, mode='w'):
     path.parent.mkdir(parents=True, exist_ok=True)
     df = pd.Series(values)
     df.to_csv(path, index=False, header=False, mode=mode)
+
+def append_to_dataset(values: np.ndarray, path: Path):
+    """
+    Appends values to an existing dataset CSV.
+    """
+    save_csv_column(values, path, mode='a')
 
 def scan_min_max_count(csv_path: Path, chunksize: int = 1_000_000) -> Tuple[int, int, int]:
     """
@@ -231,7 +244,7 @@ def save_stats(stats: dict, output_path: Path):
 # Plot Utils
 # ==========================================
 
-def plot_data_distribution(vals, dist_name, output_path):
+def plot_data_distribution(vals, dist_name, output_path, n_bins=None):
     """
     Plots a histogram of the data distribution and saves bucket info.
     
@@ -248,9 +261,9 @@ def plot_data_distribution(vals, dist_name, output_path):
     plt.figure(figsize=(10, 6))
     use_log = (dist_name.lower() == 'zipf')
     
-    # Use Freedman-Diaconis estimator for bins
-    # Calculate number of bins using FD rule, capped at 2000
-    n_bins = freedman_diaconis_bins(plot_vals, int(plot_vals.min()), int(plot_vals.max()), len(plot_vals), bins_max=2000)
+    # Use Freedman-Diaconis estimator for bins if not provided
+    if n_bins is None:
+        n_bins = freedman_diaconis_bins(plot_vals, int(plot_vals.min()), int(plot_vals.max()), len(plot_vals), bins_max=2000)
     
     counts, bin_edges, _ = plt.hist(plot_vals, bins=n_bins, color='skyblue', edgecolor='black', alpha=0.7, log=use_log)
     
@@ -258,13 +271,12 @@ def plot_data_distribution(vals, dist_name, output_path):
     try:
         bucket_data = []
         for i, count in enumerate(counts):
-            if count > 0:
-                bucket_data.append({
-                    "bin_id": i,
-                    "bin_start": bin_edges[i],
-                    "bin_end": bin_edges[i+1],
-                    "count": int(count)
-                })
+            bucket_data.append({
+                "bin_id": i,
+                "bin_start": bin_edges[i],
+                "bin_end": bin_edges[i+1],
+                "count": int(count)
+            })
         
         hist_csv_path = Path(output_path).parent / "histogram_buckets.csv"
         pd.DataFrame(bucket_data).to_csv(hist_csv_path, index=False)
@@ -302,6 +314,104 @@ def generate_boxplots(csv_path, output_path, title="Q-Error Distribution"):
     print(f"Faceted boxplot saved to {output_path}")
 
 
+def plot_workload_distribution(queries: list, bucket_csv_path: Path, output_path: Path, title: str = "Workload Distribution"):
+    """
+    Plots a histogram of query counts per dataset bucket.
+    Only counts queries that are passed in (caller should filter for >0 selectivity).
+    
+    Args:
+        queries: List of objects with .low and .high attributes (or dicts).
+        bucket_csv_path: Path to histogram_buckets.csv.
+        output_path: Path to save the plot.
+        title: Plot title.
+    """
+    if not bucket_csv_path.exists():
+        print(f"Bucket CSV not found at {bucket_csv_path}. Skipping workload plot.")
+        return
+
+    try:
+        df_buckets = pd.read_csv(bucket_csv_path)
+        if df_buckets.empty:
+            print("Bucket CSV is empty.")
+            return
+
+        # Prepare bin edges
+        # Assuming contiguous bins from sorted start
+        starts = df_buckets['bin_start'].values
+        ends = df_buckets['bin_end'].values
+        
+        # robust edges: use starts and the last end
+        # But bins might have gaps? FD bins covers min to max.
+        # Let's assume contiguous.
+        edges = np.concatenate([starts, [ends[-1]]])
+        
+        # Vectorize queries
+        # Handle objects or dicts
+        target_queries = queries
+        if not target_queries:
+             print("No queries to plot.")
+             return
+             
+        if isinstance(target_queries[0], dict):
+             ls = np.array([q['low'] for q in target_queries])
+             rs = np.array([q['high'] for q in target_queries])
+        else:
+             ls = np.array([q.low for q in target_queries])
+             rs = np.array([q.high for q in target_queries])
+
+        # Find start and end bucket indices for each query
+        # searchsorted returns index where value would be inserted to maintain order.
+        # side='right' ensures that if value equals edge, it goes to next bucket (consistent with [a, b))?
+        # Actually standard hist is [a, b). 
+        # If L = edge[i], it belongs to bucket i. index -> i+1. so -1 gives i.
+        # If L = edge[i] + eps, it belongs to bucket i. index -> i+1. so -1 gives i.
+        
+        idx_start = np.searchsorted(edges, ls, side='right') - 1
+        idx_end = np.searchsorted(edges, rs, side='right') - 1
+        
+        # Clamp indices to valid buckets [0, len(buckets)-1]
+        # If query is outside domain, clamp to nearest.
+        idx_start = np.clip(idx_start, 0, len(df_buckets) - 1)
+        idx_end = np.clip(idx_end, 0, len(df_buckets) - 1)
+        
+        # Use difference array to compute counts
+        # counts[i] increments if query covers bucket i.
+        # Query covers [idx_start, idx_end] inclusive.
+        # diff[idx_start] += 1
+        # diff[idx_end + 1] -= 1
+        
+        diff = np.zeros(len(df_buckets) + 1, dtype=int)
+        np.add.at(diff, idx_start, 1)
+        np.add.at(diff, idx_end + 1, -1)
+        
+        counts = np.cumsum(diff)[:-1] # drop last logic element
+        
+        # Plot
+        plt.figure(figsize=(12, 6))
+        
+        # Use simple bar plot
+        # x-axis is bucket index
+        x = np.arange(len(counts))
+        plt.bar(x, counts, width=1.0, color='orange', edgecolor='black', alpha=0.7)
+        
+        plt.title(f"{title} (Total Queries: {len(target_queries)})")
+        plt.xlabel("Bucket Index (FD Bins)")
+        plt.ylabel("Workload Count (Queries Intersecting)")
+        plt.grid(axis='y', alpha=0.3)
+        
+        # Add a text annotation for total bins
+        plt.text(0.98, 0.95, f"Bins: {len(counts)}", transform=plt.gca().transAxes, 
+                 ha='right', va='top', bbox=dict(facecolor='white', alpha=0.8))
+        
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=150)
+        plt.close()
+        print(f"Workload distribution plot saved to {output_path}")
+
+    except Exception as e:
+        print(f"Error plotting workload distribution: {e}")
+        import traceback
+        traceback.print_exc()
 
 def plot_model_comparison(csv_path: str, output_path: str, title: str):
     """
@@ -336,6 +446,16 @@ class DatasetManager:
     def get_dataset_dir(self, rows: int, dist: str) -> Path:
         """Returns the structured directory path for a specific dataset configuration."""
         return self.base_path / "generated" / str(rows) / dist
+
+    def ensure_dataset_exists(self, rows: int, dist: str) -> Path:
+        """
+        Checks if a dataset exists. Raises FileNotFoundError if not.
+        Returns the dataset directory.
+        """
+        ds_dir = self.get_dataset_dir(rows, dist)
+        if not (ds_dir / "data.csv").exists() or not (ds_dir / "meta.pkl").exists():
+            raise FileNotFoundError(f"Dataset {dist} ({rows} rows) not found at {ds_dir}. Please run datasets.py first.")
+        return ds_dir
 
     def prepare_dataset(self, rows: int, dist: str, force_regeneration: bool = False):
         """
@@ -404,7 +524,7 @@ class DatasetManager:
                 pickle.dump((mn, mx, N, freq, sample, k, skew, kurt), f)
                 
             # Plot distribution
-            plot_data_distribution(vals, dist, ds_dir / "hist.png")
+            plot_data_distribution(vals, dist, ds_dir / "hist.png", n_bins=k)
             
         print(f"Dataset ready at {ds_dir}")
         return ds_dir
@@ -414,19 +534,43 @@ class DatasetManager:
 # ==========================================
 import time
 
+import argparse
+
 def main():
     """
     Batch generation entry point.
     Generates datasets for predefined distributions (uniform, normal, zipf, etc.)
     and row counts (1M, 10M, 60M).
     """
-    rows_list = [1_000_000, 10_000_000, 60_000_000]
-    distributions = ["uniform", "normal", "zipf", "sparse_cluster", "anti_zipf"]
+    parser = argparse.ArgumentParser(description="Generate benchmark datasets.")
+    parser.add_argument("--rows", type=int, help="Number of rows to generate.")
+    parser.add_argument("--dist", type=str, help="Distribution to generate (uniform, normal, zipf, etc).")
+    parser.add_argument("--all", action="store_true", help="Generate all default datasets (1M, 10M, 60M).")
+    
+    args = parser.parse_args()
     
     dm = DatasetManager()
-    
     total_start = time.time()
-    
+
+    if args.rows and args.dist:
+        # Single generation
+        rows_list = [args.rows]
+        distributions = [args.dist]
+    elif args.all:
+        # Default full generation
+        rows_list = [1_000_000, 10_000_000, 60_000_000]
+        distributions = ["uniform", "normal", "zipf", "sparse_cluster", "anti_zipf"]
+    else:
+        # Default if no args provided (backward compatibility or just print help)
+        # Check if user wants default behavior or help
+        # For now, let's default to help if no args, or maybe just run default?
+        # The script originally ran default. Let's keep it running default if no args, 
+        # or perhaps print help to avoid accidental long runs.
+        # Given "analyze datasets.py...", usually scripts run default if executed.
+        # But 60M rows is a lot. Let's print help.
+        parser.print_help()
+        return
+
     for rows in rows_list:
         for dist in distributions:
             print(f"\n>>> Generating Dataset: {rows} rows, {dist} <<<")
