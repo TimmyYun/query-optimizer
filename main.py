@@ -140,6 +140,8 @@ def aggregate_summaries(results_dir="results"):
                             q_errs = subset["Q_Error"]
                             
                             med_q = q_errs.median()
+                            p25_q = q_errs.quantile(0.25)
+                            p75_q = q_errs.quantile(0.75)
                             p95_q = q_errs.quantile(0.95)
                             avg_q = q_errs.mean()
                             
@@ -158,6 +160,8 @@ def aggregate_summaries(results_dir="results"):
                                 "Workload": workload_name,
                                 "Model": model,
                                 "Avg Q-Error": avg_q,
+                                "25% Q-Error": p25_q,
+                                "75% Q-Error": p75_q,
                                 "95% Q-Error": p95_q,
                                 "Median Q-Error": med_q,
                                 "Training Time (s)": train_time,
@@ -480,6 +484,8 @@ def _run_experiment_internal(args):
                      "build_time": t_hist_build,
                      "infer_time": t_base_inf,
                      "median_q_error": m_hist_w['QErr_median'],
+                     "p25_q_error": m_hist_w['QErr_p25'],
+                     "p75_q_error": m_hist_w['QErr_p75'],
                      "avg_q_error": m_hist_w['QErr_avg'],
                      "p95_q_error": m_hist_w['QErr_p95']
                  },
@@ -491,6 +497,8 @@ def _run_experiment_internal(args):
                      "build_time_total": t_hist_build + t_ml_train,
                      "infer_time": t_hyb_inf,
                      "median_q_error": m_hyb['QErr_median'],
+                     "p25_q_error": m_hyb['QErr_p25'],
+                     "p75_q_error": m_hyb['QErr_p75'],
                      "avg_q_error": m_hyb['QErr_avg'],
                      "p95_q_error": m_hyb['QErr_p95']
                  },
@@ -498,6 +506,8 @@ def _run_experiment_internal(args):
                      "build_time": t_eh_init_total,
                      "infer_time": t_eh_inf_p1,
                      "median_q_error": m_eh_init['QErr_median'],
+                     "p25_q_error": m_eh_init['QErr_p25'],
+                     "p75_q_error": m_eh_init['QErr_p75'],
                      "avg_q_error": m_eh_init['QErr_avg'],
                      "p95_q_error": m_eh_init['QErr_p95']
                  }
