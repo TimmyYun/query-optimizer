@@ -366,6 +366,7 @@ class HybridEstimator:
         self.lin_params = None # (N, 2) -> [coef, intercept]
         self.poly_params = None # (N, 3) -> [coef1, coef2, intercept]
         self.log_params = None # (N, 2) -> [coef, intercept] for a*log(x+e) + b
+        self.power_params = None # NEW: Storage for the power-law model
         self.complex_models = {} # dict for fallback
 
 
@@ -437,26 +438,26 @@ class HybridEstimator:
             # Model Selection
             m_type = self.mod_types[i]
 
-            
+
             def get_cdf_vec(x_arr):
                 # Ensure input is array
                 xa = np.clip(x_arr, 0.0, 1.0)
-                if m_type == 0: # Identity
+                if m_type == 0:  # Identity
                     return xa
-                elif m_type == 1: # Linear
+                elif m_type == 1:  # Linear
                     p = self.lin_params[i]
                     return np.clip(xa * p[0] + p[1], 0.0, 1.0)
-                elif m_type == 2: # Poly
+                elif m_type == 2:  # Poly
                     p = self.poly_params[i]
-                    return np.clip(p[2] + p[0]*xa + p[1]*(xa**2), 0.0, 1.0)
-                elif m_type == 4: # Log-Linear
+                    return np.clip(p[2] + p[0] * xa + p[1] * (xa ** 2), 0.0, 1.0)
+                elif m_type == 4:  # Log-Linear
                     p = self.log_params[i]
-                    # y = a * log(x + eps) + b. 
-                    # We use eps=1e-7 to avoid log(0)
                     return np.clip(p[0] * np.log(xa + 1e-7) + p[1], 0.0, 1.0)
-                else: # Complex (MLP)
+                elif m_type == 5:  # NEW: Power
+                    p = self.power_params[i]
+                    return np.clip(p[0] * np.sqrt(xa) + p[1], 0.0, 1.0)
+                else:  # Complex (MLP or Tree)
                     mdl = self.complex_models[i]
-                    # Vectorized predict call (sklearn handles batch X)
                     return np.clip(mdl.predict(xa.reshape(-1, 1)).flatten(), 0.0, 1.0)
 
             cdf_hi = get_cdf_vec(x_hi)
@@ -480,39 +481,36 @@ class HybridEstimator:
         self.b_hi = np.array([b.hi for b in self.buckets], dtype=np.float64)
         self.b_count = np.array([b.count for b in self.buckets], dtype=np.float64)
         self.b_width = self.b_hi - self.b_lo + 1
-        
+
         self.mod_types = np.zeros(n, dtype=np.int8)
         self.lin_params = np.zeros((n, 2))
         self.poly_params = np.zeros((n, 3))
         self.log_params = np.zeros((n, 2))
+        self.power_params = np.zeros((n, 2))  # NEW
         self.complex_models = {}
 
         for i in range(n):
             model = self.models.get(i)
             if model is None:
-                self.mod_types[i] = 0 # Identity
+                self.mod_types[i] = 0  # Identity
             elif isinstance(model, tuple):
                 if model[0] == "linear":
                     self.mod_types[i] = 1
-                    self.lin_params[i] = [model[1], model[2]] # coef, intercept
+                    self.lin_params[i] = [model[1], model[2]]
                 elif model[0] == "poly":
                     self.mod_types[i] = 2
-                    # model: ("poly", coefs, intercept) -> coefs is [a, b]
                     self.poly_params[i] = [model[1][0], model[1][1], model[2]]
                 elif model[0] == "log_linear":
                     self.mod_types[i] = 4
                     self.log_params[i] = [model[1], model[2]]
+                elif model[0] == "power":  # NEW
+                    self.mod_types[i] = 5
+                    self.power_params[i] = [model[1], model[2]]
             else:
-                # Complex Model (Fourier or MLP)
-                self.mod_types[i] = 3 # Complex
+                # Decision Tree or Fourier MLP
+                self.mod_types[i] = 3
                 self.complex_models[i] = model
 
-        
-
-
-
-
-        
     def _collect_cdf_training_rows(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]:
         ps = np.cumsum(freq)
         target_indices = bucket_indices if bucket_indices is not None else range(len(self.buckets))
@@ -660,134 +658,126 @@ class HybridEstimator:
         models = {}
         t0 = time.perf_counter()
         
-        # Q-Error threshold for "good enough" - if a model achieves this, stop early
-        # We will use this to decide whether to try the EXPENSIVE Complex models.
-        # Cheap models (Linear/Poly/Log) are always compared against each other.
-        complex_model_threshold = 1.5 
+        # LOWERED threshold: Forces the estimator to stop being lazy and picking "Uniform"
+        complex_model_threshold = 1.05 
         
         for i, (train_rows, val_rows) in rows_data.items():
             if not train_rows:
-                models[i] = None # Fallback to uniform (diagonal)
+                models[i] = None 
                 continue
             
             bucket = self.buckets[i]
             
-            # Prepare Training Data
             X_train = np.array([r.x_norm for r in train_rows]).reshape(-1, 1)
             y_train = np.array([r.y_cdf for r in train_rows])
             
-            # Prepare Validation Data (or fallback to Train if empty)
             if val_rows:
                 X_val = np.array([r.x_norm for r in val_rows]).reshape(-1, 1)
                 y_val = np.array([r.y_cdf for r in val_rows])
             else:
                 X_val, y_val = X_train, y_train
             
-            # Generate validation queries for Q-Error evaluation
-            # Option G: Increased from 200 to 2000 for better stability
+            # WEIGHTING: Force ML models to care about the tail of the bucket
+            weights = 1.0 + 10.0 * (y_train ** 2)
+            
             val_queries = self._generate_bucket_queries(bucket, n_queries=2000, rng=rng, freq=freq, mn=mn)
-            
-            # --- MODEL COMPETITION ---
-            # Instead of a waterfall, we now train ALL cheap models and pick the winner.
-            
-            # 1. Identity (Baseline)
-            # Evaluate implicitly? No, treat as a candidate.
-            q_med_identity, q_p95_identity = self._eval_model_q_error(None, val_queries, bucket, freq, mn)
-            
             candidates = []
+
+            # 1. Identity (Uniform)
+            q_med_identity, q_p95_identity = self._eval_model_q_error(None, val_queries, bucket, freq, mn)
             candidates.append((q_med_identity, q_p95_identity, None))
 
-            # 2. Linear Model
+            # 2. Linear Model (Added sample_weight)
             try:
-                mdl_linear = Ridge(alpha=1.0).fit(X_train, y_train)
+                mdl_linear = Ridge(alpha=1.0).fit(X_train, y_train, sample_weight=weights)
                 q_med_linear, q_p95_linear = self._eval_model_q_error(
-                    ("linear", mdl_linear.coef_[0], mdl_linear.intercept_),
-                    val_queries, bucket, freq, mn
-                )
+                    ("linear", mdl_linear.coef_[0], mdl_linear.intercept_), val_queries, bucket, freq, mn)
                 candidates.append((q_med_linear, q_p95_linear, ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)))
             except: pass
             
-            # 3. Polynomial Model (Degree 2)
+            # 3. Polynomial Model (Added sample_weight)
             try:
                 poly_calc = PolynomialFeatures(degree=2, include_bias=False)
                 X_poly_train = poly_calc.fit_transform(X_train)
-                mdl_poly = Ridge(alpha=1.0).fit(X_poly_train, y_train)
+                mdl_poly = Ridge(alpha=1.0).fit(X_poly_train, y_train, sample_weight=weights)
                 q_med_poly, q_p95_poly = self._eval_model_q_error(
-                    ("poly", mdl_poly.coef_, mdl_poly.intercept_),
-                    val_queries, bucket, freq, mn
-                )
+                    ("poly", mdl_poly.coef_, mdl_poly.intercept_), val_queries, bucket, freq, mn)
                 candidates.append((q_med_poly, q_p95_poly, ("poly", mdl_poly.coef_, mdl_poly.intercept_)))
             except: pass
 
-            # 4. Log-Linear Model
+            # 4. Log-Linear Model (Added sample_weight)
             try:
                 X_log_train = np.log(np.clip(X_train, 0.0, 1.0) + 1e-7)
-                mdl_log = Ridge(alpha=1.0).fit(X_log_train, y_train)
+                mdl_log = Ridge(alpha=1.0).fit(X_log_train, y_train, sample_weight=weights)
                 q_med_log, q_p95_log = self._eval_model_q_error(
-                    ("log_linear", mdl_log.coef_[0], mdl_log.intercept_),
-                    val_queries, bucket, freq, mn
-                )
+                    ("log_linear", mdl_log.coef_[0], mdl_log.intercept_), val_queries, bucket, freq, mn)
                 candidates.append((q_med_log, q_p95_log, ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)))
+            except: pass
+
+            # 5. NEW: Power/Reciprocal Model (Matches Zipf Decay)
+            try:
+                X_power_train = np.sqrt(np.clip(X_train, 0.0, 1.0))
+                mdl_power = Ridge(alpha=1.0).fit(X_power_train, y_train, sample_weight=weights)
+                q_med_power, q_p95_power = self._eval_model_q_error(
+                    ("power", mdl_power.coef_[0], mdl_power.intercept_), val_queries, bucket, freq, mn)
+                candidates.append((q_med_power, q_p95_power, ("power", mdl_power.coef_[0], mdl_power.intercept_)))
+            except: pass
+
+            # 6. NEW: Decision Tree (Sub-bucket learned histogram)
+            try:
+                mdl_tree = DecisionTreeRegressor(max_depth=4).fit(X_train, y_train)
+                q_med_tree, q_p95_tree = self._eval_model_q_error(mdl_tree, val_queries, bucket, freq, mn)
+                candidates.append((q_med_tree, q_p95_tree, mdl_tree))
             except: pass
 
             # Pick best cheap model
             best_cheap_q, best_cheap_p95, best_cheap_model = min(candidates, key=lambda x: x[0])
             
-            # Decide if we need Complex Model
             final_model = best_cheap_model
             
+            # Fallback to Fourier only if ALL models failed the 1.05 threshold
             if best_cheap_q > complex_model_threshold:
-                # Try Complex Model (Fourier MLP)
                 try:
                     mapper = FourierFeatureMapper(num_bands=32, max_freq=20000.0)
                     X_f_train = mapper.transform(X_train)
                     mdl_f_mlp = MLPRegressor(
-                        hidden_layer_sizes=(128, 64), 
-                        activation='relu', 
-                        solver='lbfgs', 
-                        max_iter=1000, 
-                        random_state=42, 
-                        alpha=0.001
+                        hidden_layer_sizes=(128, 64), activation='relu', solver='lbfgs', 
+                        max_iter=1000, random_state=42, alpha=0.001
                     )
                     mdl_f_mlp.fit(X_f_train, y_train)
                     mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
                     
                     q_med_fourier, q_p95_fourier = self._eval_model_q_error(mdl_fourier, val_queries, bucket, freq, mn)
-                    
                     if q_med_fourier < best_cheap_q:
                         final_model = mdl_fourier
-                except Exception as e:
-                    # In case of MLP failure, stick with best cheap model
-                    pass
+                except Exception as e: pass
 
             models[i] = final_model
             
-        t_total = time.perf_counter() - t0
-        return models, t_total
-
+        return models, time.perf_counter() - t0
 
     def _predict_local_cdf(self, model, x_norm) -> float:
         if model is None:
             return max(0.0, min(1.0, x_norm))
-        
-        # Fast Math for Linear/Poly
+
+        # Fast Math for Tuple Models
         if isinstance(model, tuple):
             type_ = model[0]
             if type_ == "linear":
                 coef, intercept = model[1], model[2]
                 pred = x_norm * coef + intercept
-                return max(0.0, min(1.0, float(pred)))
             elif type_ == "poly":
                 coefs, intercept = model[1], model[2]
-                # coefs is [a, b] for ax + bx^2 because include_bias=False
-                pred = intercept + coefs[0]*x_norm + coefs[1]*(x_norm**2)
-                return max(0.0, min(1.0, float(pred)))
+                pred = intercept + coefs[0] * x_norm + coefs[1] * (x_norm ** 2)
             elif type_ == "log_linear":
                 coef, intercept = model[1], model[2]
                 pred = coef * np.log(x_norm + 1e-7) + intercept
-                return max(0.0, min(1.0, float(pred)))
-        
-        # Fallback for Wrapper (Fourier MLP) or others
+            elif type_ == "power":  # NEW
+                coef, intercept = model[1], model[2]
+                pred = coef * np.sqrt(x_norm) + intercept
+            return max(0.0, min(1.0, float(pred)))
+
+        # Fallback for DecisionTreeRegressor or Fourier MLP
         pred = model.predict([[x_norm]])[0]
         return max(0.0, min(1.0, float(pred)))
 
