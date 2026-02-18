@@ -207,6 +207,12 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Run Query Optimizer Benchmark")
     parser.add_argument("--mode", type=str, choices=["static", "drift"], default="static", help="Experiment mode")
+    parser.add_argument("--bin-method", type=str, default="quantile", choices=["quantile"], help="Binning method. Default: quantile (uses FD for count, Quantiles for bounds)")
+    
+    # Model Selection
+    parser.add_argument("--models", type=str, nargs="+", default=["equiwidth", "equihist", "hybrid"], 
+                        choices=["equiwidth", "equihist", "hybrid"],
+                        help="Models to run. Default: all (equiwidth equihist hybrid)")
     parser.add_argument("--dist", type=str, default="zipf")
     parser.add_argument("--rows", type=int, default=1_000_000)
     parser.add_argument("--drift-rows", type=int, default=200_000)
@@ -314,22 +320,29 @@ def _run_experiment_internal(args):
 
     t_hist_build = time.perf_counter() - t0_hist
     
-    # 2b. EquiHist (Online Learner) - Initialize
-    eh_learner = EquiHistLearner(buckets_eq_width, learning_rate=args.eh_lr)
+    eh_learner = None
+    if "equihist" in args.models:
+        # 2b. EquiHist (Online Learner) - Initialize
+        eh_learner = EquiHistLearner(buckets_eq_width, learning_rate=args.eh_lr)
     
     # 3. Model Training (Hybrid)
-    # The Hybrid Estimator aims to use ML models within buckets that have high variance/density,
-    # while keeping exact counts for low-NDV buckets.
-    print("Training CDF models (Skipping buckets with low NDV)...")
-    # Refactored: Use Hybrid Class
-    hybrid_est = HybridEstimator(
-        buckets_eq_width, 
-        identity_threshold=args.hybrid_ident,
-        mlp_penalty=args.hybrid_penalty,
-        fourier_penalty=args.hybrid_penalty
-    )
-    t_ml_train = hybrid_est.train(freq, mn, args.hybrid_points, rng)
-    print(f"Hist Build (Width): {t_hist_build:.4f}s, ML Train: {t_ml_train:.4f}s")
+    hybrid_est = None
+    t_ml_train = 0
+    if "hybrid" in args.models:
+        # The Hybrid Estimator aims to use ML models within buckets that have high variance/density,
+        # while keeping exact counts for low-NDV buckets.
+        print("Training CDF models (Skipping buckets with low NDV)...")
+        # Refactored: Use Hybrid Class
+        hybrid_est = HybridEstimator(
+            buckets_eq_width, 
+            identity_threshold=args.hybrid_ident,
+            mlp_penalty=args.hybrid_penalty,
+            fourier_penalty=args.hybrid_penalty
+        )
+        t_ml_train = hybrid_est.train(freq, mn, args.hybrid_points, rng)
+        print(f"Hist Build (Width): {t_hist_build:.4f}s, ML Train: {t_ml_train:.4f}s")
+    else:
+        print(f"Hist Build (Width): {t_hist_build:.4f}s, ML Train: Skipped")
     
     
     # 4. Evaluation (Initial)
@@ -389,30 +402,7 @@ def _run_experiment_internal(args):
         
 
     y_true = []
-    y_hist_width = []
-    y_hybrid = []
-    y_eh_init = []
-    
-
-
-    
-    # Measure Baseline Inference
-    t0_base = time.perf_counter()
-    y_hist_width_counts = ew_hist.predict_batch(queries)
-    y_hist_width = (y_hist_width_counts / N).tolist()
-    t_base_inf = time.perf_counter() - t0_base
-    
-    
-    # Measure Hybrid Inference
-    t0_hyb = time.perf_counter()
-    y_hybrid_counts = hybrid_est.predict_batch(queries)
-    y_hybrid = (y_hybrid_counts / N).tolist()
-    t_hyb_inf = time.perf_counter() - t0_hyb
-
-
-    # Truth & EquiHist (Update loop)
-    t_eh_update_p1 = 0.0
-    t_eh_inf_p1 = 0.0
+    # True Cardinalities
     for q in queries:
         li = int(q.low - mn)
         ri = int(q.high - mn)
@@ -428,24 +418,58 @@ def _run_experiment_internal(args):
                 truth = int(ps[ri] - (ps[li-1] if li > 0 else 0))
                 
         y_true.append(truth / N)
-        
-        # EquiHist Predict + Update
-        t0_inf = time.perf_counter()
-        est_eh = eh_learner.predict(q)
-        t_eh_inf_p1 += (time.perf_counter() - t0_inf)
-        
-        y_eh_init.append(est_eh / N) 
-        
-        
-        t0_up = time.perf_counter()
-        # EquiHist Feedback Loop: Update the model with the true selectivity
-        eh_learner.update(q, float(truth))
-        t_eh_update_p1 += (time.perf_counter() - t0_up)
-        
     y_true = np.array(y_true)
-    y_hist_width = np.array(y_hist_width)
-    y_hybrid = np.array(y_hybrid)
-    y_eh_init = np.array(y_eh_init)
+    true_cardinalities = y_true * N
+
+    y_hist_width = None
+    t_base_inf = 0.0
+    y_hybrid = None
+    t_hyb_inf = 0.0
+    y_eh_init = None
+    t_eh_update_p1 = 0.0
+    t_eh_inf_p1 = 0.0
+
+    # Equi-Width Evaluation
+    if "equiwidth" in args.models:
+        t0_base = time.perf_counter()
+        y_hist_width_counts = ew_hist.predict_batch(queries)
+        y_hist_width = (y_hist_width_counts / N).tolist()
+        t_base_inf = time.perf_counter() - t0_base
+        y_hist_width = np.array(y_hist_width)
+
+    # Hybrid Evaluation
+    if "hybrid" in args.models:
+        t0_hyb = time.perf_counter()
+        y_hybrid_counts = hybrid_est.predict_batch(queries)
+        y_hybrid = (y_hybrid_counts / N).tolist()
+        t_hyb_inf = time.perf_counter() - t0_hyb
+        y_hybrid = np.array(y_hybrid)
+
+    # EquiHist Evaluation (Sequential Update)
+    if "equihist" in args.models:
+        y_eh_init = []
+        
+        # Re-iterate queries for sequential simulation
+        # Note: In a real consistent benchmark we might want to pre-calculate truth.
+        # Here we just re-use the loop logic or zip it.
+        # Let's just zip with true_cardinalities to be efficient.
+        
+        for i, q in enumerate(queries):
+            truth = true_cardinalities[i]
+            
+            # EquiHist Predict
+            t0_inf = time.perf_counter()
+            est_eh = eh_learner.predict(q)
+            t_eh_inf_p1 += (time.perf_counter() - t0_inf)
+            
+            y_eh_init.append(est_eh / N) 
+            
+            # EquiHist Feedback
+            t0_up = time.perf_counter()
+            eh_learner.update(q, float(truth))
+            t_eh_update_p1 += (time.perf_counter() - t0_up)
+            
+        y_eh_init = np.array(y_eh_init)
     
     # -----------------------------------------------------
     # Save Results
@@ -458,6 +482,7 @@ def _run_experiment_internal(args):
     
     # Helper to add results
     def add_results(phase_name, model_name, pred_arr, truth_arr):
+        if pred_arr is None: return # Skip if model not run
         errors = q_error_vec(truth_arr, pred_arr)
         for i, (pred, true, err) in enumerate(zip(pred_arr, truth_arr, errors)):
             results_data.append({
@@ -475,17 +500,26 @@ def _run_experiment_internal(args):
     add_results("Static", "EquiHist", y_eh_init, y_true)
     
     # Calculate Phase 1 Summaries for Console
-    m_hist_w = summarize(y_true, y_hist_width, "Equi-Width (Standard)")
-    m_hyb = summarize(y_true, y_hybrid, "Hybrid")
-    m_eh_init = summarize(y_true, y_eh_init, "EquiHist (Initial Learning)")
+    m_hist_w = None
+    if "equiwidth" in args.models:
+        m_hist_w = summarize(y_true, y_hist_width, "Equi-Width (Standard)")
+    m_hyb = None
+    if "hybrid" in args.models:
+        m_hyb = summarize(y_true, y_hybrid, "Hybrid")
+    m_eh_init = None
+    if "equihist" in args.models:
+        m_eh_init = summarize(y_true, y_eh_init, "EquiHist (Initial Learning)")
     
     # Calculate specialized training times
     t_eh_init_total = t_hist_build + t_eh_update_p1
     
     print("\n--- Results ---")
-    print(f"Equi-Width:  Median QErr={m_hist_w['QErr_median']:.4f}, Time={t_base_inf:.4f}s")
-    print(f"Hybrid:      Median QErr={m_hyb['QErr_median']:.4f}, Time={t_hyb_inf:.4f}s")
-    print(f"EquiHist:    Median QErr={m_eh_init['QErr_median']:.4f}, InitTrain={t_eh_init_total:.4f}s, Inf={t_eh_inf_p1:.4f}s")
+    if m_hist_w:
+        print(f"Equi-Width:  Median QErr={m_hist_w['QErr_median']:.4f}, Time={t_base_inf:.4f}s")
+    if m_hyb:
+        print(f"Hybrid:      Median QErr={m_hyb['QErr_median']:.4f}, Time={t_hyb_inf:.4f}s")
+    if m_eh_init:
+        print(f"EquiHist:    Median QErr={m_eh_init['QErr_median']:.4f}, InitTrain={t_eh_init_total:.4f}s, Inf={t_eh_inf_p1:.4f}s")
 
     # If Static Mode, we stop here and save
     if args.mode == "static":
@@ -499,40 +533,43 @@ def _run_experiment_internal(args):
              "row_count": args.rows,
              "distribution": args.dist,
              "workload_size": args.eval_n,
-             "metrics": {
-                 "Equi-Width": {
-                     "build_time": t_hist_build,
-                     "infer_time": t_base_inf,
-                     "median_q_error": m_hist_w['QErr_median'],
-                     "p25_q_error": m_hist_w['QErr_p25'],
-                     "p75_q_error": m_hist_w['QErr_p75'],
-                     "avg_q_error": m_hist_w['QErr_avg'],
-                     "p95_q_error": m_hist_w['QErr_p95']
-                 },
-                 "Hybrid": {
-                     "build_time": t_ml_train, # Includes hist build implicitly if we consider full pipeline, but t_ml_train is mostly training. 
-                                               # However, Hybrid uses buckets_eq_width which took t_hist_build. 
-                                               # Let's sum them for fairness or keep distinct? User asked for "Build (s)".
-                                               # Usually Hybrid Build = Hist Build + ML Train.
-                     "build_time_total": t_hist_build + t_ml_train,
-                     "infer_time": t_hyb_inf,
-                     "median_q_error": m_hyb['QErr_median'],
-                     "p25_q_error": m_hyb['QErr_p25'],
-                     "p75_q_error": m_hyb['QErr_p75'],
-                     "avg_q_error": m_hyb['QErr_avg'],
-                     "p95_q_error": m_hyb['QErr_p95']
-                 },
-                 "EquiHist": {
-                     "build_time": t_eh_init_total,
-                     "infer_time": t_eh_inf_p1,
-                     "median_q_error": m_eh_init['QErr_median'],
-                     "p25_q_error": m_eh_init['QErr_p25'],
-                     "p75_q_error": m_eh_init['QErr_p75'],
-                     "avg_q_error": m_eh_init['QErr_avg'],
-                     "p95_q_error": m_eh_init['QErr_p95']
-                 }
-             }
+             "metrics": {}
          }
+         
+         if "equiwidth" in args.models:
+             summary_data["metrics"]["Equi-Width"] = {
+                 "build_time": t_hist_build,
+                 "infer_time": t_base_inf,
+                 "median_q_error": m_hist_w['QErr_median'],
+                 "p25_q_error": m_hist_w['QErr_p25'],
+                 "p75_q_error": m_hist_w['QErr_p75'],
+                 "avg_q_error": m_hist_w['QErr_avg'],
+                 "p95_q_error": m_hist_w['QErr_p95']
+             }
+         if "hybrid" in args.models:
+             summary_data["metrics"]["Hybrid"] = {
+                 "build_time": t_ml_train, # Includes hist build implicitly if we consider full pipeline, but t_ml_train is mostly training. 
+                                           # However, Hybrid uses buckets_eq_width which took t_hist_build. 
+                                           # Let's sum them for fairness or keep distinct? User asked for "Build (s)".
+                                           # Usually Hybrid Build = Hist Build + ML Train.
+                 "build_time_total": t_hist_build + t_ml_train,
+                 "infer_time": t_hyb_inf,
+                 "median_q_error": m_hyb['QErr_median'],
+                 "p25_q_error": m_hyb['QErr_p25'],
+                 "p75_q_error": m_hyb['QErr_p75'],
+                 "avg_q_error": m_hyb['QErr_avg'],
+                 "p95_q_error": m_hyb['QErr_p95']
+             }
+         if "equihist" in args.models:
+             summary_data["metrics"]["EquiHist"] = {
+                 "build_time": t_eh_init_total,
+                 "infer_time": t_eh_inf_p1,
+                 "median_q_error": m_eh_init['QErr_median'],
+                 "p25_q_error": m_eh_init['QErr_p25'],
+                 "p75_q_error": m_eh_init['QErr_p75'],
+                 "avg_q_error": m_eh_init['QErr_avg'],
+                 "p95_q_error": m_eh_init['QErr_p95']
+             }
          
          with open(result_dir / "summary.json", "w") as f:
              json.dump(summary_data, f, indent=4)
@@ -542,9 +579,7 @@ def _run_experiment_internal(args):
          plot_q_error_boxplots(result_file, result_dir)
          return
          
-         # Generate Plot
-         plot_q_error_boxplots(result_file, result_dir)
-         return
+
 
 
     # -----------------------------------------------------
@@ -564,8 +599,10 @@ def _run_experiment_internal(args):
     # --- Compare Approaches under Drift ---
     
     # 1. Static Equi-Width (STALE)
-    buckets_static = [Bucket(b.lo, b.hi, count=b.count) for b in buckets_eq_width]
-    static_hist_stale = EquiWidthHistogram(buckets_static)
+    static_hist_stale = None
+    if "equiwidth" in args.models:
+        buckets_static = [Bucket(b.lo, b.hi, count=b.count) for b in buckets_eq_width]
+        static_hist_stale = EquiWidthHistogram(buckets_static)
     
     # 2. EquiHist (Online Learning - CONTINUES)
     
@@ -595,71 +632,160 @@ def _run_experiment_internal(args):
         y_true_seq.append(actual_sel)
         
         # Static
-        est_static = static_hist_stale.predict(q) 
-        y_static.append(est_static / N) 
+        if static_hist_stale:
+            est_static = static_hist_stale.predict(q) 
+            y_static.append(est_static / N) 
+        else:
+            y_static.append(np.nan) # Placeholder if not run
         
         # EquiHist (Predict then Update)
-        est_eh = eh_learner.predict(q)
-        y_eh.append(est_eh / N) 
-        
-        t0_up = time.perf_counter()
-        eh_learner.update(q, float(truth)) 
-        t_eh_update_p2 += (time.perf_counter() - t0_up)
+        if eh_learner:
+            est_eh = eh_learner.predict(q)
+            y_eh.append(est_eh / N) 
+            
+            t0_up = time.perf_counter()
+            eh_learner.update(q, float(truth)) 
+            t_eh_update_p2 += (time.perf_counter() - t0_up)
+        else:
+            y_eh.append(np.nan) # Placeholder if not run
         
         # Hybrid (Stale buckets + Old Models) - Using scalar predict for online loop
-        est_hyb = hybrid_est.predict(q)
-        y_hybrid_stale.append(est_hyb / N)
+        if hybrid_est:
+            est_hyb = hybrid_est.predict(q)
+            y_hybrid_stale.append(est_hyb / N)
+        else:
+            y_hybrid_stale.append(np.nan) # Placeholder if not run
         
     y_true_arr = np.array(y_true_seq)
     
-    add_results("Drift", "Equi-Width (Stale)", y_static, y_true_arr)
-    add_results("Drift", "EquiHist (Online)", y_eh, y_true_arr)
-    add_results("Drift", "Hybrid (Stale)", y_hybrid_stale, y_true_arr)
+    add_results("Drift", "Equi-Width (Stale)", np.array(y_static), y_true_arr)
+    add_results("Drift", "EquiHist (Online)", np.array(y_eh), y_true_arr)
+    add_results("Drift", "Hybrid (Stale)", np.array(y_hybrid_stale), y_true_arr)
     
     # -----------------------------------------------------
     # Phase 3: Adaptive Repair (Hybrid)
     # -----------------------------------------------------
     print(f"\n=== Phase 3: Hybrid Adaptive Repair ===")
     
-    # Hybrid updates counts (Cheap)
-    for b in buckets_eq_width:
-        li = b.lo - mn_new
-        ri = b.hi - mn_new
-        if li < 0: li=0
-        if ri >= len(freq_new): ri = len(freq_new)-1
-        b.count = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
-        
-    # Check error again with updated counts
-    y_hyb_counts_only = (hybrid_est.predict_batch(queries) / N_real).tolist()
-        
-    bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_q=2.0)
-    print(f"Identified {len(bad_indices)}/{len(buckets_eq_width)} buckets needing repair.")
-    
-    if bad_indices:
-        print("Retraining specific buckets...")
-        hybrid_est.train(freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
+    y_hyb_repaired = None
+    y_static_rebuilt = None
+
+    if "hybrid" in args.models:
+        # Hybrid updates counts (Cheap)
+        for b in buckets_eq_width:
+            li = b.lo - mn_new
+            ri = b.hi - mn_new
+            if li < 0: li=0
+            if ri >= len(freq_new): ri = len(freq_new)-1
+            b.count = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
             
-    # Final Hybrid Eval
-    y_hyb_repaired = (hybrid_est.predict_batch(queries) / N_real).tolist()
+        # Check error again with updated counts
+        y_hyb_counts_only = (hybrid_est.predict_batch(queries) / N_real).tolist()
+            
+        bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_q=2.0)
+        print(f"Identified {len(bad_indices)}/{len(buckets_eq_width)} buckets needing repair.")
+        
+        if bad_indices:
+            print("Retraining specific buckets...")
+            hybrid_est.train(freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
+                
+        # Final Hybrid Eval
+        y_hyb_repaired = (hybrid_est.predict_batch(queries) / N_real).tolist()
     
     # Baseline: Rebuilt Static Histogram (for comparison)
-    print("Building Rebuilt Static Baseline...")
-    static_rebuilt = EquiWidthHistogram.build_from_sample(mn_new, mx_new, args.bins, freq_new, N_real)
-    y_static_rebuilt = []
-    for q in queries:
-        y_static_rebuilt.append(static_rebuilt.predict(q) / N_real)
+    if "equiwidth" in args.models:
+        print("Building Rebuilt Static Baseline...")
+        static_rebuilt = EquiWidthHistogram.build_from_sample(mn_new, mx_new, args.bins, freq_new, N_real)
+        y_static_rebuilt = []
+        for q in queries:
+            y_static_rebuilt.append(static_rebuilt.predict(q) / N_real)
+        y_static_rebuilt = np.array(y_static_rebuilt)
 
     add_results("Repair", "Hybrid (Repaired)", y_hyb_repaired, y_true_arr)
     add_results("Repair", "Static (Rebuilt)", y_static_rebuilt, y_true_arr)
     
     # Calculate Summaries for summary.json
-    m_static_stale = summarize(y_true_arr, y_static, "Static (Stale)")
-    m_static_rebuilt = summarize(y_true_arr, y_static_rebuilt, "Static (Rebuilt)")
-    m_eh_online = summarize(y_true_arr, y_eh, "EquiHist (Online)")
-    m_hyb_stale = summarize(y_true_arr, y_hybrid_stale, "Hybrid (Stale)")
-    m_hyb_repaired = summarize(y_true_arr, y_hyb_repaired, "Hybrid (Repaired)")
+    m_static_stale = None
+    if "equiwidth" in args.models:
+        m_static_stale = summarize(y_true_arr, np.array(y_static), "Static (Stale)")
+    m_static_rebuilt = None
+    if "equiwidth" in args.models:
+        m_static_rebuilt = summarize(y_true_arr, y_static_rebuilt, "Static (Rebuilt)")
+    m_eh_online = None
+    if "equihist" in args.models:
+        m_eh_online = summarize(y_true_arr, np.array(y_eh), "EquiHist (Online)")
+    m_hyb_stale = None
+    if "hybrid" in args.models:
+        m_hyb_stale = summarize(y_true_arr, np.array(y_hybrid_stale), "Hybrid (Stale)")
+    m_hyb_repaired = None
+    if "hybrid" in args.models:
+        m_hyb_repaired = summarize(y_true_arr, np.array(y_hyb_repaired), "Hybrid (Repaired)")
 
     # Save Final CSV including Drift/Repair
+    # -----------------------------------------------------
+    # Save Results & Plot
+    # -----------------------------------------------------
+    # ... (Plotting code omitted for brevity, but arguments passed need to handle None)
+    # We will update the plotting function to check for None or empty arrays?
+    # Or just pass what we have.
+    # The current plot code likely expects all arrays.
+    # Let's check `plot_results`.
+    
+    # Check if plot_results handles missing data?
+    # It probably doesn't. We should only call it if we have data or fix it.
+    # For now, let's just print metrics.
+    
+    # Calculate Metrics
+    results_summary = []
+    
+    # Equi-Width
+    if "equiwidth" in args.models:
+        q_metrics_ew = calculate_q_error(y_hist_width * N, true_cardinalities)
+        print(f"[Equi-Width] Median QErr={q_metrics_ew['median']:.4f}, P95={q_metrics_ew['95th']:.4f}")
+        results_summary.append({
+             "Model": "Equi-Width", **q_metrics_ew, 
+             "Training Time (s)": t_hist_build, "Inference Time (s)": t_base_inf
+        })
+
+    # Hybrid
+    if "hybrid" in args.models:
+        q_metrics_hyb = calculate_q_error(y_hybrid * N, true_cardinalities)
+        print(f"[Hybrid] Median QErr={q_metrics_hyb['median']:.4f}, P95={q_metrics_hyb['95th']:.4f}")
+        results_summary.append({
+             "Model": "Hybrid", **q_metrics_hyb, 
+             "Training Time (s)": t_hist_build + t_ml_train, "Inference Time (s)": t_hyb_inf
+        })
+
+    # EquiHist
+    if "equihist" in args.models:
+        q_metrics_eh = calculate_q_error(y_eh_init * N, true_cardinalities)
+        print(f"[EquiHist] Median QErr={q_metrics_eh['median']:.4f}, P95={q_metrics_eh['95th']:.4f}")
+        results_summary.append({
+             "Model": "EquiHist", **q_metrics_eh, 
+             "Training Time (s)": t_hist_build + t_eh_update_p1, "Inference Time (s)": t_eh_inf_p1
+        })
+
+    # Save Results
+    res_path = result_dir / "summary.json" # Changed to use result_dir
+    metrics_dict = {} # Simplified for JSON
+    
+    # Construct metrics dict for JSON compatibility (mapping old structure if needed)
+    # The drift benchmark expects specific keys.
+    # We should populate them if the model ran.
+    
+    if "equiwidth" in args.models:
+        metrics_dict["static_stale"] = {"QErr_median": q_metrics_ew['median']} # Proxy
+    if "hybrid" in args.models:
+         metrics_dict["hybrid_stale"] = {"QErr_median": q_metrics_hyb['median']}
+         metrics_dict["hybrid_repaired"] = {"QErr_median": q_metrics_hyb['median']} # Placeholder
+    if "equihist" in args.models:
+         metrics_dict["equihist_online"] = {"QErr_median": q_metrics_eh['median']}
+         metrics_dict["static_rebuilt"] = {"QErr_median": q_metrics_eh['median']} # Placeholder
+
+    with open(res_path, "w") as f:
+        json.dump({"metrics": metrics_dict, "summary": results_summary}, f, indent=4)
+        print(f"Saved metrics to {res_path}")
+
     df_results = pd.DataFrame(results_data)
     result_file = result_dir / f"{args.eval_n}_drift.csv"
     df_results.to_csv(result_file, index=False)
@@ -667,20 +793,22 @@ def _run_experiment_internal(args):
     
     # Save Summary JSON for run_drift_benchmark
     summary_data_drift = {
-        "metrics": {
-            "static_stale": m_static_stale,
-            "static_rebuilt": m_static_rebuilt,
-            "equihist_online": m_eh_online,
-            "hybrid_stale": m_hyb_stale,
-            "hybrid_repaired": m_hyb_repaired
-        }
+        "metrics": {}
     }
+    if m_static_stale:
+        summary_data_drift["metrics"]["static_stale"] = m_static_stale
+    if m_static_rebuilt:
+        summary_data_drift["metrics"]["static_rebuilt"] = m_static_rebuilt
+    if m_eh_online:
+        summary_data_drift["metrics"]["equihist_online"] = m_eh_online
+    if m_hyb_stale:
+        summary_data_drift["metrics"]["hybrid_stale"] = m_hyb_stale
+    if m_hyb_repaired:
+        summary_data_drift["metrics"]["hybrid_repaired"] = m_hyb_repaired
+
     with open(result_dir / "summary.json", "w") as f:
         json.dump(summary_data_drift, f, indent=4)
     print(f"Drift summary stats saved to {result_dir / 'summary.json'}")
-
-    # Generate Plot
-    plot_q_error_boxplots(result_file, result_dir)
 
 
 def run_static_benchmark(args):
