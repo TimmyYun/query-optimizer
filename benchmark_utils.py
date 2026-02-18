@@ -14,6 +14,7 @@ def get_common_parser(description):
     parser.add_argument("--eval-n", type=str, default="1000000", help="Workload name/size to evaluate")
     parser.add_argument("--out-dir", type=str, default="results", help="Base directory for results")
     parser.add_argument("--experiment-name", type=str, default=None, help="Experiment ID or name")
+    parser.add_argument("--buckets", type=int, default=None, help="Force a specific number of buckets (overrides FD binning)")
     return parser
 
 def run_benchmark_suite(args, approach_fn):

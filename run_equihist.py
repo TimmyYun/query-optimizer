@@ -8,7 +8,8 @@ from benchmark_utils import (
 )
 
 def run_logic(args, out_dir, metadata):
-    mn, mx, N, freq, sample, n_bins, skew, kurt = metadata
+    mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
+    n_bins = args.buckets if args.buckets is not None else n_bins_data
     
     # Build Initial Histogram (Equi-Width)
     t0 = time.perf_counter()
