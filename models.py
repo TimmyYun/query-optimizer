@@ -811,11 +811,12 @@ class HybridEstimator:
             
         return model_pred
 
-    def report_models(self):
+    def report_models(self, file_path=None):
         """Prints a summary of which models were chosen for each bucket."""
-        print("\n" + "="*80)
-        print(f"{'Idx':<4} | {'Range':<25} | {'Count':<10} | {'Model Type':<15} | {'Stats'}")
-        print("-" * 80)
+        output = []
+        output.append("\n" + "="*80)
+        output.append(f"{'Idx':<4} | {'Range':<25} | {'Count':<10} | {'Model Type':<15} | {'Stats'}")
+        output.append("-" * 80)
         
         for i, b in enumerate(self.buckets):
             model = self.models.get(i)
@@ -840,8 +841,16 @@ class HybridEstimator:
                 info = "Complex Neural Net"
                 
             range_str = f"[{b.lo}, {b.hi}]"
-            print(f"{i:<4} | {range_str:<25} | {b.count:<10} | {m_name:<15} | {info}")
-        print("="*80 + "\n")
+            output.append(f"{i:<4} | {range_str:<25} | {b.count:<10} | {m_name:<15} | {info}")
+        output.append("="*80 + "\n")
+        
+        report_text = "\n".join(output)
+        print(report_text)
+        
+        if file_path:
+            with open(file_path, "w") as f:
+                f.write(report_text)
+            print(f"Model selection report saved to {file_path}")
 
 # -----------------------------------------------------------------------------
 # Evaluation Utilities

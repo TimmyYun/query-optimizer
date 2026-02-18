@@ -26,7 +26,8 @@ def run_logic(args, out_dir, metadata):
     t_train = hybrid_est.train(freq, mn, args.points, rng)
     
     # Report Model Selections
-    hybrid_est.report_models()
+    model_report_path = out_dir / f"model_selection_Hybrid.txt"
+    hybrid_est.report_models(file_path=model_report_path)
     
     # Load Workload
     queries, y_true = load_and_filter_workload(args.eval_n, mn, mx, freq)
