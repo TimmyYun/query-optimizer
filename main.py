@@ -41,7 +41,9 @@ from datasets import (
     DatasetManager,
     scan_min_max_count, build_frequency_and_sample,
     generate_boxplots, plot_data_distribution, plot_model_comparison,
-    generate_drift_data, append_to_dataset
+    scan_min_max_count, build_frequency_and_sample,
+    generate_boxplots, plot_data_distribution, plot_model_comparison,
+    generate_drift_data, append_to_dataset, quantile_bins
 )
 from workload import RangeQuery, load_workload_csv
 import copy
@@ -213,7 +215,6 @@ def main():
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--eval-n", dest="eval_n", type=str, default="1000", help="Workload name/size to evaluate (e.g. 1000 or 1000_narrow)")
     parser.add_argument("--bins", type=int, default=100, help="Number of bins for Equi-Width Histogram (Default: 100)")
-    parser.add_argument("--bin-method", type=str, choices=["fixed", "fd"], default="fd", help="Method to calculate bins: 'fixed' (uses --bins) or 'fd' (Freedman-Diaconis). Default: fd")
     parser.add_argument("--skewed", action="store_true", help="Use skewed workload for Head heavy evaluation")
 
     # Batch specific params
@@ -277,30 +278,47 @@ def _run_experiment_internal(args):
     shutil.copy2(ds_path, working_ds_path)
     ds_path = working_ds_path
 
-    # Option to use FD Rule for Bin Count
-    if args.bin_method == 'fd':
-        if n_bins and n_bins > 0:
-             print(f"FD Rule: Using pre-calculated {n_bins} bins from dataset metadata.")
-             args.bins = n_bins
-        else:
-             print("Using Freedman-Diaconis (FD) Rule for Bin Calculation (No pre-calculated value found)...")
-             try:
-                  # Use numpy's robust FD implementation on the sample
-                  bin_edges = np.histogram_bin_edges(sample, bins='fd')
-                  args.bins = len(bin_edges) - 1
-                  print(f"FD Rule: Calculated {args.bins} bins.")
-             except Exception as e:
-                  print(f"FD Rule Failed: {e}. Fallback to {args.bins} bins.")
+    # Load full dataset for Quantile Binning
+    print(f"Loading full dataset from {ds_path} for quantile binning...")
+    data = pd.read_csv(ds_path, header=None, names=['value'])['value'].values
+    print(f"Dataset loaded. Shape: {data.shape}")
 
-    print(f"Using Bins: {args.bins} (Method: {args.bin_method})")
-    
-    # 2a. Equi-Width Histogram (Standard Baseline)
-    # This represents a traditional database histogram.
+    # Determine binning strategy and create initial buckets
+    buckets_eq_width = [] # This will hold the initial buckets for all models
     t0_hist = time.perf_counter()
-    # Refactored: Use Class Builder to create the histogram
-    # Using Sample-Based Construction (Postgres-like)
-    ew_hist = EquiWidthHistogram.build_from_sample(mn, mx, args.bins, sample, N)
-    buckets_eq_width = ew_hist.buckets # Access buckets for other models to use as a base
+    print(f"DEBUG: Bin method: Quantile (FD-Count + Quantile-Bounds)")
+    
+    # 1. Calculate Bin Count using FD Rule (or use pre-calculated)
+    if n_bins and n_bins > 0:
+            print(f"FD Rule: Using pre-calculated {n_bins} bins from dataset metadata.")
+            args.bins = n_bins
+    else:
+            print("Using Freedman-Diaconis (FD) Rule to determine bin count...")
+            try:
+                # Use numpy's robust FD implementation on the sample
+                bin_edges = np.histogram_bin_edges(sample, bins='fd')
+                args.bins = len(bin_edges) - 1
+                print(f"FD Rule: Calculated {args.bins} bins.")
+            except Exception as e:
+                print(f"FD Rule Failed: {e}. Fallback to {args.bins} bins.")
+
+    # 2. Create Quantile Buckets
+    print(f"Using Quantile (Equi-Depth) Binning with {args.bins} bins...")
+
+    print(f"DEBUG: Quantile binning on data shape {data.shape}")
+    buckets_eq_width = quantile_bins(data, args.bins)
+    print(f"Created {len(buckets_eq_width)} quantile buckets.")
+    ew_hist = EquiWidthHistogram(buckets_eq_width)
+
+    elif args.bin_method == 'quantile':
+        print(f"Using Quantile (Equi-Depth) Binning with {args.bins} bins...")
+        if data is None:
+             raise ValueError("Quantile binning requires full dataset (use --bin-method quantile)")
+        print(f"DEBUG: Quantile binning on data shape {data.shape}")
+        buckets_eq_width = quantile_bins(data, args.bins)
+        print(f"Created {len(buckets_eq_width)} quantile buckets. First: {buckets_eq_width[0] if buckets_eq_width else 'None'}")
+        ew_hist = EquiWidthHistogram(buckets_eq_width)
+
     t_hist_build = time.perf_counter() - t0_hist
     
     # 2b. EquiHist (Online Learner) - Initialize
