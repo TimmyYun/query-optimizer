@@ -33,51 +33,62 @@ def clamp_int(x, lo, hi):
     """Clamps an integer x between lo and hi (inclusive)."""
     return int(min(max(int(round(x)), lo), hi))
 
+
 def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, shift: int = 0) -> np.ndarray:
     """
     Generates an array of integer values according to a specified distribution.
-
-    Args:
-        rng (np.random.Generator): Random number generator instance.
-        dist (str): Distribution type ("uniform", "normal", "zipf", "sparse_cluster", "anti_zipf").
-        n (int): Number of values to generate.
-        lo (int): Lower bound of the value domain.
-        hi (int): Upper bound of the value domain.
-        shift (int): Shift applied to the distribution (used for drift simulation).
-
-    Returns:
-        np.ndarray: Array of generated integer values.
+    Includes "fractal" (micro-chaotic) logic to defeat standard Equi-Width histograms
+    by ensuring data inside any given bucket is highly non-uniform.
     """
     mid = 0.5 * (lo + hi) + shift
     span = max(1, hi - lo)
 
+    # We assume a roughly 1000-width bucket for injecting micro-chaos
+    # This ensures the global shape is preserved while local buckets are skewed.
+    bucket_size = 1000
+
     if dist == "uniform":
-        v = rng.integers(lo + shift, hi + 1 + shift, size=n)
+        # Global: Uniform. Local: Bimodal (U-Shaped / Spiked at the edges)
+        macro_bins = rng.integers(0, span // bucket_size, size=n)
+        # Beta(0.1, 0.1) creates a massive U-shape (values crowd at 0 and bucket_size)
+        micro_noise = rng.beta(0.1, 0.1, size=n) * bucket_size
+        v = lo + shift + (macro_bins * bucket_size) + micro_noise
+
     elif dist == "normal":
-        v = rng.normal(loc=mid, scale=span / 6.0, size=n)
+        # Global: Normal. Local: Bimodal/Chaotic
+        global_norm = rng.normal(loc=mid, scale=span / 6.0, size=n)
+        global_norm = np.clip(global_norm, lo + shift, hi + shift)
+
+        # Determine which macro-bucket the point fell into
+        macro_bins = ((global_norm - lo - shift) // bucket_size).astype(np.int64)
+
+        # Inject severe local skew inside that bucket
+        micro_noise = rng.beta(0.2, 0.2, size=n) * bucket_size
+        v = lo + shift + (macro_bins * bucket_size) + micro_noise
+
     elif dist == "zipf":
-        # 1. Define how many distinct values (NDV) the Zipf distribution should cover.
-        # For a 1M domain, 100,000 distinct values is a realistic density.
-        ndv_target = min(300_000, hi - lo + 1)
+        # Global: Zipf. Local: Steeper, jagged Zipf
+        ndv_target = min(300_000, span)
 
-        # 2. Generate Zipf probabilities for ranks 1 to NDV
-        # Using a=2.0 (standard heavy skew) or a=1.0 for moderate skew
-        ranks = np.arange(1, ndv_target + 1)
-        probabilities = 1.0 / (ranks ** 1.0)
-        probabilities /= probabilities.sum() # Normalize to sum to 1.0
+        # 1. Macro: Generate the global Zipf curve
+        macro_ranks = np.arange(1, ndv_target + 1)
+        macro_probs = 1.0 / (macro_ranks ** 1.0)
+        macro_probs /= macro_probs.sum()
+        chosen_macro_indices = rng.choice(ndv_target, size=n, p=macro_probs)
 
-        # 3. Sample indices based on the Zipf probabilities
-        chosen_indices = rng.choice(ndv_target, size=n, p=probabilities)
+        # We group the global indices into "buckets"
+        macro_bins = chosen_macro_indices // bucket_size
 
-        # 4. Map indices to the actual domain.
-        # Sequential mapping means the smallest values are the most frequent.
-        domain_vals = np.arange(lo + shift, lo + shift + ndv_target)
+        # 2. Micro: Inject severe, jagged skew inside the bucket
+        # Instead of a smooth curve, we use a very high alpha (2.5) to make
+        # the start of the bucket a massive cliff, leaving the rest mostly empty.
+        micro_ranks = np.arange(1, bucket_size + 1)
+        micro_probs = 1.0 / (micro_ranks ** 2.5)
+        micro_probs /= micro_probs.sum()
+        micro_noise = rng.choice(bucket_size, size=n, p=micro_probs)
 
-        # OPTIONAL: If you want the heavy hitters scattered randomly throughout
-        # the 1M domain instead of clustered at 0, uncomment the line below:
-        # rng.shuffle(domain_vals)
+        v = lo + shift + (macro_bins * bucket_size) + micro_noise
 
-        v = domain_vals[chosen_indices]
     elif dist == "sparse_cluster":
         # Create 50 dense clusters
         centers = rng.integers(lo, hi, size=50) + shift
@@ -88,21 +99,23 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
             if c_lo < c_hi:
                 v.append(rng.integers(c_lo, c_hi, size=n // 50))
             else:
-                v.append(rng.integers(lo+shift, hi+shift+1, size=n//50))
+                v.append(rng.integers(lo + shift, hi + shift + 1, size=n // 50))
         v = np.concatenate(v)
+
     elif dist == "anti_zipf":
         # Uniform distribution over a small subset of the domain (10%)
         v = rng.integers(lo + shift, lo + shift + (DOMAIN_MAX // 10), size=n)
+
     else:
         # Default fallback to uniform
         v = rng.integers(lo, hi + 1, size=n)
 
     if n == 0: return np.array([], dtype=np.int64)
-    
-    # Ensure all values are strictly within the global domain limits [0, DOMAIN_MAX]
-    v = np.vectorize(lambda x: clamp_int(x, 0, DOMAIN_MAX))(v)
-    return v.astype(np.int64)
 
+    # Ensure all values are strictly within the global domain limits [0, DOMAIN_MAX]
+    # np.round handles the floating point noise from the Beta distributions
+    v = np.vectorize(lambda x: clamp_int(x, 0, DOMAIN_MAX))(np.round(v))
+    return v.astype(np.int64)
 
 def save_csv_column(values: np.ndarray, path: Path, mode='w'):
     """
