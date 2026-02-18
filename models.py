@@ -267,8 +267,9 @@ class EquiHistLearner:
                 total += frac * b.count
         return total
         
-    def update(self, q: RangeQuery, actual: float):
-        pred = self.predict(q)
+    def update(self, q: RangeQuery, actual: float, pred: float = None):
+        if pred is None:
+            pred = self.predict(q)
         if pred == 0: return
         # Adaptive learning rate based on error
         ratio = actual / pred

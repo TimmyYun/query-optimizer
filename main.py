@@ -403,8 +403,8 @@ def _run_experiment_internal(args):
         
         # Sequential Update (simulate feedback loop)
         t0_up = time.perf_counter()
-        for q, truth in zip(q_batch, t_batch):
-            eh_learner.update(q, float(truth))
+        for q, truth, pred_val in zip(q_batch, t_batch, preds):
+            eh_learner.update(q, float(truth), pred=float(pred_val))
         t_eh_update_p1 += (time.perf_counter() - t0_up)
     
     y_eh_init = np.array(y_eh_init)
