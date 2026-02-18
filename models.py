@@ -155,6 +155,8 @@ class EquiWidthHistogram:
                      
                      cur = hi + 1
                      if cur > mid_mx: break
+        
+        return EquiWidthHistogram(pb + mid_buckets + sb)
                      
     @staticmethod
     def build_from_sample(mn: int, mx: int, bins: int, sample: np.ndarray, total_rows: int) -> 'EquiWidthHistogram':
@@ -621,7 +623,7 @@ class HybridEstimator:
             mn: Minimum value of dataset
             
         Returns:
-            Median Q-Error across all queries
+            Tuple[float, float]: (Median Q-Error, 95th Percentile Q-Error)
         """
         q_errors = []
         width = bucket.hi - bucket.lo + 1
@@ -646,7 +648,10 @@ class HybridEstimator:
             q_err = max(act / pred, pred / act)
             q_errors.append(q_err)
         
-        return np.median(q_errors)
+        if not q_errors:
+            return 1.0, 1.0
+
+        return np.median(q_errors), np.percentile(q_errors, 95)
 
 
     def _train_adaptive_models(self, rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]], 
@@ -686,19 +691,19 @@ class HybridEstimator:
             
             # 1. Identity (Baseline)
             # Evaluate implicitly? No, treat as a candidate.
-            q_err_identity = self._eval_model_q_error(None, val_queries, bucket, freq, mn)
+            q_med_identity, q_p95_identity = self._eval_model_q_error(None, val_queries, bucket, freq, mn)
             
             candidates = []
-            candidates.append((q_err_identity, None))
+            candidates.append((q_med_identity, q_p95_identity, None))
 
             # 2. Linear Model
             try:
                 mdl_linear = Ridge(alpha=1.0).fit(X_train, y_train)
-                q_err_linear = self._eval_model_q_error(
+                q_med_linear, q_p95_linear = self._eval_model_q_error(
                     ("linear", mdl_linear.coef_[0], mdl_linear.intercept_),
                     val_queries, bucket, freq, mn
                 )
-                candidates.append((q_err_linear, ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)))
+                candidates.append((q_med_linear, q_p95_linear, ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)))
             except: pass
             
             # 3. Polynomial Model (Degree 2)
@@ -706,26 +711,26 @@ class HybridEstimator:
                 poly_calc = PolynomialFeatures(degree=2, include_bias=False)
                 X_poly_train = poly_calc.fit_transform(X_train)
                 mdl_poly = Ridge(alpha=1.0).fit(X_poly_train, y_train)
-                q_err_poly = self._eval_model_q_error(
+                q_med_poly, q_p95_poly = self._eval_model_q_error(
                     ("poly", mdl_poly.coef_, mdl_poly.intercept_),
                     val_queries, bucket, freq, mn
                 )
-                candidates.append((q_err_poly, ("poly", mdl_poly.coef_, mdl_poly.intercept_)))
+                candidates.append((q_med_poly, q_p95_poly, ("poly", mdl_poly.coef_, mdl_poly.intercept_)))
             except: pass
 
             # 4. Log-Linear Model
             try:
                 X_log_train = np.log(np.clip(X_train, 0.0, 1.0) + 1e-7)
                 mdl_log = Ridge(alpha=1.0).fit(X_log_train, y_train)
-                q_err_log = self._eval_model_q_error(
+                q_med_log, q_p95_log = self._eval_model_q_error(
                     ("log_linear", mdl_log.coef_[0], mdl_log.intercept_),
                     val_queries, bucket, freq, mn
                 )
-                candidates.append((q_err_log, ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)))
+                candidates.append((q_med_log, q_p95_log, ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)))
             except: pass
 
             # Pick best cheap model
-            best_cheap_q, best_cheap_model = min(candidates, key=lambda x: x[0])
+            best_cheap_q, best_cheap_p95, best_cheap_model = min(candidates, key=lambda x: x[0])
             
             # Decide if we need Complex Model
             final_model = best_cheap_model
@@ -746,9 +751,9 @@ class HybridEstimator:
                     mdl_f_mlp.fit(X_f_train, y_train)
                     mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
                     
-                    q_err_fourier = self._eval_model_q_error(mdl_fourier, val_queries, bucket, freq, mn)
+                    q_med_fourier, q_p95_fourier = self._eval_model_q_error(mdl_fourier, val_queries, bucket, freq, mn)
                     
-                    if q_err_fourier < best_cheap_q:
+                    if q_med_fourier < best_cheap_q:
                         final_model = mdl_fourier
                 except Exception as e:
                     # In case of MLP failure, stick with best cheap model
