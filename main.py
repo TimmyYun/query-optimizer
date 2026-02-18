@@ -384,30 +384,12 @@ def _run_experiment_internal(args):
     t_hyb_inf = time.perf_counter() - t0_hyb
     y_hybrid = np.array(y_hybrid)
 
-    # EquiHist Evaluation (Sequential Update)
-    y_eh_init = []
-    
-    # Re-iterate queries for sequential simulation
-    # Note: In a real consistent benchmark we might want to pre-calculate truth.
-    # Here we just re-use the loop logic or zip it.
-    # Let's just zip with true_cardinalities to be efficient.
-    
-    for i, q in enumerate(queries):
-        truth = true_cardinalities[i]
-        
-        # EquiHist Predict
-        t0_inf = time.perf_counter()
-        est_eh = eh_learner.predict(q)
-        t_eh_inf_p1 += (time.perf_counter() - t0_inf)
-        
-        y_eh_init.append(est_eh / N) 
-        
-        # EquiHist Feedback
-        t0_up = time.perf_counter()
-        eh_learner.update(q, float(truth))
-        t_eh_update_p1 += (time.perf_counter() - t0_up)
-        
-    y_eh_init = np.array(y_eh_init)
+    # EquiHist Evaluation (Vectorized)
+    t0_eh = time.perf_counter()
+    y_eh_init_counts = eh_learner.predict_batch(queries)
+    t_eh_inf_p1 = time.perf_counter() - t0_eh
+    y_eh_init = np.array(y_eh_init_counts) / N
+    t_eh_update_p1 = 0.0 # No online updates in vectorized batch mode
     
     # -----------------------------------------------------
     # Save Results
