@@ -369,13 +369,21 @@ class HybridEstimator:
     def train(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> float:
         t_start = time.perf_counter()
         
+        # Helper to check data health
+        if freq is None:
+            print("[CRITICAL ERROR] freq is None in HybridEstimator.train")
+
         # Train models directly on the raw frequency distribution (No MCV removal)
         rows_data = self._collect_cdf_training_rows(freq, mn, points_per_bucket, rng, bucket_indices)
         new_models, t_train_models = self._train_adaptive_models(rows_data, freq, mn, rng)
         
+
+        if len(new_models) == 0:
+            print("[CRITICAL WARNING] No models were trained! Hybrid estimator will predict 0.0 everywhere.")
+
         for k, v in new_models.items():
             self.models[k] = v
-            
+             
         self._bake_vectorized_data()
             
         t_total = time.perf_counter() - t_start
@@ -425,6 +433,7 @@ class HybridEstimator:
             
             # Model Selection
             m_type = self.mod_types[i]
+
             
             def get_cdf_vec(x_arr):
                 # Ensure input is array
@@ -491,8 +500,12 @@ class HybridEstimator:
                     self.mod_types[i] = 4
                     self.log_params[i] = [model[1], model[2]]
             else:
+                # Complex Model (Fourier or MLP)
                 self.mod_types[i] = 3 # Complex
                 self.complex_models[i] = model
+
+        
+
 
 
 
@@ -637,12 +650,14 @@ class HybridEstimator:
 
 
     def _train_adaptive_models(self, rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]], 
-                              freq: np.ndarray, mn: int, rng: np.random.Generator) -> Tuple[Dict[int, Any], float]:
+                          freq: np.ndarray, mn: int, rng: np.random.Generator) -> Tuple[Dict[int, Any], float]:
         models = {}
         t0 = time.perf_counter()
         
         # Q-Error threshold for "good enough" - if a model achieves this, stop early
-        q_error_threshold = 2.0
+        # We will use this to decide whether to try the EXPENSIVE Complex models.
+        # Cheap models (Linear/Poly/Log) are always compared against each other.
+        complex_model_threshold = 1.5 
         
         for i, (train_rows, val_rows) in rows_data.items():
             if not train_rows:
@@ -663,115 +678,86 @@ class HybridEstimator:
                 X_val, y_val = X_train, y_train
             
             # Generate validation queries for Q-Error evaluation
-            val_queries = self._generate_bucket_queries(bucket, n_queries=200, rng=rng, freq=freq, mn=mn)
+            # Option G: Increased from 200 to 2000 for better stability
+            val_queries = self._generate_bucket_queries(bucket, n_queries=2000, rng=rng, freq=freq, mn=mn)
             
-            # --- WATERFALL: Try simple models first, stop early if good enough ---
+            # --- MODEL COMPETITION ---
+            # Instead of a waterfall, we now train ALL cheap models and pick the winner.
             
-            # 1. Identity Check (Uniform assumption)
-            y_pred_identity_val = X_val.flatten() 
-            mse_identity_val = np.mean((y_val - y_pred_identity_val)**2)
-            if mse_identity_val < self.identity_threshold: 
-                models[i] = None # Use Identity
-                continue
+            # 1. Identity (Baseline)
+            # Evaluate implicitly? No, treat as a candidate.
+            q_err_identity = self._eval_model_q_error(None, val_queries, bucket, freq, mn)
+            
+            candidates = []
+            candidates.append((q_err_identity, None))
 
             # 2. Linear Model
-            mdl_linear = Ridge(alpha=1.0).fit(X_train, y_train)
-            q_err_linear = self._eval_model_q_error(
-                ("linear", mdl_linear.coef_[0], mdl_linear.intercept_),
-                val_queries, bucket, freq, mn
-            )
-            
-            if i < 3:  # Debug first few buckets
-                print(f"[DEBUG] Bucket {i}: Linear Q-Error={q_err_linear:.2f}")
-            
-            if q_err_linear < q_error_threshold:
-                models[i] = ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)
-                if i < 3:
-                    print(f"[DEBUG] Bucket {i}: Selected Linear (early stop)")
-                continue
+            try:
+                mdl_linear = Ridge(alpha=1.0).fit(X_train, y_train)
+                q_err_linear = self._eval_model_q_error(
+                    ("linear", mdl_linear.coef_[0], mdl_linear.intercept_),
+                    val_queries, bucket, freq, mn
+                )
+                candidates.append((q_err_linear, ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)))
+            except: pass
             
             # 3. Polynomial Model (Degree 2)
-            poly_calc = PolynomialFeatures(degree=2, include_bias=False)
-            X_poly_train = poly_calc.fit_transform(X_train)
-            mdl_poly = Ridge(alpha=1.0).fit(X_poly_train, y_train)
-            q_err_poly = self._eval_model_q_error(
-                ("poly", mdl_poly.coef_, mdl_poly.intercept_),
-                val_queries, bucket, freq, mn
-            )
-            
-            if i < 3:
-                print(f"[DEBUG] Bucket {i}: Poly Q-Error={q_err_poly:.2f}")
-            
-            if q_err_poly < q_error_threshold:
-                models[i] = ("poly", mdl_poly.coef_, mdl_poly.intercept_)
-                if i < 3:
-                    print(f"[DEBUG] Bucket {i}: Selected Poly (early stop)")
-                continue
-
-            # 4. Log-Linear Model  
-            X_log_train = np.log(np.clip(X_train, 0.0, 1.0) + 1e-7)
-            mdl_log = Ridge(alpha=1.0).fit(X_log_train, y_train)
-            q_err_log = self._eval_model_q_error(
-                ("log_linear", mdl_log.coef_[0], mdl_log.intercept_),
-                val_queries, bucket, freq, mn
-            )
-            
-            if i < 3:
-                print(f"[DEBUG] Bucket {i}: Log-Linear Q-Error={q_err_log:.2f}")
-            
-            if q_err_log < q_error_threshold:
-                models[i] = ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)
-                if i < 3:
-                    print(f"[DEBUG] Bucket {i}: Selected Log-Linear (early stop)")
-                continue
-
-            # 5. Fallback: Complex Model (Fourier MLP) - only trained if simpler models aren't good enough
             try:
-                mapper = FourierFeatureMapper(num_bands=32, max_freq=20000.0)
-                X_f_train = mapper.transform(X_train)
-                mdl_f_mlp = MLPRegressor(
-                    hidden_layer_sizes=(128, 64), 
-                    activation='relu', 
-                    solver='lbfgs', 
-                    max_iter=1000, 
-                    random_state=42, 
-                    alpha=0.001
+                poly_calc = PolynomialFeatures(degree=2, include_bias=False)
+                X_poly_train = poly_calc.fit_transform(X_train)
+                mdl_poly = Ridge(alpha=1.0).fit(X_poly_train, y_train)
+                q_err_poly = self._eval_model_q_error(
+                    ("poly", mdl_poly.coef_, mdl_poly.intercept_),
+                    val_queries, bucket, freq, mn
                 )
-                mdl_f_mlp.fit(X_f_train, y_train)
-                mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
-                
-                q_err_fourier = self._eval_model_q_error(mdl_fourier, val_queries, bucket, freq, mn)
-                
-                if i < 3:
-                    print(f"[DEBUG] Bucket {i}: Fourier Q-Error={q_err_fourier:.2f}")
-                
-                # Select the best model among ALL candidates (including Fourier)
-                best_model = min(
-                    (q_err_linear, ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)),
-                    (q_err_poly, ("poly", mdl_poly.coef_, mdl_poly.intercept_)),
-                    (q_err_log, ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)),
-                    (q_err_fourier, mdl_fourier)
-                )
-                
-                models[i] = best_model[1]
-                
-                if i < 3:
-                    model_name = best_model[1][0] if isinstance(best_model[1], tuple) else "Fourier"
-                    print(f"[DEBUG] Bucket {i}: Selected {model_name} with Q-Error={best_model[0]:.2f}")
-                
-            except Exception:
-                # Absolute Fallback: pick best of the simple models
-                best_simple = min(
-                    (q_err_linear, ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)),
-                    (q_err_poly, ("poly", mdl_poly.coef_, mdl_poly.intercept_)),
-                    (q_err_log, ("log_linear", mdl_log.coef_[0], mdl_log.intercept_))
-                )
-                models[i] = best_simple[1]
-                if i < 3:
-                    print(f"[DEBUG] Bucket {i}: Selected best simple model (Fourier failed)")
+                candidates.append((q_err_poly, ("poly", mdl_poly.coef_, mdl_poly.intercept_)))
+            except: pass
 
+            # 4. Log-Linear Model
+            try:
+                X_log_train = np.log(np.clip(X_train, 0.0, 1.0) + 1e-7)
+                mdl_log = Ridge(alpha=1.0).fit(X_log_train, y_train)
+                q_err_log = self._eval_model_q_error(
+                    ("log_linear", mdl_log.coef_[0], mdl_log.intercept_),
+                    val_queries, bucket, freq, mn
+                )
+                candidates.append((q_err_log, ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)))
+            except: pass
+
+            # Pick best cheap model
+            best_cheap_q, best_cheap_model = min(candidates, key=lambda x: x[0])
             
-        return models, time.perf_counter() - t0
+            # Decide if we need Complex Model
+            final_model = best_cheap_model
+            
+            if best_cheap_q > complex_model_threshold:
+                # Try Complex Model (Fourier MLP)
+                try:
+                    mapper = FourierFeatureMapper(num_bands=32, max_freq=20000.0)
+                    X_f_train = mapper.transform(X_train)
+                    mdl_f_mlp = MLPRegressor(
+                        hidden_layer_sizes=(128, 64), 
+                        activation='relu', 
+                        solver='lbfgs', 
+                        max_iter=1000, 
+                        random_state=42, 
+                        alpha=0.001
+                    )
+                    mdl_f_mlp.fit(X_f_train, y_train)
+                    mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
+                    
+                    q_err_fourier = self._eval_model_q_error(mdl_fourier, val_queries, bucket, freq, mn)
+                    
+                    if q_err_fourier < best_cheap_q:
+                        final_model = mdl_fourier
+                except Exception as e:
+                    # In case of MLP failure, stick with best cheap model
+                    pass
+
+            models[i] = final_model
+            
+        t_total = time.perf_counter() - t0
+        return models, t_total
 
 
     def _predict_local_cdf(self, model, x_norm) -> float:
