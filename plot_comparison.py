@@ -30,7 +30,7 @@ def main():
     full_df = pd.concat(combined_dfs)
     
     plt.figure(figsize=(12, 7))
-    sns.boxplot(data=full_df, x='Model', y='Q_Error', showfliers=False)
+    sns.boxenplot(data=full_df, x='Model', y='Q_Error')
     plt.yscale('log')
     plt.title(args.title)
     plt.ylabel('Q-Error (Log Scale)')

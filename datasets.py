@@ -56,28 +56,28 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
     elif dist == "normal":
         v = rng.normal(loc=mid, scale=span / 6.0, size=n)
     elif dist == "zipf":
-            # 1. Define how many distinct values (NDV) the Zipf distribution should cover.
-            # For a 1M domain, 100,000 distinct values is a realistic density.
-            ndv_target = min(100_000, hi - lo + 1)
-            
-            # 2. Generate Zipf probabilities for ranks 1 to NDV
-            # Using a=2.0 (standard heavy skew) or a=1.0 for moderate skew
-            ranks = np.arange(1, ndv_target + 1)
-            probabilities = 1.0 / (ranks ** 1.0)
-            probabilities /= probabilities.sum() # Normalize to sum to 1.0
-            
-            # 3. Sample indices based on the Zipf probabilities
-            chosen_indices = rng.choice(ndv_target, size=n, p=probabilities)
-            
-            # 4. Map indices to the actual domain.
-            # Sequential mapping means the smallest values are the most frequent.
-            domain_vals = np.arange(lo + shift, lo + shift + ndv_target)
-            
-            # OPTIONAL: If you want the heavy hitters scattered randomly throughout 
-            # the 1M domain instead of clustered at 0, uncomment the line below:
-            rng.shuffle(domain_vals)
-            
-            v = domain_vals[chosen_indices]
+        # 1. Define how many distinct values (NDV) the Zipf distribution should cover.
+        # For a 1M domain, 100,000 distinct values is a realistic density.
+        ndv_target = min(300_000, hi - lo + 1)
+
+        # 2. Generate Zipf probabilities for ranks 1 to NDV
+        # Using a=2.0 (standard heavy skew) or a=1.0 for moderate skew
+        ranks = np.arange(1, ndv_target + 1)
+        probabilities = 1.0 / (ranks ** 1.0)
+        probabilities /= probabilities.sum() # Normalize to sum to 1.0
+
+        # 3. Sample indices based on the Zipf probabilities
+        chosen_indices = rng.choice(ndv_target, size=n, p=probabilities)
+
+        # 4. Map indices to the actual domain.
+        # Sequential mapping means the smallest values are the most frequent.
+        domain_vals = np.arange(lo + shift, lo + shift + ndv_target)
+
+        # OPTIONAL: If you want the heavy hitters scattered randomly throughout
+        # the 1M domain instead of clustered at 0, uncomment the line below:
+        # rng.shuffle(domain_vals)
+
+        v = domain_vals[chosen_indices]
     elif dist == "sparse_cluster":
         # Create 10 dense clusters
         centers = rng.integers(lo, hi, size=10) + shift
@@ -96,7 +96,7 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
     else:
         # Default fallback to uniform
         v = rng.integers(lo, hi + 1, size=n)
-        
+
     if n == 0: return np.array([], dtype=np.int64)
     
     # Ensure all values are strictly within the global domain limits [0, DOMAIN_MAX]
