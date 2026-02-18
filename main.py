@@ -22,7 +22,6 @@ import argparse
 import json
 import time
 import pickle
-import shutil
 import os
 from pathlib import Path
 import numpy as np
@@ -40,10 +39,7 @@ from models import (
 from datasets import (
     DatasetManager,
     scan_min_max_count, build_frequency_and_sample,
-    generate_boxplots, plot_data_distribution, plot_model_comparison,
-    scan_min_max_count, build_frequency_and_sample,
-    generate_boxplots, plot_data_distribution, plot_model_comparison,
-    generate_drift_data, append_to_dataset
+    generate_boxplots, plot_data_distribution, plot_model_comparison
 )
 from workload import RangeQuery, load_workload_csv
 import copy
@@ -206,13 +202,10 @@ def main():
     7. Saves metrics and timings to JSON artifacts.
     """
     parser = argparse.ArgumentParser(description="Run Query Optimizer Benchmark")
-    parser.add_argument("--mode", type=str, choices=["static", "drift"], default="static", help="Experiment mode")
+    parser.add_argument("--mode", type=str, choices=["static"], default="static", help="Experiment mode")
     
     parser.add_argument("--dist", type=str, default="all")
     parser.add_argument("--rows", type=int, default=60_000_000)
-    parser.add_argument("--drift-rows", type=int, default=200_000)
-    parser.add_argument("--drift-dist", type=str, default="normal")
-    parser.add_argument("--drift-shift", type=int, default=50_000, help="Shift magnitude for drift data")
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--eval-n", dest="eval_n", type=str, default="1000000", help="Workload name/size to evaluate (e.g. 1000 or 1000_narrow)")
     # Batch specific params
@@ -246,8 +239,6 @@ def main():
     
     if args.mode == "static":
         run_static_benchmark(args)
-    elif args.mode == "drift":
-        run_drift_benchmark(args)
 
 def _run_experiment_internal(args):
     rng = np.random.default_rng(42)
@@ -268,11 +259,6 @@ def _run_experiment_internal(args):
     with open(ds_dir / "meta.pkl", "rb") as f:
         mn, mx, N, freq, sample, n_bins, skew, kurt = pickle.load(f)
     
-    # Create working copy for drift experiments
-    working_ds_path = Path(args.out_dir) / "data_current_run.csv"
-    shutil.copy2(ds_path, working_ds_path)
-    ds_path = working_ds_path
-
     # 1. Create Buckets
     print(f"Generating Buckets (Bins: {n_bins})...")
 
@@ -518,205 +504,7 @@ def _run_experiment_internal(args):
         plot_q_error_boxplots(result_file, result_dir)
         return
          
-
-
-
-    # -----------------------------------------------------
-    # Phase 2: Data Drift (Insert Data)
-    # -----------------------------------------------------
-    print(f"\n=== Phase 2: Data Drift (Inserting {args.drift_rows} rows of {args.drift_dist}, shift={args.drift_shift}) ===")
-    drift_vals = generate_drift_data(rng, args.drift_dist, args.drift_rows, shift=args.drift_shift)
-    append_to_dataset(drift_vals, ds_path)
-    
-    # Update Ground Truth Frequencies
-    N_new = N + args.drift_rows
-    print("Updating Global Frequency (Ground Truth)...")
-    mn_new, mx_new, N_real = scan_min_max_count(ds_path) 
-    freq_new, _ = build_frequency_and_sample(ds_path, mn_new, mx_new, N_real, 1000, 42)
-    ps_new = np.cumsum(freq_new)
-    
-    # --- Compare Approaches under Drift ---
-    
-    # 1. Static Equi-Width (STALE)
-    # 1. Static Equi-Width (STALE)
-    buckets_static = [Bucket(b.lo, b.hi, count=b.count) for b in buckets_eq_width]
-    static_hist_stale = EquiWidthHistogram(buckets_static)
-    
-    # 2. EquiHist (Online Learning - CONTINUES)
-    
-    print("Evaluating Drift Sequence...")
-    y_true_seq = []
-    y_static = []
-    y_eh = []
-    y_hybrid_stale = []
-    
-    t_eh_update_p2 = 0.0
-    
-    for q in queries:
-        li = int(q.low - mn_new)
-        ri = int(q.high - mn_new)
-        
-        if ri < 0 or li >= len(ps_new):
-            truth = 0
-        else:
-            if li < 0: li = 0
-            if ri >= len(ps_new): ri = len(ps_new) - 1
-            if li > ri:
-                truth = 0
-            else:
-                truth = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
-                
-        actual_sel = truth / N_real
-        y_true_seq.append(actual_sel)
-        
-        # Static
-        # Static
-        est_static = static_hist_stale.predict(q) 
-        y_static.append(est_static / N) 
-    
-        # EquiHist (Predict then Update)
-        est_eh = eh_learner.predict(q)
-        y_eh.append(est_eh / N) 
-        
-        t0_up = time.perf_counter()
-        eh_learner.update(q, float(truth)) 
-        t_eh_update_p2 += (time.perf_counter() - t0_up)
-
-        # Hybrid (Stale buckets + Old Models) - Using scalar predict for online loop
-        est_hyb = hybrid_est.predict(q)
-        y_hybrid_stale.append(est_hyb / N)
-        
-    y_true_arr = np.array(y_true_seq)
-    
-    add_results("Drift", "Equi-Width (Stale)", np.array(y_static), y_true_arr)
-    add_results("Drift", "EquiHist (Online)", np.array(y_eh), y_true_arr)
-    add_results("Drift", "Hybrid (Stale)", np.array(y_hybrid_stale), y_true_arr)
-    
-    # -----------------------------------------------------
-    # Phase 3: Adaptive Repair (Hybrid)
-    # -----------------------------------------------------
-    print(f"\n=== Phase 3: Hybrid Adaptive Repair ===")
-    
-    y_hyb_repaired = None
-    y_static_rebuilt = None
-
-    # Hybrid updates counts (Cheap)
-    for b in buckets_ew:
-        li = b.lo - mn_new
-        ri = b.hi - mn_new
-        if li < 0: li=0
-        if ri >= len(freq_new): ri = len(freq_new)-1
-        b.count = int(ps_new[ri] - (ps_new[li-1] if li > 0 else 0))
-        
-    # Check error again with updated counts
-    y_hyb_counts_only = (hybrid_est.predict_batch(queries) / N_real).tolist()
-        
-    bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_ew, threshold_q=2.0)
-    print(f"Identified {len(bad_indices)}/{len(buckets_ew)} buckets needing repair.")
-    
-    if bad_indices:
-        print("Retraining specific buckets...")
-        hybrid_est.train(freq_new, mn_new, 50, rng, bucket_indices=bad_indices)
-            
-    # Final Hybrid Eval
-    y_hyb_repaired = (hybrid_est.predict_batch(queries) / N_real).tolist()
-    
-    # Baseline: Rebuilt Static Histogram (for comparison)
-    print("Building Rebuilt Static Baseline...")
-    static_rebuilt = EquiWidthHistogram.build_from_sample(mn_new, mx_new, n_bins, freq_new, N_real)
-    y_static_rebuilt = []
-    for q in queries:
-        y_static_rebuilt.append(static_rebuilt.predict(q) / N_real)
-    y_static_rebuilt = np.array(y_static_rebuilt)
-
-    add_results("Repair", "Hybrid (Repaired)", y_hyb_repaired, y_true_arr)
-    add_results("Repair", "Static (Rebuilt)", y_static_rebuilt, y_true_arr)
-    
-    # Calculate Summaries for summary.json
-    m_static_stale = summarize(y_true_arr, np.array(y_static), "Static (Stale)")
-    m_static_rebuilt = summarize(y_true_arr, y_static_rebuilt, "Static (Rebuilt)")
-    m_eh_online = summarize(y_true_arr, np.array(y_eh), "EquiHist (Online)")
-    m_hyb_stale = summarize(y_true_arr, np.array(y_hybrid_stale), "Hybrid (Stale)")
-    m_hyb_repaired = summarize(y_true_arr, np.array(y_hyb_repaired), "Hybrid (Repaired)")
-
-    # Save Final CSV including Drift/Repair
-    # -----------------------------------------------------
-    # Save Results & Plot
-    # -----------------------------------------------------
-    # ... (Plotting code omitted for brevity, but arguments passed need to handle None)
-    # We will update the plotting function to check for None or empty arrays?
-    # Or just pass what we have.
-    # The current plot code likely expects all arrays.
-    # Let's check `plot_results`.
-    
-    # Check if plot_results handles missing data?
-    # It probably doesn't. We should only call it if we have data or fix it.
-    # For now, let's just print metrics.
-    
-    # Calculate Metrics
-    results_summary = []
-    
-    # Equi-Width
-    # Equi-Width
-    q_metrics_ew = calculate_q_error(y_hist_width * N, true_cardinalities)
-    print(f"[Equi-Width] Median QErr={q_metrics_ew['median']:.4f}, P95={q_metrics_ew['95th']:.4f}")
-    results_summary.append({
-            "Model": "Equi-Width", **q_metrics_ew, 
-            "Training Time (s)": t_hist_build, "Inference Time (s)": t_base_inf
-    })
-
-    # Hybrid
-    q_metrics_hyb = calculate_q_error(y_hybrid * N, true_cardinalities)
-    print(f"[Hybrid] Median QErr={q_metrics_hyb['median']:.4f}, P95={q_metrics_hyb['95th']:.4f}")
-    results_summary.append({
-            "Model": "Hybrid", **q_metrics_hyb, 
-            "Training Time (s)": t_hist_build + t_ml_train, "Inference Time (s)": t_hyb_inf
-    })
-
-    # EquiHist
-    q_metrics_eh = calculate_q_error(y_eh_init * N, true_cardinalities)
-    print(f"[EquiHist] Median QErr={q_metrics_eh['median']:.4f}, P95={q_metrics_eh['95th']:.4f}")
-    results_summary.append({
-            "Model": "EquiHist", **q_metrics_eh, 
-            "Training Time (s)": t_hist_build + t_eh_update_p1, "Inference Time (s)": t_eh_inf_p1
-    })
-
-    # Save Results
-    res_path = result_dir / "summary.json" # Changed to use result_dir
-    metrics_dict = {} # Simplified for JSON
-    
-    # Construct metrics dict for JSON compatibility (mapping old structure if needed)
-    # The drift benchmark expects specific keys.
-    # We should populate them if the model ran.
-    
-    metrics_dict["static_stale"] = {"QErr_median": q_metrics_ew['median']} # Proxy
-    metrics_dict["hybrid_stale"] = {"QErr_median": q_metrics_hyb['median']}
-    metrics_dict["hybrid_repaired"] = {"QErr_median": q_metrics_hyb['median']} # Placeholder
-    metrics_dict["equihist_online"] = {"QErr_median": q_metrics_eh['median']}
-    metrics_dict["static_rebuilt"] = {"QErr_median": q_metrics_eh['median']} # Placeholder
-
-    with open(res_path, "w") as f:
-        json.dump({"metrics": metrics_dict, "summary": results_summary}, f, indent=4)
-        print(f"Saved metrics to {res_path}")
-
-    df_results = pd.DataFrame(results_data)
-    result_file = result_dir / f"{args.eval_n}_drift.csv"
-    df_results.to_csv(result_file, index=False)
-    print(f"Detailed drift results saved to {result_file}")
-    
-    # Save Summary JSON for run_drift_benchmark
-    summary_data_drift = {
-        "metrics": {}
-    }
-    summary_data_drift["metrics"]["static_stale"] = m_static_stale
-    summary_data_drift["metrics"]["static_rebuilt"] = m_static_rebuilt
-    summary_data_drift["metrics"]["equihist_online"] = m_eh_online
-    summary_data_drift["metrics"]["hybrid_stale"] = m_hyb_stale
-    summary_data_drift["metrics"]["hybrid_repaired"] = m_hyb_repaired
-
-    with open(result_dir / "summary.json", "w") as f:
-        json.dump(summary_data_drift, f, indent=4)
-    print(f"Drift summary stats saved to {result_dir / 'summary.json'}")
+        return
 
 
 def run_static_benchmark(args):
@@ -745,65 +533,6 @@ def run_static_benchmark(args):
     print("\n>>> Aggregating All Results <<<")
     aggregate_summaries(str(Path(args.out_dir).parent))
 
-def run_drift_benchmark(args):
-    """
-    Runs a batch of drift experiments over multiple scenarios.
-    Migrated from drift_benchmark.py
-    """
-    scenarios = [
-        ("zipf", "normal", 50000),      # Shifted insert
-        ("uniform", "sparse_cluster", 0),  # Radical distribution change
-        ("normal", "zipf", 20000),      # Overlap drift
-        ("anti_zipf", "uniform", 100000) # Out of range drift
-    ]
-    
-    all_results = []
-    output_dir = Path(args.out_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    experiment_suffix = f"_{args.experiment_name}" if args.experiment_name else ""
-    excel_path = output_dir / f"drift_benchmark_results{experiment_suffix}.xlsx"
-    
-    print(f"Starting Drift Benchmark Batch (Rows: {args.rows}, DriftRows: {args.drift_rows})")
-    
-    for init_dist, drift_dist, shift in scenarios:
-        scenario_name = f"{init_dist}_to_{drift_dist}_s{shift}"
-        print(f"\n>>> Processing Scenario: {scenario_name} <<<")
-        
-        scenario_args = copy.deepcopy(args)
-        scenario_args.dist = init_dist
-        scenario_args.drift_dist = drift_dist
-        scenario_args.drift_shift = shift
-        scenario_args.out_dir = str(output_dir / scenario_name)
-        
-        try:
-            _run_experiment_internal(scenario_args)
-            
-            # Fix: summary.json is saved in Path(out_dir) / rows / dist
-            summary_path = Path(scenario_args.out_dir) / str(args.rows) / init_dist / "summary.json"
-            with open(summary_path, "r") as f:
-                res = json.load(f)
-                
-            metrics = res["metrics"]
-            summary_row = {
-                "Scenario": scenario_name,
-                "Init_Dist": init_dist,
-                "Drift_Dist": drift_dist,
-                "Shift": shift,
-                "Static_Stale_QErr": metrics["static_stale"]["QErr_median"],
-                "Static_Rebuilt_QErr": metrics["static_rebuilt"]["QErr_median"],
-                "EH_Adaptive_QErr": metrics["equihist_online"]["QErr_median"],
-                "Hybrid_Stale_QErr": metrics["hybrid_stale"]["QErr_median"],
-                "Hybrid_Repaired_QErr": metrics["hybrid_repaired"]["QErr_median"]
-            }
-            all_results.append(summary_row)
-        except Exception as e:
-            print(f"Error processing scenario {scenario_name}: {e}")
-            continue
-
-    df_summary = pd.DataFrame(all_results)
-    df_summary.to_excel(excel_path, index=False)
-    print(f"\nFinal Drift Summary saved to {excel_path}")
 
 if __name__ == "__main__":
     main()

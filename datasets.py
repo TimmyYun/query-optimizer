@@ -80,12 +80,6 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
     v = np.vectorize(lambda x: clamp_int(x, 0, 200_000))(v)
     return v.astype(np.int64)
 
-def generate_drift_data(rng: np.random.Generator, dist: str, n: int, shift: int = 0) -> np.ndarray:
-    """
-    Generates data for drift simulation.
-    Wrapper around gen_values with fixed domain [0, 200_000].
-    """
-    return gen_values(rng, dist, n, 0, 200_000, shift=shift)
 
 def save_csv_column(values: np.ndarray, path: Path, mode='w'):
     """
@@ -100,11 +94,6 @@ def save_csv_column(values: np.ndarray, path: Path, mode='w'):
     df = pd.Series(values)
     df.to_csv(path, index=False, header=False, mode=mode)
 
-def append_to_dataset(values: np.ndarray, path: Path):
-    """
-    Appends values to an existing dataset CSV.
-    """
-    save_csv_column(values, path, mode='a')
 
 def scan_min_max_count(csv_path: Path, chunksize: int = 1_000_000) -> Tuple[int, int, int]:
     """
