@@ -3,19 +3,12 @@ import time
 import numpy as np
 from models import EquiWidthHistogram, summarize
 from benchmark_utils import (
-    get_common_parser, setup_out_dir, 
-    load_data_and_metadata, load_and_filter_workload,
-    save_benchmark_results
+    get_common_parser, run_benchmark_suite,
+    load_and_filter_workload, save_benchmark_results
 )
 
-def main():
-    parser = get_common_parser("Run EquiWidth Baseline Benchmark")
-    args = parser.parse_args()
-    
-    out_dir = setup_out_dir(args, "equiwidth")
-    
-    # Load Data
-    mn, mx, N, freq, sample, n_bins, skew, kurt = load_data_and_metadata(args.rows, args.dist)
+def run_logic(args, out_dir, metadata):
+    mn, mx, N, freq, sample, n_bins, skew, kurt = metadata
     
     # Build Histogram
     t0 = time.perf_counter()
@@ -46,6 +39,11 @@ def main():
     print(f"Equi-Width: Median QErr={metrics['median_q_error']:.4f}, Build={build_time:.4f}s, Inf={infer_time:.4f}s")
     
     save_benchmark_results(out_dir, args.eval_n, "EquiWidth", queries, y_true, y_pred, metrics)
+
+def main():
+    parser = get_common_parser("Run EquiWidth Baseline Benchmark")
+    args = parser.parse_args()
+    run_benchmark_suite(args, run_logic)
 
 if __name__ == "__main__":
     main()

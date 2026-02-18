@@ -1,24 +1,14 @@
 #!/usr/bin/env python3
 import time
 import numpy as np
-import argparse
 from models import EquiWidthHistogram, EquiHistLearner, summarize
 from benchmark_utils import (
-    get_common_parser, setup_out_dir, 
-    load_data_and_metadata, load_and_filter_workload,
-    save_benchmark_results
+    get_common_parser, run_benchmark_suite,
+    load_and_filter_workload, save_benchmark_results
 )
 
-def main():
-    parser = get_common_parser("Run EquiHist Benchmark")
-    parser.add_argument("--lr", type=float, default=0.5, help="Learning Rate")
-    parser.add_argument("--batch-size", type=int, default=100000, help="Mini-batch size for updates")
-    args = parser.parse_args()
-    
-    out_dir = setup_out_dir(args, "equihist")
-    
-    # Load Data
-    mn, mx, N, freq, sample, n_bins, skew, kurt = load_data_and_metadata(args.rows, args.dist)
+def run_logic(args, out_dir, metadata):
+    mn, mx, N, freq, sample, n_bins, skew, kurt = metadata
     
     # Build Initial Histogram (Equi-Width)
     t0 = time.perf_counter()
@@ -70,6 +60,13 @@ def main():
     print(f"EquiHist: Median QErr={metrics['median_q_error']:.4f}, Train={metrics['total_train_time']:.4f}s, Inf={inf_time_total:.4f}s")
     
     save_benchmark_results(out_dir, args.eval_n, "EquiHist", queries, y_true, y_pred, metrics)
+
+def main():
+    parser = get_common_parser("Run EquiHist Benchmark")
+    parser.add_argument("--lr", type=float, default=0.5, help="Learning Rate")
+    parser.add_argument("--batch-size", type=int, default=100000, help="Mini-batch size for updates")
+    args = parser.parse_args()
+    run_benchmark_suite(args, run_logic)
 
 if __name__ == "__main__":
     main()
