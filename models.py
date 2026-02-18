@@ -811,6 +811,38 @@ class HybridEstimator:
             
         return model_pred
 
+    def report_models(self):
+        """Prints a summary of which models were chosen for each bucket."""
+        print("\n" + "="*80)
+        print(f"{'Idx':<4} | {'Range':<25} | {'Count':<10} | {'Model Type':<15} | {'Stats'}")
+        print("-" * 80)
+        
+        for i, b in enumerate(self.buckets):
+            model = self.models.get(i)
+            m_name = "Uniform"
+            info = ""
+            
+            if model is None:
+                m_name = "Uniform"
+            elif isinstance(model, tuple):
+                m_type = model[0]
+                if m_type == "linear":
+                    m_name = "Linear"
+                    info = f"coef={model[1]:.4f}, int={model[2]:.4f}"
+                elif m_type == "poly":
+                    m_name = "Polynomial"
+                    info = f"c1={model[1][0]:.4f}, c2={model[1][1]:.4f}, int={model[2]:.4f}"
+                elif m_type == "log_linear":
+                    m_name = "Log-Linear"
+                    info = f"coef={model[1]:.4f}, int={model[2]:.4f}"
+            else:
+                m_name = "Fourier MLP"
+                info = "Complex Neural Net"
+                
+            range_str = f"[{b.lo}, {b.hi}]"
+            print(f"{i:<4} | {range_str:<25} | {b.count:<10} | {m_name:<15} | {info}")
+        print("="*80 + "\n")
+
 # -----------------------------------------------------------------------------
 # Evaluation Utilities
 # -----------------------------------------------------------------------------
