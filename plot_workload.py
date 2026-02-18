@@ -6,7 +6,7 @@ from pathlib import Path
 
 WORKLOAD_FILE = Path("workload/1000000/workload.csv")
 OUTPUT_DIR = Path("workload/1000000/plots")
-DOMAIN_MAX = 200000
+DOMAIN_MAX = 1000000
 
 def plot_workload_analysis():
     print("Loading workload...")

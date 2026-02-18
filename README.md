@@ -32,7 +32,7 @@ poetry run python datasets.py
 *   **Scales**: 1M, 10M, 60M rows (default).
 
 ### Stage 2: Workload Generation (`workload.py`)
-This script generates independent workloads of range queries. These workloads are saved as CSV files and are domain-based (e.g., `[0, 200,000]`), ensuring they are not biased by the specific data values in the dataset.
+This script generates independent workloads of range queries. These workloads are saved as CSV files and are domain-based (e.g., `[0, 1,000,000]`), ensuring they are not biased by the specific data values in the dataset.
 
 **Usage:**
 ```bash

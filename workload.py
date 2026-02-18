@@ -198,7 +198,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate workload queries.")
     parser.add_argument("--count", type=int, help="Single workload count (deprecated, use --counts).")
     parser.add_argument("--counts", type=int, nargs='+', help="List of workload counts to generate (e.g. 1000 10000).")
-    parser.add_argument("--domain-max", type=int, default=200_000, help="Maximum value of the domain (default: 200,000).")
+    parser.add_argument("--domain-max", type=int, default=1_000_000, help="Maximum value of the domain (default: 1,000,000).")
     parser.add_argument("--plot-buckets", type=str, help="Path to histogram_buckets.csv. If provided, plots the generated workload distribution.")
     parser.add_argument("--rows", type=int, help="Dataset size (e.g. 60000000). If provided, plots histograms for ALL distributions of this size.")
     

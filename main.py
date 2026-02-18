@@ -388,7 +388,7 @@ def _run_experiment_internal(args):
     y_eh_init = []
     t_eh_inf_p1 = 0.0
     t_eh_update_p1 = 0.0
-    batch_size = 10000
+    batch_size = 100000
     
     for i in range(0, len(queries), batch_size):
         q_batch = queries[i : i + batch_size]

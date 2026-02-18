@@ -27,6 +27,8 @@ Key Responsibilities:
 # Data Utils
 # ==========================================
 
+DOMAIN_MAX = 1_000_000
+
 def clamp_int(x, lo, hi):
     """Clamps an integer x between lo and hi (inclusive)."""
     return int(min(max(int(round(x)), lo), hi))
@@ -61,23 +63,23 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
         v = []
         for c in centers:
             c_lo = max(lo + shift, c - 50)
-            c_hi = min(hi + shift + 200_000, c + 50)
+            c_hi = min(hi + shift + DOMAIN_MAX, c + 50)
             if c_lo < c_hi:
                 v.append(rng.integers(c_lo, c_hi, size=n // 10))
             else:
                 v.append(rng.integers(lo+shift, hi+shift+1, size=n//10))
         v = np.concatenate(v)
     elif dist == "anti_zipf":
-        # Uniform distribution over a small subset of the domain
-        v = rng.integers(lo + shift, lo + shift + 20000, size=n)
+        # Uniform distribution over a small subset of the domain (10%)
+        v = rng.integers(lo + shift, lo + shift + (DOMAIN_MAX // 10), size=n)
     else:
         # Default fallback to uniform
         v = rng.integers(lo, hi + 1, size=n)
         
     if n == 0: return np.array([], dtype=np.int64)
     
-    # Ensure all values are strictly within the global domain limits [0, 200_000]
-    v = np.vectorize(lambda x: clamp_int(x, 0, 200_000))(v)
+    # Ensure all values are strictly within the global domain limits [0, DOMAIN_MAX]
+    v = np.vectorize(lambda x: clamp_int(x, 0, DOMAIN_MAX))(v)
     return v.astype(np.int64)
 
 
@@ -214,11 +216,11 @@ def calculate_skew_kurt(csv_path: Path) -> Tuple[float, float]:
 
 def calculate_ndv(csv_path: Path):
     """Calculates the Number of Distinct Values (NDV) in the dataset."""
-    seen = np.zeros(200_001, dtype=bool)
+    seen = np.zeros(DOMAIN_MAX + 1, dtype=bool)
     try:
         for chunk in pd.read_csv(csv_path, header=None, names=["v"], dtype="int64", chunksize=1_000_000, engine="c"):
             vals = chunk["v"].to_numpy()
-            vals = vals[(vals >= 0) & (vals <= 200_000)]
+            vals = vals[(vals >= 0) & (vals <= DOMAIN_MAX)]
             seen[vals] = True
         return np.count_nonzero(seen)
     except Exception as e:
@@ -278,7 +280,7 @@ def plot_data_distribution(vals, dist_name, output_path, n_bins=None):
     plt.xlabel("Value")
     plt.ylabel("Frequency" + (" (Log Scale)" if use_log else ""))
     plt.grid(axis='y', alpha=0.3)
-    if dist_name.lower() not in ['imdb', 'census']: plt.xlim(0, 200_000)
+    if dist_name.lower() not in ['imdb', 'census']: plt.xlim(0, DOMAIN_MAX)
     plt.gcf().text(0.78, 0.6, stats_text, fontsize=9, bbox=dict(facecolor='white', alpha=0.8, edgecolor='gray'))
     plt.tight_layout()
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
@@ -482,7 +484,7 @@ class DatasetManager:
             elif dist.lower() == "census":
                 vals = load_census_age(Path("data/census/USCensus1990.data.txt.csv"))
             else:
-                vals = gen_values(rng, dist, rows, 0, 200_000)
+                vals = gen_values(rng, dist, rows, 0, DOMAIN_MAX)
             
             save_csv_column(vals, data_path)
             
