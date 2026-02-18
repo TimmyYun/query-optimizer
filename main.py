@@ -310,14 +310,7 @@ def _run_experiment_internal(args):
     print(f"Created {len(buckets_eq_width)} quantile buckets.")
     ew_hist = EquiWidthHistogram(buckets_eq_width)
 
-    elif args.bin_method == 'quantile':
-        print(f"Using Quantile (Equi-Depth) Binning with {args.bins} bins...")
-        if data is None:
-             raise ValueError("Quantile binning requires full dataset (use --bin-method quantile)")
-        print(f"DEBUG: Quantile binning on data shape {data.shape}")
-        buckets_eq_width = quantile_bins(data, args.bins)
-        print(f"Created {len(buckets_eq_width)} quantile buckets. First: {buckets_eq_width[0] if buckets_eq_width else 'None'}")
-        ew_hist = EquiWidthHistogram(buckets_eq_width)
+
 
     t_hist_build = time.perf_counter() - t0_hist
     
