@@ -384,12 +384,30 @@ def _run_experiment_internal(args):
     t_hyb_inf = time.perf_counter() - t0_hyb
     y_hybrid = np.array(y_hybrid)
 
-    # EquiHist Evaluation (Vectorized)
-    t0_eh = time.perf_counter()
-    y_eh_init_counts = eh_learner.predict_batch(queries)
-    t_eh_inf_p1 = time.perf_counter() - t0_eh
-    y_eh_init = np.array(y_eh_init_counts) / N
-    t_eh_update_p1 = 0.0 # No online updates in vectorized batch mode
+    # EquiHist Evaluation (Mini-batch Vectorized)
+    y_eh_init = []
+    t_eh_inf_p1 = 0.0
+    t_eh_update_p1 = 0.0
+    batch_size = 10000
+    
+    for i in range(0, len(queries), batch_size):
+        q_batch = queries[i : i + batch_size]
+        t_batch = true_cardinalities[i : i + batch_size]
+        
+        # Batch Predict
+        t0_inf = time.perf_counter()
+        preds = eh_learner.predict_batch(q_batch)
+        t_eh_inf_p1 += (time.perf_counter() - t0_inf)
+        
+        y_eh_init.extend(preds / N)
+        
+        # Sequential Update (simulate feedback loop)
+        t0_up = time.perf_counter()
+        for q, truth in zip(q_batch, t_batch):
+            eh_learner.update(q, float(truth))
+        t_eh_update_p1 += (time.perf_counter() - t0_up)
+    
+    y_eh_init = np.array(y_eh_init)
     
     # -----------------------------------------------------
     # Save Results
