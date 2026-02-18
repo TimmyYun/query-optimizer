@@ -22,6 +22,15 @@ def run_benchmark_suite(args, approach_fn):
     """
     import copy
     
+    # Ensure a single experiment name for all distributions in this suite
+    if args.experiment_name is None:
+        base_dir = Path(args.out_dir)
+        base_dir.mkdir(parents=True, exist_ok=True)
+        existing_ids = [int(d.name) for d in base_dir.iterdir() if d.is_dir() and d.name.isdigit()]
+        next_id = max(existing_ids) + 1 if existing_ids else 1
+        args.experiment_name = str(next_id)
+        print(f"Assigning Experiment ID: {args.experiment_name}")
+
     if args.dist == "all":
         distributions = ["uniform", "normal", "zipf", "sparse_cluster", "anti_zipf"]
     else:

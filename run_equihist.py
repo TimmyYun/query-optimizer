@@ -64,7 +64,7 @@ def run_logic(args, out_dir, metadata):
 def main():
     parser = get_common_parser("Run EquiHist Benchmark")
     parser.add_argument("--lr", type=float, default=0.5, help="Learning Rate")
-    parser.add_argument("--batch-size", type=int, default=100000, help="Mini-batch size for updates")
+    parser.add_argument("--batch-size", type=int, default=100, help="Mini-batch size for updates")
     args = parser.parse_args()
     run_benchmark_suite(args, run_logic)
 
