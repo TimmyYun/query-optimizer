@@ -79,16 +79,16 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
 
         v = domain_vals[chosen_indices]
     elif dist == "sparse_cluster":
-        # Create 10 dense clusters
-        centers = rng.integers(lo, hi, size=10) + shift
+        # Create 50 dense clusters
+        centers = rng.integers(lo, hi, size=50) + shift
         v = []
         for c in centers:
             c_lo = max(lo + shift, c - 50)
             c_hi = min(hi + shift + DOMAIN_MAX, c + 50)
             if c_lo < c_hi:
-                v.append(rng.integers(c_lo, c_hi, size=n // 10))
+                v.append(rng.integers(c_lo, c_hi, size=n // 50))
             else:
-                v.append(rng.integers(lo+shift, hi+shift+1, size=n//10))
+                v.append(rng.integers(lo+shift, hi+shift+1, size=n//50))
         v = np.concatenate(v)
     elif dist == "anti_zipf":
         # Uniform distribution over a small subset of the domain (10%)
