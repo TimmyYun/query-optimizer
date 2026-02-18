@@ -217,9 +217,6 @@ def main():
     parser.add_argument("--drift-shift", type=int, default=50_000, help="Shift magnitude for drift data")
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--eval-n", dest="eval_n", type=str, default="1000000", help="Workload name/size to evaluate (e.g. 1000 or 1000_narrow)")
-    parser.add_argument("--bins", type=int, default=100, help="Number of bins for Equi-Width Histogram (Default: 100)")
-    parser.add_argument("--skewed", action="store_true", help="Use skewed workload for Head heavy evaluation")
-
     # Batch specific params
     parser.add_argument("--experiment-name", type=str, default=None, help="Suffix for output files")
     
@@ -291,42 +288,50 @@ def _run_experiment_internal(args):
     t0_hist = time.perf_counter()
     print(f"DEBUG: Bin method: Quantile (FD-Count + Quantile-Bounds)")
     
+    num_bins = 100 # Default fallback
+
     # 1. Calculate Bin Count using FD Rule (or use pre-calculated)
     if n_bins and n_bins > 0:
             print(f"FD Rule: Using pre-calculated {n_bins} bins from dataset metadata.")
-            args.bins = n_bins
+            num_bins = n_bins
     else:
             print("Using Freedman-Diaconis (FD) Rule to determine bin count...")
             try:
                 # Use numpy's robust FD implementation on the sample
                 bin_edges = np.histogram_bin_edges(sample, bins='fd')
-                args.bins = len(bin_edges) - 1
-                print(f"FD Rule: Calculated {args.bins} bins.")
+                num_bins = len(bin_edges) - 1
+                print(f"FD Rule: Calculated {num_bins} bins.")
             except Exception as e:
-                print(f"FD Rule Failed: {e}. Fallback to {args.bins} bins.")
+                print(f"FD Rule Failed: {e}. Fallback to {num_bins} bins.")
 
-    # 2. Create Quantile Buckets
-    print(f"Using Quantile (Equi-Depth) Binning with {args.bins} bins...")
+    # 2. Create Buckets
+    print(f"Generating Buckets (Bins: {num_bins})...")
 
-    print(f"DEBUG: Quantile binning on data shape {data.shape}")
-    buckets_eq_width = quantile_bins(data, args.bins)
-    print(f"Created {len(buckets_eq_width)} quantile buckets.")
-    ew_hist = EquiWidthHistogram(buckets_eq_width)
-
-
-
-    t_hist_build = time.perf_counter() - t0_hist
+    # A. Standard Equi-Width Buckets (For Baselines: Equi-Width & EquiHist)
+    # This preserves the original baseline logic.
+    print("Building Equi-Width Buckets (Baseline)...")
+    ew_hist_baseline = EquiWidthHistogram.build(mn, mx, num_bins, freq)
+    buckets_ew = ew_hist_baseline.buckets
     
-    eh_learner = EquiHistLearner(buckets_eq_width, learning_rate=args.eh_lr)
+    # B. Quantile (Equi-Depth) Buckets (For Hybrid Approach)
+    # This applies the improvement ONLY to the Hybrid model.
+    print("Building Quantile Buckets (Hybrid)...")
+    buckets_quantile = quantile_bins(data, num_bins)
+    
+    # Initialize Baseline Models
+    ew_hist = ew_hist_baseline # Use the standard EW histogram
+    eh_learner = EquiHistLearner(buckets_ew, learning_rate=args.eh_lr) # EquiHist starts from Equi-Width
+    
+    t_hist_build = time.perf_counter() - t0_hist
     
     # 3. Model Training (Hybrid)
     t_ml_train = 0
     # The Hybrid Estimator aims to use ML models within buckets that have high variance/density,
     # while keeping exact counts for low-NDV buckets.
-    print("Training CDF models (Skipping buckets with low NDV)...")
+    print("Training CDF models (Hybrid using Quantile Buckets)...")
     # Refactored: Use Hybrid Class
     hybrid_est = HybridEstimator(
-        buckets_eq_width, 
+        buckets_quantile,  # Hybrid uses Quantile Buckets
         identity_threshold=args.hybrid_ident,
         mlp_penalty=args.hybrid_penalty,
         fourier_penalty=args.hybrid_penalty
@@ -340,9 +345,6 @@ def _run_experiment_internal(args):
     
     # Use load_workload_csv for independent workloads
     wl_name = args.eval_n
-    if args.skewed:
-        wl_name = f"{args.eval_n}_skewed"
-        print(f"Using Skewed Workload: {wl_name}")
         
     workload_path = Path(f"workload/{wl_name}/workload.csv")
     if not workload_path.exists():
@@ -658,7 +660,7 @@ def _run_experiment_internal(args):
     
     # Baseline: Rebuilt Static Histogram (for comparison)
     print("Building Rebuilt Static Baseline...")
-    static_rebuilt = EquiWidthHistogram.build_from_sample(mn_new, mx_new, args.bins, freq_new, N_real)
+    static_rebuilt = EquiWidthHistogram.build_from_sample(mn_new, mx_new, num_bins, freq_new, N_real)
     y_static_rebuilt = []
     for q in queries:
         y_static_rebuilt.append(static_rebuilt.predict(q) / N_real)
