@@ -63,7 +63,7 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
             # 2. Generate Zipf probabilities for ranks 1 to NDV
             # Using a=2.0 (standard heavy skew) or a=1.0 for moderate skew
             ranks = np.arange(1, ndv_target + 1)
-            probabilities = 1.0 / (ranks ** 2.0)
+            probabilities = 1.0 / (ranks ** 1.0)
             probabilities /= probabilities.sum() # Normalize to sum to 1.0
             
             # 3. Sample indices based on the Zipf probabilities
@@ -75,7 +75,7 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
             
             # OPTIONAL: If you want the heavy hitters scattered randomly throughout 
             # the 1M domain instead of clustered at 0, uncomment the line below:
-            # rng.shuffle(domain_vals) 
+            rng.shuffle(domain_vals)
             
             v = domain_vals[chosen_indices]
     elif dist == "sparse_cluster":
