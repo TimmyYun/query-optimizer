@@ -592,54 +592,6 @@ def main():
     total_elapsed = time.time() - total_start
     print(f"\nAll operations completed in {total_elapsed:.2f}s")
 
-def quantile_bins(data: np.ndarray, num_bins: int) -> List[Bucket]:
-    """
-    Creates Equi-Depth buckets (approximate) using quantiles.
-    Adapts to data density: narrower buckets in dense regions.
-    """
-    if len(data) == 0:
-        return []
-
-    # 1. Calculate quantiles
-    quantiles = np.linspace(0, 100, num_bins + 1)
-    edges = np.percentile(data, quantiles)
-
-    # 2. Create Buckets
-    buckets = []
-    # We round to nearest integer for integer data compatibility
-    edges = np.round(edges).astype(int)
-    
-    # Remove duplicate edges
-    unique_edges = np.unique(edges)
-    
-    # Check if we have enough edges to make buckets
-    if len(unique_edges) < 2:
-        # Fallback to single bucket covering min-max of data
-        mn, mx = int(data.min()), int(data.max())
-        return [Bucket(mn, mx, len(data))]
-
-    for i in range(len(unique_edges) - 1):
-        lo = int(unique_edges[i])
-        hi = int(unique_edges[i+1])
-        
-        # Adjust specific bucket boundaries to avoid overlap
-        if i > 0:
-            lo = method_safe_lo(buckets[-1].hi, lo)
-            
-        if hi < lo:
-             # Should not happen with unique sorted edges unless rounding/adj issues
-             hi = lo 
-             
-        # Count elements in this bucket range
-        c = ((data >= lo) & (data <= hi)).sum()
-        buckets.append(Bucket(lo, hi, int(c)))
-        
-    return buckets
-
-def method_safe_lo(prev_hi, current_lo):
-    return max(prev_hi + 1, current_lo)
-
-
 
 if __name__ == "__main__":
     main()

@@ -43,7 +43,7 @@ from datasets import (
     generate_boxplots, plot_data_distribution, plot_model_comparison,
     scan_min_max_count, build_frequency_and_sample,
     generate_boxplots, plot_data_distribution, plot_model_comparison,
-    generate_drift_data, append_to_dataset, quantile_bins
+    generate_drift_data, append_to_dataset
 )
 from workload import RangeQuery, load_workload_csv
 import copy
@@ -207,9 +207,7 @@ def main():
     """
     parser = argparse.ArgumentParser(description="Run Query Optimizer Benchmark")
     parser.add_argument("--mode", type=str, choices=["static", "drift"], default="static", help="Experiment mode")
-    parser.add_argument("--bin-method", type=str, default="quantile", choices=["quantile"], help="Binning method. Default: quantile (uses FD for count, Quantiles for bounds)")
     
-
     parser.add_argument("--dist", type=str, default="all")
     parser.add_argument("--rows", type=int, default=60_000_000)
     parser.add_argument("--drift-rows", type=int, default=200_000)
@@ -254,10 +252,7 @@ def main():
 def _run_experiment_internal(args):
     rng = np.random.default_rng(42)
     Path(args.out_dir).mkdir(parents=True, exist_ok=True)
-    
-    # Store raw errors for plotting
-    raw_errors = []
-    
+
     # -----------------------------------------------------
     # Phase 1: Initial Build
     # -----------------------------------------------------
@@ -278,60 +273,28 @@ def _run_experiment_internal(args):
     shutil.copy2(ds_path, working_ds_path)
     ds_path = working_ds_path
 
-    # Load full dataset for Quantile Binning
-    print(f"Loading full dataset from {ds_path} for quantile binning...")
-    data = pd.read_csv(ds_path, header=None, names=['value'])['value'].values
-    print(f"Dataset loaded. Shape: {data.shape}")
+    # 1. Create Buckets
+    print(f"Generating Buckets (Bins: {n_bins})...")
 
-    # Determine binning strategy and create initial buckets
-    buckets_eq_width = [] # This will hold the initial buckets for all models
+    # Standard Equi-Width Buckets (For all models: EW-Hist, EquiHist & Hybrid)
     t0_hist = time.perf_counter()
-    print(f"DEBUG: Bin method: Quantile (FD-Count + Quantile-Bounds)")
-    
-    num_bins = 100 # Default fallback
-
-    # 1. Calculate Bin Count using FD Rule (or use pre-calculated)
-    if n_bins and n_bins > 0:
-            print(f"FD Rule: Using pre-calculated {n_bins} bins from dataset metadata.")
-            num_bins = n_bins
-    else:
-            print("Using Freedman-Diaconis (FD) Rule to determine bin count...")
-            try:
-                # Use numpy's robust FD implementation on the sample
-                bin_edges = np.histogram_bin_edges(sample, bins='fd')
-                num_bins = len(bin_edges) - 1
-                print(f"FD Rule: Calculated {num_bins} bins.")
-            except Exception as e:
-                print(f"FD Rule Failed: {e}. Fallback to {num_bins} bins.")
-
-    # 2. Create Buckets
-    print(f"Generating Buckets (Bins: {num_bins})...")
-
-    # A. Standard Equi-Width Buckets (For Baselines: Equi-Width & EquiHist)
-    # This preserves the original baseline logic.
-    print("Building Equi-Width Buckets (Baseline)...")
-    ew_hist_baseline = EquiWidthHistogram.build(mn, mx, num_bins, freq)
-    buckets_ew = ew_hist_baseline.buckets
-    
-    # B. Quantile (Equi-Depth) Buckets (For Hybrid Approach)
-    # This applies the improvement ONLY to the Hybrid model.
-    print("Building Quantile Buckets (Hybrid)...")
-    buckets_quantile = quantile_bins(data, num_bins)
+    print("Building Equi-Width Buckets...")
+    ew_hist = EquiWidthHistogram.build(mn, mx, n_bins, freq)
+    ew_hist_build = time.perf_counter() - t0_hist
+    buckets_ew = ew_hist.buckets
     
     # Initialize Baseline Models
-    ew_hist = ew_hist_baseline # Use the standard EW histogram
-    eh_learner = EquiHistLearner(buckets_ew, learning_rate=args.eh_lr) # EquiHist starts from Equi-Width
+    eh_learner = EquiHistLearner(buckets_ew, learning_rate=args.eh_lr) 
     
     t_hist_build = time.perf_counter() - t0_hist
     
     # 3. Model Training (Hybrid)
-    t_ml_train = 0
     # The Hybrid Estimator aims to use ML models within buckets that have high variance/density,
     # while keeping exact counts for low-NDV buckets.
-    print("Training CDF models (Hybrid using Quantile Buckets)...")
+    print("Training CDF models (Hybrid using Equi-Width Buckets)...")
     # Refactored: Use Hybrid Class
     hybrid_est = HybridEstimator(
-        buckets_quantile,  # Hybrid uses Quantile Buckets
+        buckets_ew,
         identity_threshold=args.hybrid_ident,
         mlp_penalty=args.hybrid_penalty,
         fourier_penalty=args.hybrid_penalty
@@ -638,7 +601,7 @@ def _run_experiment_internal(args):
     y_static_rebuilt = None
 
     # Hybrid updates counts (Cheap)
-    for b in buckets_eq_width:
+    for b in buckets_ew:
         li = b.lo - mn_new
         ri = b.hi - mn_new
         if li < 0: li=0
@@ -648,8 +611,8 @@ def _run_experiment_internal(args):
     # Check error again with updated counts
     y_hyb_counts_only = (hybrid_est.predict_batch(queries) / N_real).tolist()
         
-    bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_eq_width, threshold_q=2.0)
-    print(f"Identified {len(bad_indices)}/{len(buckets_eq_width)} buckets needing repair.")
+    bad_indices = identify_bad_buckets(queries, y_true_arr, np.array(y_hyb_counts_only), buckets_ew, threshold_q=2.0)
+    print(f"Identified {len(bad_indices)}/{len(buckets_ew)} buckets needing repair.")
     
     if bad_indices:
         print("Retraining specific buckets...")
@@ -660,7 +623,7 @@ def _run_experiment_internal(args):
     
     # Baseline: Rebuilt Static Histogram (for comparison)
     print("Building Rebuilt Static Baseline...")
-    static_rebuilt = EquiWidthHistogram.build_from_sample(mn_new, mx_new, num_bins, freq_new, N_real)
+    static_rebuilt = EquiWidthHistogram.build_from_sample(mn_new, mx_new, n_bins, freq_new, N_real)
     y_static_rebuilt = []
     for q in queries:
         y_static_rebuilt.append(static_rebuilt.predict(q) / N_real)
