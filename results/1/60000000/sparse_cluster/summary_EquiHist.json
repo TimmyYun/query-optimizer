@@ -1,0 +1,15 @@
+{
+    "model": "EquiHist",
+    "wl_name": "1000000",
+    "metrics": {
+        "initial_build_time": 0.0019792919993051328,
+        "update_time_total": 0.037499250000109896,
+        "total_train_time": 0.03947854199941503,
+        "infer_time": 0.009174666993203573,
+        "median_q_error": 6.247828450283921,
+        "p25_q_error": 3.722501404094979,
+        "p75_q_error": 11.76545617661123,
+        "p95_q_error": 24.05592977889808,
+        "avg_q_error": 8.794501408519153
+    }
+}
