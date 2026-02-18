@@ -211,7 +211,7 @@ def main():
     
 
     parser.add_argument("--dist", type=str, default="all")
-    parser.add_argument("--rows", type=int, default=1_000_000)
+    parser.add_argument("--rows", type=int, default=60_000_000)
     parser.add_argument("--drift-rows", type=int, default=200_000)
     parser.add_argument("--drift-dist", type=str, default="normal")
     parser.add_argument("--drift-shift", type=int, default=50_000, help="Shift magnitude for drift data")
