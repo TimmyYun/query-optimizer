@@ -15,7 +15,22 @@ fi
 
 EXP_NAME=$1
 shift
-EXTRA_ARGS="$@"
+
+BUCKETS=""
+EXTRA_ARGS=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --buckets)
+            BUCKETS="$2"
+            shift 2
+            ;;
+        *)
+            EXTRA_ARGS="$EXTRA_ARGS $1"
+            shift
+            ;;
+    esac
+done
 
 # Hardcoded Multi-Model Defaults
 ROWS=60000000
@@ -34,12 +49,20 @@ run_model() {
     local script=$1
     local name=$2
     echo -e "\n>>> Running $name Baseline <<<"
-    poetry run python "$script" \
-        --experiment-name "$EXP_NAME" \
-        --rows "$ROWS" \
-        --dist "$DIST" \
-        --eval-n "$EVAL_N" \
-        $EXTRA_ARGS
+    
+    local cmd="poetry run python \"$script\" \
+        --experiment-name \"$EXP_NAME\" \
+        --rows \"$ROWS\" \
+        --dist \"$DIST\" \
+        --eval-n \"$EVAL_N\""
+    
+    if [ ! -z "$BUCKETS" ]; then
+        cmd="$cmd --buckets $BUCKETS"
+    fi
+    
+    cmd="$cmd $EXTRA_ARGS"
+    
+    eval $cmd
 }
 
 run_model "run_equiwidth.py" "Equi-Width"
