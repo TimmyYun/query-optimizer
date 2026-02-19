@@ -339,9 +339,8 @@ class HybridEstimator:
         models = {}
         t0 = time.perf_counter()
 
-        # Accuracy thresholds
-        EARLY_EXIT_THRESHOLD = 1.01  # If Q-error is < 1%, stop immediately
-        COMPLEX_MODEL_THRESHOLD = 1.05  # Only try MLP if error is > 5%
+        EARLY_EXIT_THRESHOLD = 1.01
+        COMPLEX_MODEL_THRESHOLD = 1.05
 
         for i, (train_rows, val_rows) in rows_data.items():
             bucket = self.buckets[i]
@@ -349,12 +348,10 @@ class HybridEstimator:
                 models[i] = None
                 continue
 
-            # Setup Training Data
             X_train = np.array([r.x_norm for r in train_rows]).reshape(-1, 1)
             y_train = np.array([r.y_cdf for r in train_rows])
             weights = 1.0 + 10.0 * (y_train ** 2)
 
-            # Setup Vectorized Validation (Prefix Sums for O(1) ground truth)
             b_lo_idx, b_hi_idx = bucket.lo - mn, bucket.hi - mn
             b_ps = np.cumsum(freq[b_lo_idx: b_hi_idx + 1])
             width = bucket.hi - bucket.lo + 1
@@ -363,26 +360,30 @@ class HybridEstimator:
             q_lo = np.array([q.low for q in val_queries])
             q_hi = np.array([q.high for q in val_queries])
 
+            # --- UPDATED HELPER ---
             def check(mdl):
-                return self._eval_model_q_error_vec(mdl, q_lo, q_hi, bucket, b_ps, bucket.lo, width)
+                q_m, q_95 = self._eval_model_q_error_vec(mdl, q_lo, q_hi, bucket, b_ps, bucket.lo, width)
+                return q_m, q_95, mdl
 
-            # 1. Identity (Uniform) - The fastest check
+            # 1. Identity (Uniform)
             best_q, best_p95, best_model = check(None)
             if best_q < EARLY_EXIT_THRESHOLD:
                 models[i] = best_model
                 continue
 
-            # 2. Try Linear & Power (Zipf-friendly)
+            # 2. Try Linear & Power
             candidates = []
             try:
                 m_lin = Ridge(alpha=1.0).fit(X_train, y_train, sample_weight=weights)
                 lin_mdl = ("linear", m_lin.coef_[0], m_lin.intercept_)
-                q, p95 = check(lin_mdl)
+                # --- UPDATED UNPACKING ---
+                q, p95, _ = check(lin_mdl)
                 candidates.append((q, p95, lin_mdl))
 
                 m_pow = Ridge(alpha=1.0).fit(np.sqrt(X_train), y_train, sample_weight=weights)
                 pow_mdl = ("power", m_pow.coef_[0], m_pow.intercept_)
-                q, p95 = check(pow_mdl)
+                # --- UPDATED UNPACKING ---
+                q, p95, _ = check(pow_mdl)
                 candidates.append((q, p95, pow_mdl))
             except:
                 pass
@@ -396,10 +397,11 @@ class HybridEstimator:
                 models[i] = best_model
                 continue
 
-            # 3. Try Decision Tree (Good for Normal tails)
+            # 3. Try Decision Tree
             try:
                 mdl_tree = DecisionTreeRegressor(max_depth=4).fit(X_train, y_train)
-                q, p95 = check(mdl_tree)
+                # --- UPDATED UNPACKING ---
+                q, p95, _ = check(mdl_tree)
                 if q < best_q:
                     best_q, best_p95, best_model = q, p95, mdl_tree
             except:
@@ -412,7 +414,8 @@ class HybridEstimator:
                     X_f_train = mapper.transform(X_train)
                     mdl_f_mlp = MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=500).fit(X_f_train, y_train)
                     mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
-                    q, p95 = check(mdl_fourier)
+                    # --- UPDATED UNPACKING ---
+                    q, p95, _ = check(mdl_fourier)
                     if q < best_q:
                         best_model = mdl_fourier
                 except:
