@@ -463,6 +463,33 @@ def plot_model_comparison(csv_path: str, output_path: str, title: str):
     print(f"Single distribution boxplot saved to {output_path}")
 
 
+def plot_micro_distribution(vals: np.ndarray, dist_name: str, output_path: Path):
+    """
+    Plots a histogram isolating the 'micro-noise' inside the 1000-width buckets.
+    Uses the modulo operator to aggregate all micro-buckets into one view.
+    """
+    bucket_size = 1000
+
+    # Isolate the micro-distribution by taking modulo 1000
+    micro_vals = vals % bucket_size
+
+    plt.figure(figsize=(8, 5))
+    use_log = (dist_name.lower() == 'zipf')
+
+    # Plot with 100 bins to see the shape clearly
+    plt.hist(micro_vals, bins=100, color='coral', edgecolor='black', alpha=0.7, log=use_log)
+
+    plt.title(f"Inner Micro-Bucket Distribution: {dist_name.capitalize()}")
+    plt.xlabel(f"Offset inside 1000-width bucket [0, {bucket_size - 1}]")
+    plt.ylabel("Frequency" + (" (Log Scale)" if use_log else ""))
+    plt.grid(axis='y', alpha=0.3)
+
+    plt.tight_layout()
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Saved micro-distribution plot to {output_path}")
+
 # ==========================================
 # Dataset Manager
 # ==========================================
@@ -556,7 +583,11 @@ class DatasetManager:
                 
             # Plot distribution
             plot_data_distribution(vals, dist, ds_dir / "hist.png", n_bins=k)
-            
+
+            # NEW: Plot micro-distribution (Micro)
+            if dist.lower() in ["uniform", "normal", "zipf"]:
+                plot_micro_distribution(vals, dist, ds_dir / "hist_micro.png")
+
         print(f"Dataset ready at {ds_dir}")
         return ds_dir
 
