@@ -27,7 +27,7 @@ for DIST in "${DISTS[@]}"; do
 
     echo ">>> Generating comparison plot for $DIST in $BASE_PATH..."
     
-    poetry run python plot_comparison.py --experiments \
+    poetry run python ./plot/plot_comparison.py --experiments \
         "$BASE_PATH/${WL}_EquiWidth.csv" \
         "$BASE_PATH/${WL}_EquiHist.csv" \
         "$BASE_PATH/${WL}_Hybrid.csv" \
