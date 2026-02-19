@@ -37,53 +37,47 @@ def clamp_int(x, lo, hi):
 def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, shift: int = 0) -> np.ndarray:
     """
     Generates an array of integer values according to a specified distribution.
-    Includes "fractal" (micro-chaotic) logic to defeat standard Equi-Width histograms
-    by ensuring data inside any given bucket is highly non-uniform.
+    Uses 'True Fractal' generation: The micro-distribution inside each 1000-width
+    bucket perfectly matches the shape of the global macro-distribution.
     """
     mid = 0.5 * (lo + hi) + shift
     span = max(1, hi - lo)
 
-    # We assume a roughly 1000-width bucket for injecting micro-chaos
-    # This ensures the global shape is preserved while local buckets are skewed.
+    # We use a 1000-width bucket as the "zoom level" for our fractal patterns.
     bucket_size = 1000
 
     if dist == "uniform":
-        # Global: Uniform. Local: Bimodal (U-Shaped / Spiked at the edges)
+        # Macro: Flat line across all buckets
         macro_bins = rng.integers(0, span // bucket_size, size=n)
-        # Beta(0.1, 0.1) creates a massive U-shape (values crowd at 0 and bucket_size)
-        micro_noise = rng.beta(0.1, 0.1, size=n) * bucket_size
+        # Micro: Flat line inside the 1000-width bucket
+        micro_noise = rng.integers(0, bucket_size, size=n)
         v = lo + shift + (macro_bins * bucket_size) + micro_noise
 
     elif dist == "normal":
-        # Global: Normal. Local: Bimodal/Chaotic
-        global_norm = rng.normal(loc=mid, scale=span / 6.0, size=n)
-        global_norm = np.clip(global_norm, lo + shift, hi + shift)
+        # Macro: Global bell curve
+        num_chunks = span // bucket_size
+        global_norm = rng.normal(loc=num_chunks / 2.0, scale=num_chunks / 6.0, size=n)
+        macro_bins = np.clip(np.round(global_norm), 0, num_chunks - 1).astype(np.int64)
 
-        # Determine which macro-bucket the point fell into
-        macro_bins = ((global_norm - lo - shift) // bucket_size).astype(np.int64)
+        # Micro: A perfect mini bell-curve centered exactly in the middle of the bucket (500)
+        micro_noise = rng.normal(loc=bucket_size / 2.0, scale=bucket_size / 6.0, size=n)
+        micro_noise = np.clip(np.round(micro_noise), 0, bucket_size - 1)
 
-        # Inject severe local skew inside that bucket
-        micro_noise = rng.beta(0.2, 0.2, size=n) * bucket_size
         v = lo + shift + (macro_bins * bucket_size) + micro_noise
 
     elif dist == "zipf":
-        # Global: Zipf. Local: Steeper, jagged Zipf
+        # Macro: Global Zipfian cliff/tail
         ndv_target = min(300_000, span)
-
-        # 1. Macro: Generate the global Zipf curve
         macro_ranks = np.arange(1, ndv_target + 1)
         macro_probs = 1.0 / (macro_ranks ** 1.0)
         macro_probs /= macro_probs.sum()
         chosen_macro_indices = rng.choice(ndv_target, size=n, p=macro_probs)
-
-        # We group the global indices into "buckets"
         macro_bins = chosen_macro_indices // bucket_size
 
-        # 2. Micro: Inject severe, jagged skew inside the bucket
-        # Instead of a smooth curve, we use a very high alpha (2.5) to make
-        # the start of the bucket a massive cliff, leaving the rest mostly empty.
+        # Micro: A mini Zipf cliff inside EVERY bucket
+        # We use a standard skew (1.5) so it looks like a clean Zipf curve inside the bucket
         micro_ranks = np.arange(1, bucket_size + 1)
-        micro_probs = 1.0 / (micro_ranks ** 2.5)
+        micro_probs = 1.0 / (micro_ranks ** 1.5)
         micro_probs /= micro_probs.sum()
         micro_noise = rng.choice(bucket_size, size=n, p=micro_probs)
 
@@ -113,8 +107,7 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
     if n == 0: return np.array([], dtype=np.int64)
 
     # Ensure all values are strictly within the global domain limits [0, DOMAIN_MAX]
-    # np.round handles the floating point noise from the Beta distributions
-    v = np.vectorize(lambda x: clamp_int(x, 0, DOMAIN_MAX))(np.round(v))
+    v = np.vectorize(lambda x: clamp_int(x, 0, DOMAIN_MAX))(v)
     return v.astype(np.int64)
 
 def save_csv_column(values: np.ndarray, path: Path, mode='w'):
@@ -273,7 +266,7 @@ def save_stats(stats: dict, output_path: Path):
 def plot_data_distribution(vals, dist_name, output_path, n_bins=None):
     """
     Plots a histogram of the data distribution and saves bucket info.
-    
+
     Args:
         vals (np.ndarray): The full dataset or a large sample.
         dist_name (str): Name of the distribution (e.g., "Zipf").
@@ -286,31 +279,44 @@ def plot_data_distribution(vals, dist_name, output_path, n_bins=None):
 
     plt.figure(figsize=(10, 6))
     use_log = (dist_name.lower() == 'zipf')
-    
-    # Use Freedman-Diaconis estimator for bins if not provided
-    if n_bins is None:
-        n_bins = freedman_diaconis_bins(plot_vals, int(plot_vals.min()), int(plot_vals.max()), len(plot_vals), bins_max=2000)
-    
-    counts, bin_edges, _ = plt.hist(plot_vals, bins=n_bins, color='skyblue', edgecolor='black', alpha=0.7, log=use_log)
-    
-    # Save bucket details to CSV
+
+    # ---------------------------------------------------------
+    # 1. VISUALIZATION (Always 1000 to prevent aliasing/combing)
+    # ---------------------------------------------------------
+    plot_bins = 1000
+    plt.hist(plot_vals, bins=plot_bins, color='skyblue', edgecolor='black', alpha=0.7, log=use_log)
+
+    # ---------------------------------------------------------
+    # 2. CSV EXPORT (Strictly using FD bins for accurate modeling)
+    # ---------------------------------------------------------
     try:
+        # Use passed in n_bins (FD from main loop) or calculate it
+        if n_bins is None:
+            fd_n_bins = freedman_diaconis_bins(plot_vals, int(plot_vals.min()), int(plot_vals.max()), len(plot_vals),
+                                               bins_max=2000)
+        else:
+            fd_n_bins = n_bins
+
+        # Re-calculate the actual bucket math quietly (no plotting)
+        counts, bin_edges = np.histogram(plot_vals, bins=fd_n_bins)
+
         bucket_data = []
         for i, count in enumerate(counts):
             bucket_data.append({
                 "bin_id": i,
                 "bin_start": bin_edges[i],
-                "bin_end": bin_edges[i+1],
+                "bin_end": bin_edges[i + 1],
                 "count": int(count)
             })
-        
+
         hist_csv_path = Path(output_path).parent / "histogram_buckets.csv"
         pd.DataFrame(bucket_data).to_csv(hist_csv_path, index=False)
-        print(f"Saved histogram bucket details to {hist_csv_path}")
+        print(f"Saved histogram bucket details to {hist_csv_path} (Using {fd_n_bins} FD Bins)")
     except Exception as e:
         print(f"Failed to save histogram buckets: {e}")
 
-    plt.title(f"Distribution: {dist_name} (FD Bins: {len(counts)})")
+    # Finalize Plot
+    plt.title(f"Distribution: {dist_name} (FD Bins in CSV: {fd_n_bins} | Visual Bins: {plot_bins})")
     plt.xlabel("Value")
     plt.ylabel("Frequency" + (" (Log Scale)" if use_log else ""))
     plt.grid(axis='y', alpha=0.3)
@@ -320,7 +326,6 @@ def plot_data_distribution(vals, dist_name, output_path, n_bins=None):
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, dpi=150)
     plt.close()
-
 def generate_boxplots(csv_path, output_path, title="Q-Error Distribution"):
     """
     Generates faceted boxplots for Q-Error distributions across multiple models and data distributions.
