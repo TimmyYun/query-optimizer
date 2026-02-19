@@ -74,7 +74,7 @@ def setup_out_dir(args, approach_name):
     return out_dir
 
 def load_data_and_metadata(rows, dist):
-    from datasets import DatasetManager
+    from data.datasets import DatasetManager
     dm = DatasetManager()
     ds_dir = dm.ensure_dataset_exists(rows, dist)
     

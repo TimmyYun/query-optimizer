@@ -223,90 +223,56 @@ class HybridEstimator:
                 self.mod_types[i] = 3
                 self.complex_models[i] = model
 
-    def _collect_cdf_training_rows(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator, bucket_indices: List[int] = None) -> Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]:
+    def _collect_cdf_training_rows(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator,
+                                   bucket_indices: List[int] = None) -> Dict[
+        int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]:
         ps = np.cumsum(freq)
         target_indices = bucket_indices if bucket_indices is not None else range(len(self.buckets))
         rows_data = {}
-        
+
         for i in target_indices:
             b = self.buckets[i]
-            rows_data[i] = ([], []) # Train, Val
+            rows_data[i] = ([], [])
             if b.count == 0: continue
-            
+
             width = b.hi - b.lo + 1
             b_lo_idx = b.lo - mn
-            base_cnt = ps[b_lo_idx - 1] if b_lo_idx > 0 else 0
+            b_hi_idx = b.hi - mn
 
-            # --- Sample Generation ---
-            # Training: Mixed Sampling (Uniform + Log-Uniform for Head)
-            n_train = max(points_per_bucket * 5, 1000)
-            
-            # 50% Uniform Random
-            n_unif = n_train // 2
+            # Extract local frequency for density-based sampling
+            local_freq = freq[b_lo_idx: b_hi_idx + 1]
+            local_probs = local_freq / (local_freq.sum() + 1e-9)
+
+            # 1. Density-Based Sampling (Focus on where data is)
+            n_dense = points_per_bucket * 2
+            xs_dense = rng.choice(np.arange(b.lo, b.hi + 1), size=n_dense, p=local_probs)
+
+            # 2. Uniform Sampling (Ensure coverage of empty areas)
+            n_unif = points_per_bucket
             xs_unif = rng.integers(b.lo, b.hi + 1, size=n_unif)
-            
-            # 50% Log-Uniform (to catch the head of Zipf)
-            n_log = n_train - n_unif
-            if b.hi > b.lo:
-                start_log = max(1, b.lo) if b.lo > 0 else 1
-                end_log = max(start_log + 1, b.hi)
-                log_space = np.geomspace(start_log, end_log, num=n_log).astype(int)
-                xs_log = np.clip(log_space, b.lo, b.hi)
-            else:
-                xs_log = np.array([b.lo] * n_log)
-                
-            xs_train = np.concatenate([xs_unif, xs_log])
-            
-            # Validation: Mixed Sampling (Uniform + Random Log-Use for Generalization)
-            n_val = max(points_per_bucket, 200)
-            n_val_unif = n_val // 2
-            xs_val_unif = rng.integers(b.lo, b.hi + 1, size=n_val_unif)
-            
-            # Add log-spaced validation points to test head fit
-            n_val_log = n_val - n_val_unif
-            if b.hi > b.lo:
-                start_log = max(1, b.lo) if b.lo > 0 else 1
-                end_log = max(start_log + 1, b.hi)
-                log_space_val = np.geomspace(start_log, end_log, num=n_val_log).astype(int)
-                # Jitter the log points slightly for validation to avoid testing on exact train points
-                jitter = rng.integers(-1, 2, size=len(log_space_val)) 
-                xs_val_log = np.clip(log_space_val + jitter, b.lo, b.hi)
-            else:
-                xs_val_log = np.array([b.lo] * n_val_log)
-                
-            xs_val = np.concatenate([xs_val_unif, xs_val_log])
 
-            # CRITICAL: Always include boundaries and near-boundary points in TRAINING
-            log_points = np.array([], dtype=int)
-            if b.hi > b.lo:
-                try:
-                    start_val = max(1, b.lo)
-                    if start_val < b.hi:
-                        log_points = np.unique(np.geomspace(start_val, b.hi, num=50, dtype=int))
-                except Exception:
-                    pass
-            
-            edge_points = np.concatenate([
-                np.arange(b.lo, min(b.hi, b.lo + 50) + 1), # First 50 points dense
-                log_points,                                 # Log spaced points
-                np.array([b.hi, max(b.lo, b.hi - 1), max(b.lo, b.hi - 2)]) # End points
-            ])
-            xs_train = np.concatenate([xs_train, edge_points])
-            xs_train = np.unique(xs_train)
+            # 3. Edge Points (Crucial for range queries)
+            xs_edges = np.array([b.lo, b.hi, b.lo + 1, b.hi - 1])
+
+            xs_train = np.unique(np.concatenate([xs_dense, xs_unif, xs_edges]))
             xs_train = np.sort(xs_train)
-            
-            # Helper to build rows
+
+            # Validation uses a clean uniform sample + density sample
+            xs_val = np.unique(np.concatenate([
+                rng.choice(np.arange(b.lo, b.hi + 1), size=points_per_bucket, p=local_probs),
+                rng.integers(b.lo, b.hi + 1, size=points_per_bucket)
+            ]))
+
             def build_rows(xs_arr):
+                base_cnt = ps[b_lo_idx - 1] if b_lo_idx > 0 else 0
                 res = []
                 for x in xs_arr:
                     x_idx = x - mn
-                    if x_idx < 0 or x_idx >= len(ps): continue
                     y_cdf = (ps[x_idx] - base_cnt) / b.count
-                    res.append(CDFTrainRow(x_norm=(x - b.lo) / width, y_cdf=y_cdf))
+                    res.append(CDFTrainRow(x_norm=(x - b.lo) / width, y_cdf=np.clip(y_cdf, 0.0, 1.0)))
                 return res
 
             rows_data[i] = (build_rows(xs_train), build_rows(xs_val))
-            
         return rows_data
 
     def _generate_bucket_queries(self, b: Bucket, n_queries: int, rng, freq: np.ndarray, mn: int) -> List[RangeQuery]:
