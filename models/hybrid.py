@@ -287,151 +287,139 @@ class HybridEstimator:
             queries.append(RangeQuery(lo, hi))
         return queries
 
-    def _eval_model_q_error(self, model, queries: List[RangeQuery], bucket: Bucket, 
-                           freq: np.ndarray, mn: int) -> float:
+    def _predict_local_cdf_vec(self, model, x_norm_arr: np.ndarray) -> np.ndarray:
+        """Vectorized version of _predict_local_cdf for batch evaluation."""
+        if model is None:
+            return np.clip(x_norm_arr, 0.0, 1.0)
+
+        if isinstance(model, tuple):
+            m_type = model[0]
+            if m_type == "linear":
+                return np.clip(x_norm_arr * model[1] + model[2], 0.0, 1.0)
+            elif m_type == "poly":
+                coefs, intercept = model[1], model[2]
+                # c1*x + c2*x^2 + intercept
+                return np.clip(intercept + coefs[0] * x_norm_arr + coefs[1] * (x_norm_arr ** 2), 0.0, 1.0)
+            elif m_type == "log_linear":
+                return np.clip(model[1] * np.log(x_norm_arr + 1e-7) + model[2], 0.0, 1.0)
+            elif m_type == "power":
+                return np.clip(model[1] * np.sqrt(x_norm_arr) + model[2], 0.0, 1.0)
+
+        # Fallback for complex models (MLP/Tree)
+        preds = model.predict(x_norm_arr.reshape(-1, 1)).flatten()
+        return np.clip(preds, 0.0, 1.0)
+
+    def _eval_model_q_error_vec(self, model, queries_lo, queries_hi, bucket, b_ps, b_lo, width):
         """
-        Evaluate median Q-Error for a model on a query set.
-        
-        Args:
-            model: Model to evaluate (tuple format or FourierModelWrapper)
-            queries: List of range queries
-            bucket: Bucket being evaluated
-            freq: Frequency array for ground truth
-            mn: Minimum value of dataset
-            
-        Returns:
-            Tuple[float, float]: (Median Q-Error, 95th Percentile Q-Error)
+        Vectorized evaluation of q-error for a candidate model.
+        b_ps: local prefix sum of frequencies for this bucket.
         """
-        q_errors = []
-        width = bucket.hi - bucket.lo + 1
-        
-        for q in queries:
-            # Ground truth from frequency array
-            idx_lo = q.low - mn
-            idx_hi = q.high - mn
-            act_count = np.sum(freq[idx_lo:idx_hi + 1])
-            
-            # Prediction from model
-            lo_norm = (q.low - bucket.lo) / width
-            hi_norm = (q.high - bucket.lo) / width
-            
-            val_hi = self._predict_local_cdf(model, hi_norm)
-            val_lo = self._predict_local_cdf(model, lo_norm)
-            pred_count = (val_hi - val_lo) * bucket.count
-            
-            # Q-Error (avoid division by zero)
-            act = max(1, act_count)
-            pred = max(1, pred_count)
-            q_err = max(act / pred, pred / act)
-            q_errors.append(q_err)
-        
-        if not q_errors:
-            return 1.0, 1.0
+        # 1. Ground Truth (O(1) via prefix sums)
+        idx_hi = queries_hi - b_lo
+        idx_lo = queries_lo - b_lo
+        # actual = ps[hi] - ps[lo-1]
+        act_counts = b_ps[idx_hi] - np.where(idx_lo > 0, b_ps[idx_lo - 1], 0)
+        act_counts = np.maximum(1.0, act_counts)
 
-        return np.median(q_errors), np.percentile(q_errors, 95)
+        # 2. Predictions
+        lo_norm = (queries_lo - bucket.lo) / width
+        hi_norm = (queries_hi - bucket.lo) / width
 
+        # Batch predict (you'll need to update _predict_local_cdf to handle arrays)
+        val_hi = self._predict_local_cdf_vec(model, hi_norm)
+        val_lo = self._predict_local_cdf_vec(model, lo_norm)
+        pred_counts = np.maximum(1.0, (val_hi - val_lo) * bucket.count)
 
-    def _train_adaptive_models(self, rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]], 
-                          freq: np.ndarray, mn: int, rng: np.random.Generator) -> Tuple[Dict[int, Any], float]:
+        # 3. Q-Error
+        q_errs = np.maximum(act_counts / pred_counts, pred_counts / act_counts)
+        return np.median(q_errs), np.percentile(q_errs, 95)
+
+    def _train_adaptive_models(self, rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
+                               freq: np.ndarray, mn: int, rng: np.random.Generator) -> Tuple[Dict[int, Any], float]:
         models = {}
         t0 = time.perf_counter()
-        
-        # LOWERED threshold: Forces the estimator to stop being lazy and picking "Uniform"
-        complex_model_threshold = 1.05 
-        
+
+        # Accuracy thresholds
+        EARLY_EXIT_THRESHOLD = 1.01  # If Q-error is < 1%, stop immediately
+        COMPLEX_MODEL_THRESHOLD = 1.05  # Only try MLP if error is > 5%
+
         for i, (train_rows, val_rows) in rows_data.items():
-            if not train_rows:
-                models[i] = None 
-                continue
-            
             bucket = self.buckets[i]
-            
+            if not train_rows or bucket.count == 0:
+                models[i] = None
+                continue
+
+            # Setup Training Data
             X_train = np.array([r.x_norm for r in train_rows]).reshape(-1, 1)
             y_train = np.array([r.y_cdf for r in train_rows])
-            
-            if val_rows:
-                X_val = np.array([r.x_norm for r in val_rows]).reshape(-1, 1)
-                y_val = np.array([r.y_cdf for r in val_rows])
-            else:
-                X_val, y_val = X_train, y_train
-            
-            # WEIGHTING: Force ML models to care about the tail of the bucket
             weights = 1.0 + 10.0 * (y_train ** 2)
-            
-            val_queries = self._generate_bucket_queries(bucket, n_queries=2000, rng=rng, freq=freq, mn=mn)
+
+            # Setup Vectorized Validation (Prefix Sums for O(1) ground truth)
+            b_lo_idx, b_hi_idx = bucket.lo - mn, bucket.hi - mn
+            b_ps = np.cumsum(freq[b_lo_idx: b_hi_idx + 1])
+            width = bucket.hi - bucket.lo + 1
+
+            val_queries = self._generate_bucket_queries(bucket, n_queries=500, rng=rng, freq=freq, mn=mn)
+            q_lo = np.array([q.low for q in val_queries])
+            q_hi = np.array([q.high for q in val_queries])
+
+            def check(mdl):
+                return self._eval_model_q_error_vec(mdl, q_lo, q_hi, bucket, b_ps, bucket.lo, width)
+
+            # 1. Identity (Uniform) - The fastest check
+            best_q, best_p95, best_model = check(None)
+            if best_q < EARLY_EXIT_THRESHOLD:
+                models[i] = best_model
+                continue
+
+            # 2. Try Linear & Power (Zipf-friendly)
             candidates = []
-
-            # 1. Identity (Uniform)
-            q_med_identity, q_p95_identity = self._eval_model_q_error(None, val_queries, bucket, freq, mn)
-            candidates.append((q_med_identity, q_p95_identity, None))
-
-            # 2. Linear Model (Added sample_weight)
             try:
-                mdl_linear = Ridge(alpha=1.0).fit(X_train, y_train, sample_weight=weights)
-                q_med_linear, q_p95_linear = self._eval_model_q_error(
-                    ("linear", mdl_linear.coef_[0], mdl_linear.intercept_), val_queries, bucket, freq, mn)
-                candidates.append((q_med_linear, q_p95_linear, ("linear", mdl_linear.coef_[0], mdl_linear.intercept_)))
-            except: pass
-            
-            # 3. Polynomial Model (Added sample_weight)
-            try:
-                poly_calc = PolynomialFeatures(degree=2, include_bias=False)
-                X_poly_train = poly_calc.fit_transform(X_train)
-                mdl_poly = Ridge(alpha=1.0).fit(X_poly_train, y_train, sample_weight=weights)
-                q_med_poly, q_p95_poly = self._eval_model_q_error(
-                    ("poly", mdl_poly.coef_, mdl_poly.intercept_), val_queries, bucket, freq, mn)
-                candidates.append((q_med_poly, q_p95_poly, ("poly", mdl_poly.coef_, mdl_poly.intercept_)))
-            except: pass
+                m_lin = Ridge(alpha=1.0).fit(X_train, y_train, sample_weight=weights)
+                lin_mdl = ("linear", m_lin.coef_[0], m_lin.intercept_)
+                q, p95 = check(lin_mdl)
+                candidates.append((q, p95, lin_mdl))
 
-            # 4. Log-Linear Model (Added sample_weight)
-            try:
-                X_log_train = np.log(np.clip(X_train, 0.0, 1.0) + 1e-7)
-                mdl_log = Ridge(alpha=1.0).fit(X_log_train, y_train, sample_weight=weights)
-                q_med_log, q_p95_log = self._eval_model_q_error(
-                    ("log_linear", mdl_log.coef_[0], mdl_log.intercept_), val_queries, bucket, freq, mn)
-                candidates.append((q_med_log, q_p95_log, ("log_linear", mdl_log.coef_[0], mdl_log.intercept_)))
-            except: pass
+                m_pow = Ridge(alpha=1.0).fit(np.sqrt(X_train), y_train, sample_weight=weights)
+                pow_mdl = ("power", m_pow.coef_[0], m_pow.intercept_)
+                q, p95 = check(pow_mdl)
+                candidates.append((q, p95, pow_mdl))
+            except:
+                pass
 
-            # 5. NEW: Power/Reciprocal Model (Matches Zipf Decay)
-            try:
-                X_power_train = np.sqrt(np.clip(X_train, 0.0, 1.0))
-                mdl_power = Ridge(alpha=1.0).fit(X_power_train, y_train, sample_weight=weights)
-                q_med_power, q_p95_power = self._eval_model_q_error(
-                    ("power", mdl_power.coef_[0], mdl_power.intercept_), val_queries, bucket, freq, mn)
-                candidates.append((q_med_power, q_p95_power, ("power", mdl_power.coef_[0], mdl_power.intercept_)))
-            except: pass
+            if candidates:
+                q, p95, mdl = min(candidates, key=lambda x: x[0])
+                if q < best_q:
+                    best_q, best_p95, best_model = q, p95, mdl
 
-            # 6. NEW: Decision Tree (Sub-bucket learned histogram)
+            if best_q < EARLY_EXIT_THRESHOLD:
+                models[i] = best_model
+                continue
+
+            # 3. Try Decision Tree (Good for Normal tails)
             try:
                 mdl_tree = DecisionTreeRegressor(max_depth=4).fit(X_train, y_train)
-                q_med_tree, q_p95_tree = self._eval_model_q_error(mdl_tree, val_queries, bucket, freq, mn)
-                candidates.append((q_med_tree, q_p95_tree, mdl_tree))
-            except: pass
+                q, p95 = check(mdl_tree)
+                if q < best_q:
+                    best_q, best_p95, best_model = q, p95, mdl_tree
+            except:
+                pass
 
-            # Pick best cheap model
-            best_cheap_q, best_cheap_p95, best_cheap_model = min(candidates, key=lambda x: x[0])
-            
-            final_model = best_cheap_model
-            
-            # Fallback to Fourier only if ALL models failed the 1.05 threshold
-            if best_cheap_q > complex_model_threshold:
+            # 4. Complex Fallback (Fourier MLP)
+            if best_q > COMPLEX_MODEL_THRESHOLD:
                 try:
-                    mapper = FourierFeatureMapper(num_bands=32, max_freq=20000.0)
+                    mapper = FourierFeatureMapper(num_bands=32, max_freq=1000.0)
                     X_f_train = mapper.transform(X_train)
-                    mdl_f_mlp = MLPRegressor(
-                        hidden_layer_sizes=(128, 64), activation='relu', solver='lbfgs', 
-                        max_iter=1000, random_state=42, alpha=0.001
-                    )
-                    mdl_f_mlp.fit(X_f_train, y_train)
+                    mdl_f_mlp = MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=500).fit(X_f_train, y_train)
                     mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
-                    
-                    q_med_fourier, q_p95_fourier = self._eval_model_q_error(mdl_fourier, val_queries, bucket, freq, mn)
-                    if q_med_fourier < best_cheap_q:
-                        final_model = mdl_fourier
-                except Exception as e: pass
+                    q, p95 = check(mdl_fourier)
+                    if q < best_q:
+                        best_model = mdl_fourier
+                except:
+                    pass
 
-            models[i] = final_model
-            
+            models[i] = best_model
+
         return models, time.perf_counter() - t0
 
     def _predict_local_cdf(self, model, x_norm) -> float:
