@@ -80,11 +80,8 @@ def main():
         "--target-dists",
         type=str,
         nargs="+",
-        default=["uniform", "zipf", "anti_zipf", "sparse"],
+        default=["uniform", "zipf", "anti_zipf"],
         help="Distributions to shift to",
-    )
-    parser.add_argument(
-        "--buckets", type=int, default=1000, help="Number of histogram buckets"
     )
     parser.add_argument(
         "--points", type=int, default=20, help="Points per bucket for training"
@@ -108,12 +105,15 @@ def main():
     print(
         f"\n{'=' * 60}\nPHASE 1: Initial Training on '{args.init_dist.upper()}'\n{'=' * 60}"
     )
-    init_mn, init_mx, init_N, init_freq, _, _, _, _ = load_dataset_meta(
+
+    # Extract init_k (FD Bins) from index 5
+    init_mn, init_mx, init_N, init_freq, _, init_k, _, _ = load_dataset_meta(
         base_path, args.rows, args.init_dist
     )
+    print(f"Using Freedman-Diaconis Bin Count: {init_k}")
 
-    # Build Initial Histogram and Train
-    init_hist = EquiWidthHistogram.build(init_mn, init_mx, args.buckets, init_freq)
+    # Build Initial Histogram and Train using init_k
+    init_hist = EquiWidthHistogram.build(init_mn, init_mx, init_k, init_freq)
     model_init = HybridEstimator(init_hist.buckets)
 
     t_train_init = model_init.train(init_freq, init_mn, args.points, rng)
@@ -149,14 +149,14 @@ def main():
         # ---------------------------------------------------------
         # Phase 2: Zero-Shot Degradation (Update Histogram, Keep ML)
         # ---------------------------------------------------------
-        # We rebuild the histogram to get new exact counts (cheap DB stats update)
-        tgt_hist = EquiWidthHistogram.build(tgt_mn, tgt_mx, args.buckets, tgt_freq)
+        # We MUST use init_k here so the new histogram boundaries exactly match the old ML models
+        tgt_hist = EquiWidthHistogram.build(tgt_mn, tgt_mx, init_k, tgt_freq)
 
         # We inject the OLD ML models into the NEW histogram
         model_shifted = HybridEstimator(
             tgt_hist.buckets, models=dict(model_init.models)
         )
-        model_shifted._bake_vectorized_data()  # Force it to recognize the new bucket counts
+        model_shifted._bake_vectorized_data()
 
         t0 = time.perf_counter()
         y_pred_shifted = model_shifted.predict_batch(q_tgt) / tgt_N
@@ -174,14 +174,13 @@ def main():
         bad_buckets = detect_drift(
             model_shifted, tgt_freq, tgt_mn, rng, threshold=args.drift_threshold
         )
-        percent_bad = (len(bad_buckets) / args.buckets) * 100
+        percent_bad = (len(bad_buckets) / init_k) * 100
         print(
-            f"Detected {len(bad_buckets)} / {args.buckets} buckets ({percent_bad:.1f}%) exceeding QErr > {args.drift_threshold}"
+            f"Detected {len(bad_buckets)} / {init_k} buckets ({percent_bad:.1f}%) exceeding QErr > {args.drift_threshold}"
         )
 
         if len(bad_buckets) > 0:
             print(f"Finetuning {len(bad_buckets)} buckets...")
-            # We pass the bad_buckets list to ONLY train those specific indices
             t_finetune = model_shifted.train(
                 tgt_freq, tgt_mn, args.points, rng, bucket_indices=bad_buckets
             )
