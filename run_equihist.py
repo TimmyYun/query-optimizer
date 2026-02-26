@@ -24,24 +24,20 @@ def run_logic(args, out_dir, metadata):
     queries, y_true = load_and_filter_workload(args.workload, mn, mx, freq)
     true_cardinalities = y_true * N
     
-    # Evaluate with Mini-Batch Updates
+    # Evaluate sequentially (No Batching)
     y_pred = []
     inf_time_total = 0.0
     update_time_total = 0.0
     
-    for i in range(0, len(queries), args.batch_size):
-        q_batch = queries[i : i + args.batch_size]
-        t_batch = true_cardinalities[i : i + args.batch_size]
-        
+    for q, truth in zip(queries, true_cardinalities):
         t0 = time.perf_counter()
-        batch_preds = eh_learner.predict_batch(q_batch)
+        pred_val = eh_learner.predict(q)
         inf_time_total += (time.perf_counter() - t0)
         
-        y_pred.extend(batch_preds / N)
+        y_pred.append(pred_val / N)
         
         t0 = time.perf_counter()
-        for q, truth, pred_val in zip(q_batch, t_batch, batch_preds):
-            eh_learner.update(q, float(truth), pred=float(pred_val))
+        eh_learner.update(q, float(truth), pred=float(pred_val))
         update_time_total += (time.perf_counter() - t0)
         
     y_pred = np.array(y_pred)
@@ -67,7 +63,6 @@ def run_logic(args, out_dir, metadata):
 def main():
     parser = get_common_parser("Run EquiHist Benchmark")
     parser.add_argument("--lr", type=float, default=0.5, help="Learning Rate")
-    parser.add_argument("--batch-size", type=int, default=100, help="Mini-batch size for updates")
     args = parser.parse_args()
     run_benchmark_suite(args, run_logic)
 
