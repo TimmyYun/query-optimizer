@@ -20,10 +20,12 @@ Key Responsibilities:
 4. Visualization: Plots workload distribution against dataset buckets.
 """
 
+
 class RangeQuery:
     """
     Represents a selection range query [low, high] (inclusive).
     """
+
     def __init__(self, low: int, high: int):
         self.low = low
         self.high = high
@@ -37,7 +39,10 @@ class RangeQuery:
         """Creates a RangeQuery instance from a dictionary."""
         return RangeQuery(int(d["low"]), int(d["high"]))
 
-def generate_workload(n: int, mn: int, mx: int, seed: int = 42, max_width: int = None, wide: bool = False) -> List[RangeQuery]:
+
+def generate_workload(
+    n: int, mn: int, mx: int, seed: int = 42, max_width: int = None, wide: bool = False
+) -> List[RangeQuery]:
     """
     Generates a list of random range queries.
 
@@ -52,27 +57,35 @@ def generate_workload(n: int, mn: int, mx: int, seed: int = 42, max_width: int =
     rng = np.random.default_rng(seed)
     queries = []
     domain_width = mx - mn
-    
+
     for _ in range(n):
         l = rng.integers(mn, mx)
-        
+
         if wide:
             # Generate a wide range: between 10% and 100% of the total domain
             w = rng.integers(int(domain_width * 0.1), domain_width)
         else:
             # Use max_width logic for narrow queries
-            limit_w = max_width if max_width is not None else max(10, domain_width // 20)
+            limit_w = (
+                max_width if max_width is not None else max(10, domain_width // 20)
+            )
             w = rng.integers(1, limit_w)
-            
+
         r = min(mx, l + w)
         queries.append(RangeQuery(l, r))
     return queries
 
-def plot_workload_distribution(queries: list, bucket_csv_path: Path, output_path: Path, title: str = "Workload Distribution"):
+
+def plot_workload_distribution(
+    queries: list,
+    bucket_csv_path: Path,
+    output_path: Path,
+    title: str = "Workload Distribution",
+):
     """
     Plots a histogram of query counts per dataset bucket.
     Only counts queries that are passed in (caller should filter for >0 selectivity).
-    
+
     Args:
         queries: List of objects with .low and .high attributes (or dicts).
         bucket_csv_path: Path to histogram_buckets.csv.
@@ -81,7 +94,7 @@ def plot_workload_distribution(queries: list, bucket_csv_path: Path, output_path
     """
     bucket_csv_path = Path(bucket_csv_path)
     output_path = Path(output_path)
-    
+
     if not bucket_csv_path.exists():
         print(f"Bucket CSV not found at {bucket_csv_path}. Skipping workload plot.")
         return
@@ -94,58 +107,65 @@ def plot_workload_distribution(queries: list, bucket_csv_path: Path, output_path
 
         # Prepare bin edges
         # Assuming contiguous bins from sorted start
-        starts = df_buckets['bin_start'].values
-        ends = df_buckets['bin_end'].values
-        
+        starts = df_buckets["bin_start"].values
+        ends = df_buckets["bin_end"].values
+
         # robust edges: use starts and the last end
         edges = np.concatenate([starts, [ends[-1]]])
-        
+
         # Vectorize queries
         target_queries = queries
         if not target_queries:
-             print("No queries to plot.")
-             return
-             
+            print("No queries to plot.")
+            return
+
         if isinstance(target_queries[0], dict):
-             ls = np.array([q['low'] for q in target_queries])
-             rs = np.array([q['high'] for q in target_queries])
+            ls = np.array([q["low"] for q in target_queries])
+            rs = np.array([q["high"] for q in target_queries])
         else:
-             ls = np.array([q.low for q in target_queries])
-             rs = np.array([q.high for q in target_queries])
+            ls = np.array([q.low for q in target_queries])
+            rs = np.array([q.high for q in target_queries])
 
         # Find start and end bucket indices for each query
-        idx_start = np.searchsorted(edges, ls, side='right') - 1
-        idx_end = np.searchsorted(edges, rs, side='right') - 1
-        
+        idx_start = np.searchsorted(edges, ls, side="right") - 1
+        idx_end = np.searchsorted(edges, rs, side="right") - 1
+
         # Clamp indices to valid buckets [0, len(buckets)-1]
         idx_start = np.clip(idx_start, 0, len(df_buckets) - 1)
         idx_end = np.clip(idx_end, 0, len(df_buckets) - 1)
-        
+
         # Use difference array to compute counts
         # counts[i] increments if query covers bucket i.
         diff = np.zeros(len(df_buckets) + 1, dtype=int)
         np.add.at(diff, idx_start, 1)
         np.add.at(diff, idx_end + 1, -1)
-        
-        counts = np.cumsum(diff)[:-1] # drop last logic element
-        
+
+        counts = np.cumsum(diff)[:-1]  # drop last logic element
+
         # Plot
         plt.figure(figsize=(12, 6))
-        
+
         # Use simple bar plot
         # x-axis is bucket index
         x = np.arange(len(counts))
-        plt.bar(x, counts, width=1.0, color='orange', edgecolor='black', alpha=0.7)
-        
+        plt.bar(x, counts, width=1.0, color="orange", edgecolor="black", alpha=0.7)
+
         plt.title(f"{title} (Total Queries: {len(target_queries)})")
         plt.xlabel("Bucket Index (FD Bins)")
         plt.ylabel("Workload Count (Queries Intersecting)")
-        plt.grid(axis='y', alpha=0.3)
-        
+        plt.grid(axis="y", alpha=0.3)
+
         # Add a text annotation for total bins
-        plt.text(0.98, 0.95, f"Bins: {len(counts)}", transform=plt.gca().transAxes, 
-                 ha='right', va='top', bbox=dict(facecolor='white', alpha=0.8))
-        
+        plt.text(
+            0.98,
+            0.95,
+            f"Bins: {len(counts)}",
+            transform=plt.gca().transAxes,
+            ha="right",
+            va="top",
+            bbox=dict(facecolor="white", alpha=0.8),
+        )
+
         plt.tight_layout()
         plt.savefig(output_path, dpi=150)
         plt.close()
@@ -154,6 +174,7 @@ def plot_workload_distribution(queries: list, bucket_csv_path: Path, output_path
     except Exception as e:
         print(f"Error plotting workload distribution: {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -171,6 +192,7 @@ def save_workload_csv(queries: List[RangeQuery], output_path: Path):
         writer.writerow(["low", "high"])
         for q in queries:
             writer.writerow([q.low, q.high])
+
 
 def load_workload_csv(input_path: Path) -> List[RangeQuery]:
     """
@@ -193,12 +215,22 @@ def load_workload_csv(input_path: Path) -> List[RangeQuery]:
 def main():
     parser = argparse.ArgumentParser(description="Generate workload queries.")
     parser.add_argument("--count", type=int, help="Single workload count.")
-    parser.add_argument("--counts", type=int, nargs='+', help="List of workload counts.")
-    parser.add_argument("--domain-max", type=int, default=1_000_000, help="Max domain value.")
-    parser.add_argument("--plot-buckets", type=str, help="Path to histogram_buckets.csv.")
+    parser.add_argument(
+        "--counts", type=int, nargs="+", help="List of workload counts."
+    )
+    parser.add_argument(
+        "--domain-max", type=int, default=1_000_000, help="Max domain value."
+    )
+    parser.add_argument(
+        "--plot-buckets", type=str, help="Path to histogram_buckets.csv."
+    )
     parser.add_argument("--rows", type=int, help="Dataset size for batch plotting.")
     # NEW FLAG ADDED HERE
-    parser.add_argument("--wide", action="store_true", help="Generate wide range queries (10-100%% of domain).")
+    parser.add_argument(
+        "--wide",
+        action="store_true",
+        help="Generate wide range queries (10-100%% of domain).",
+    )
 
     args = parser.parse_args()
 
@@ -211,10 +243,14 @@ def main():
         # 1. Manual single bucket plot if provided
         if args.plot_buckets:
             bucket_path = Path(args.plot_buckets)
-            dist_name = bucket_path.parent.name if bucket_path.parent.name != "." else "dist"
+            dist_name = (
+                bucket_path.parent.name if bucket_path.parent.name != "." else "dist"
+            )
             plot_path = workload_dir_for_count / f"{dist_name}_hist.png"
             print(f"Generating plot to {plot_path} using manual buckets...")
-            plot_workload_distribution(queries, bucket_path, plot_path, title=f"Workload {c} on {dist_name}")
+            plot_workload_distribution(
+                queries, bucket_path, plot_path, title=f"Workload {c} on {dist_name}"
+            )
 
         # 2. Batch plotting for all distributions if --rows is provided
         if args.rows:
@@ -230,11 +266,14 @@ def main():
                 if bucket_csv.exists():
                     plot_path = workload_dir_for_count / f"{dist}_hist.png"
                     print(f"Generating batch plot for {dist} to {plot_path}...")
-                    plot_workload_distribution(queries, bucket_csv, plot_path, title=f"Workload {c} on {dist}")
+                    plot_workload_distribution(
+                        queries, bucket_csv, plot_path, title=f"Workload {c} on {dist}"
+                    )
 
     # Consolidate counts
     counts_to_gen = args.counts if args.counts else []
-    if args.count: counts_to_gen.append(args.count)
+    if args.count:
+        counts_to_gen.append(args.count)
 
     if not counts_to_gen:
         parser.print_help()
@@ -258,7 +297,9 @@ def main():
         save_workload_csv(queries, out_path)
         print(f"Saved to {out_path}")
 
-        handle_plotting(queries, c, count_dir) # Use the helper from your original script
+        handle_plotting(
+            queries, c, count_dir
+        )  # Use the helper from your original script
 
 
 if __name__ == "__main__":

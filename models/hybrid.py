@@ -48,10 +48,14 @@ class HybridEstimator:
     Implements a Hybrid Selectivity Estimator combining histograms and ML models.
     """
 
-    def __init__(self, buckets: List[Bucket], models: Dict[int, Any] = None,
-                 identity_threshold: float = 1e-4,
-                 mlp_penalty: float = 1.5,
-                 fourier_penalty: float = 1.5):
+    def __init__(
+        self,
+        buckets: List[Bucket],
+        models: Dict[int, Any] = None,
+        identity_threshold: float = 1e-4,
+        mlp_penalty: float = 1.5,
+        fourier_penalty: float = 1.5,
+    ):
         self.buckets = buckets
         self.models = models if models is not None else {}
         self.last_train_time = 0.0
@@ -61,7 +65,9 @@ class HybridEstimator:
         self.b_hi = None
         self.b_count = None
         self.b_width = None
-        self.mod_types = None  # 0: id, 1: lin, 2: poly, 3: complex, 4: log, 5: pow, 6: poly3, 7: iso
+        self.mod_types = (
+            None  # 0: id, 1: lin, 2: poly, 3: complex, 4: log, 5: pow, 6: poly3, 7: iso
+        )
         self.lin_params = None
         self.poly_params = None
         self.poly3_params = None
@@ -69,14 +75,25 @@ class HybridEstimator:
         self.power_params = None
         self.complex_models = {}
 
-    def train(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator,
-              bucket_indices: List[int] = None) -> float:
+    def train(
+        self,
+        freq: np.ndarray,
+        mn: int,
+        points_per_bucket: int,
+        rng: np.random.Generator,
+        bucket_indices: List[int] = None,
+    ) -> float:
         t_start = time.perf_counter()
 
-        if freq is None: print("[CRITICAL ERROR] freq is None")
+        if freq is None:
+            print("[CRITICAL ERROR] freq is None")
 
-        rows_data = self._collect_cdf_training_rows(freq, mn, points_per_bucket, rng, bucket_indices)
-        new_models, t_train_models = self._train_adaptive_models(rows_data, freq, mn, rng)
+        rows_data = self._collect_cdf_training_rows(
+            freq, mn, points_per_bucket, rng, bucket_indices
+        )
+        new_models, t_train_models = self._train_adaptive_models(
+            rows_data, freq, mn, rng
+        )
 
         if len(new_models) == 0:
             print("[CRITICAL WARNING] No models trained!")
@@ -92,7 +109,8 @@ class HybridEstimator:
     def predict(self, q: RangeQuery) -> float:
         total = 0.0
         for i in range(len(self.buckets)):
-            if self.buckets[i].count == 0: continue
+            if self.buckets[i].count == 0:
+                continue
             total += self._get_bucket_overlap_count(i, q.low, q.high)
         return total
 
@@ -107,12 +125,14 @@ class HybridEstimator:
 
         for i in range(len(self.buckets)):
             b_count = self.b_count[i]
-            if b_count == 0: continue
+            if b_count == 0:
+                continue
 
             b_lo, b_hi, b_width = self.b_lo[i], self.b_hi[i], self.b_width[i]
 
             mask = (q_hi >= b_lo) & (q_lo <= b_hi)
-            if not np.any(mask): continue
+            if not np.any(mask):
+                continue
 
             lo_clamped = np.maximum(q_lo[mask], b_lo)
             hi_clamped = np.minimum(q_hi[mask], b_hi)
@@ -131,7 +151,7 @@ class HybridEstimator:
                     return np.clip(xa * p[0] + p[1], 0.0, 1.0)
                 elif m_type == 2:
                     p = self.poly_params[i]
-                    return np.clip(p[2] + p[0] * xa + p[1] * (xa ** 2), 0.0, 1.0)
+                    return np.clip(p[2] + p[0] * xa + p[1] * (xa**2), 0.0, 1.0)
                 elif m_type == 4:
                     p = self.log_params[i]
                     return np.clip(p[0] * np.log(xa + 1e-7) + p[1], 0.0, 1.0)
@@ -140,11 +160,17 @@ class HybridEstimator:
                     return np.clip(p[0] * np.sqrt(xa) + p[1], 0.0, 1.0)
                 elif m_type == 6:
                     p = self.poly3_params[i]
-                    return np.clip(p[3] + p[0] * xa + p[1] * (xa ** 2) + p[2] * (xa ** 3), 0.0, 1.0)
+                    return np.clip(
+                        p[3] + p[0] * xa + p[1] * (xa**2) + p[2] * (xa**3), 0.0, 1.0
+                    )
                 elif m_type == 7:
                     return np.clip(self.complex_models[i].predict(xa), 0.0, 1.0)
                 else:
-                    return np.clip(self.complex_models[i].predict(xa.reshape(-1, 1)).flatten(), 0.0, 1.0)
+                    return np.clip(
+                        self.complex_models[i].predict(xa.reshape(-1, 1)).flatten(),
+                        0.0,
+                        1.0,
+                    )
 
             cdf_hi = get_cdf_vec(x_hi)
             lo_mask = x_lo_prev >= 0
@@ -156,7 +182,9 @@ class HybridEstimator:
             uniform_pred = ((hi_clamped - lo_clamped + 1) / b_width) * b_count
 
             # Using 5% uniform minimum to bound huge errors on clusters
-            total_counts[mask] += np.where(model_pred < 1e-3, uniform_pred * 0.05, model_pred)
+            total_counts[mask] += np.where(
+                model_pred < 1e-3, uniform_pred * 0.05, model_pred
+            )
 
         return total_counts
 
@@ -182,20 +210,25 @@ class HybridEstimator:
             elif isinstance(model, tuple):
                 m_t = model[0]
                 if m_t == "linear":
-                    self.mod_types[i] = 1;
+                    self.mod_types[i] = 1
                     self.lin_params[i] = [model[1], model[2]]
                 elif m_t == "poly":
-                    self.mod_types[i] = 2;
+                    self.mod_types[i] = 2
                     self.poly_params[i] = [model[1][0], model[1][1], model[2]]
                 elif m_t == "log_linear":
-                    self.mod_types[i] = 4;
+                    self.mod_types[i] = 4
                     self.log_params[i] = [model[1], model[2]]
                 elif m_t == "power":
-                    self.mod_types[i] = 5;
+                    self.mod_types[i] = 5
                     self.power_params[i] = [model[1], model[2]]
                 elif m_t == "poly3":
-                    self.mod_types[i] = 6;
-                    self.poly3_params[i] = [model[1][0], model[1][1], model[1][2], model[2]]
+                    self.mod_types[i] = 6
+                    self.poly3_params[i] = [
+                        model[1][0],
+                        model[1][1],
+                        model[1][2],
+                        model[2],
+                    ]
             else:
                 if type(model).__name__ == "IsotonicRegression":
                     self.mod_types[i] = 7
@@ -203,28 +236,38 @@ class HybridEstimator:
                     self.mod_types[i] = 3
                 self.complex_models[i] = model
 
-    def _collect_cdf_training_rows(self, freq: np.ndarray, mn: int, points_per_bucket: int, rng: np.random.Generator,
-                                   bucket_indices: List[int] = None) -> Dict[
-        int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]:
+    def _collect_cdf_training_rows(
+        self,
+        freq: np.ndarray,
+        mn: int,
+        points_per_bucket: int,
+        rng: np.random.Generator,
+        bucket_indices: List[int] = None,
+    ) -> Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]:
         ps = np.cumsum(freq)
-        target_indices = bucket_indices if bucket_indices is not None else range(len(self.buckets))
+        target_indices = (
+            bucket_indices if bucket_indices is not None else range(len(self.buckets))
+        )
         rows_data = {}
 
         for i in target_indices:
             b = self.buckets[i]
             rows_data[i] = ([], [])
-            if b.count == 0: continue
+            if b.count == 0:
+                continue
 
             width = b.hi - b.lo + 1
             b_lo_idx = b.lo - mn
             b_hi_idx = b.hi - mn
 
             # 1. Density-Based Sampling
-            local_freq = freq[b_lo_idx: b_hi_idx + 1]
+            local_freq = freq[b_lo_idx : b_hi_idx + 1]
             local_probs = local_freq / (local_freq.sum() + 1e-9)
 
             n_dense = points_per_bucket * 2
-            xs_dense = rng.choice(np.arange(b.lo, b.hi + 1), size=n_dense, p=local_probs)
+            xs_dense = rng.choice(
+                np.arange(b.lo, b.hi + 1), size=n_dense, p=local_probs
+            )
 
             # 2. Uniform + Edge Sampling
             n_unif = points_per_bucket
@@ -235,10 +278,18 @@ class HybridEstimator:
             xs_train = np.sort(xs_train)
 
             # Validation Sample
-            xs_val = np.unique(np.concatenate([
-                rng.choice(np.arange(b.lo, b.hi + 1), size=points_per_bucket, p=local_probs),
-                rng.integers(b.lo, b.hi + 1, size=points_per_bucket)
-            ]))
+            xs_val = np.unique(
+                np.concatenate(
+                    [
+                        rng.choice(
+                            np.arange(b.lo, b.hi + 1),
+                            size=points_per_bucket,
+                            p=local_probs,
+                        ),
+                        rng.integers(b.lo, b.hi + 1, size=points_per_bucket),
+                    ]
+                )
+            )
 
             def build_rows(xs_arr):
                 base_cnt = ps[b_lo_idx - 1] if b_lo_idx > 0 else 0
@@ -246,13 +297,19 @@ class HybridEstimator:
                 for x in xs_arr:
                     x_idx = x - mn
                     y_cdf = (ps[x_idx] - base_cnt) / b.count
-                    res.append(CDFTrainRow(x_norm=(x - b.lo) / width, y_cdf=np.clip(y_cdf, 0.0, 1.0)))
+                    res.append(
+                        CDFTrainRow(
+                            x_norm=(x - b.lo) / width, y_cdf=np.clip(y_cdf, 0.0, 1.0)
+                        )
+                    )
                 return res
 
             rows_data[i] = (build_rows(xs_train), build_rows(xs_val))
         return rows_data
 
-    def _generate_bucket_queries(self, b: Bucket, n_queries: int, rng, freq: np.ndarray, mn: int) -> List[RangeQuery]:
+    def _generate_bucket_queries(
+        self, b: Bucket, n_queries: int, rng, freq: np.ndarray, mn: int
+    ) -> List[RangeQuery]:
         queries = []
         for _ in range(n_queries):
             lo = rng.integers(b.lo, b.hi + 1)
@@ -270,14 +327,23 @@ class HybridEstimator:
                 return np.clip(x_norm_arr * model[1] + model[2], 0.0, 1.0)
             elif m_type == "poly":
                 coefs, inter = model[1], model[2]
-                return np.clip(inter + coefs[0] * x_norm_arr + coefs[1] * (x_norm_arr ** 2), 0.0, 1.0)
+                return np.clip(
+                    inter + coefs[0] * x_norm_arr + coefs[1] * (x_norm_arr**2), 0.0, 1.0
+                )
             elif m_type == "poly3":
                 coefs, inter = model[1], model[2]
                 return np.clip(
-                    inter + coefs[0] * x_norm_arr + coefs[1] * (x_norm_arr ** 2) + coefs[2] * (x_norm_arr ** 3), 0.0,
-                    1.0)
+                    inter
+                    + coefs[0] * x_norm_arr
+                    + coefs[1] * (x_norm_arr**2)
+                    + coefs[2] * (x_norm_arr**3),
+                    0.0,
+                    1.0,
+                )
             elif m_type == "log_linear":
-                return np.clip(model[1] * np.log(x_norm_arr + 1e-7) + model[2], 0.0, 1.0)
+                return np.clip(
+                    model[1] * np.log(x_norm_arr + 1e-7) + model[2], 0.0, 1.0
+                )
             elif m_type == "power":
                 return np.clip(model[1] * np.sqrt(x_norm_arr) + model[2], 0.0, 1.0)
 
@@ -288,7 +354,9 @@ class HybridEstimator:
 
         return np.clip(preds, 0.0, 1.0)
 
-    def _eval_model_q_error_vec(self, model, queries_lo, queries_hi, bucket, b_ps, b_lo, width):
+    def _eval_model_q_error_vec(
+        self, model, queries_lo, queries_hi, bucket, b_ps, b_lo, width
+    ):
         idx_hi = queries_hi - b_lo
         idx_lo = queries_lo - b_lo
         act_counts = b_ps[idx_hi] - np.where(idx_lo > 0, b_ps[idx_lo - 1], 0)
@@ -304,8 +372,13 @@ class HybridEstimator:
         q_errs = np.maximum(act_counts / pred_counts, pred_counts / act_counts)
         return np.median(q_errs), np.percentile(q_errs, 95)
 
-    def _train_adaptive_models(self, rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
-                               freq: np.ndarray, mn: int, rng: np.random.Generator) -> Tuple[Dict[int, Any], float]:
+    def _train_adaptive_models(
+        self,
+        rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
+        freq: np.ndarray,
+        mn: int,
+        rng: np.random.Generator,
+    ) -> Tuple[Dict[int, Any], float]:
         models = {}
         t0 = time.perf_counter()
 
@@ -322,27 +395,35 @@ class HybridEstimator:
             y_train = np.array([r.y_cdf for r in train_rows])
 
             b_lo_idx, b_hi_idx = bucket.lo - mn, bucket.hi - mn
-            b_ps = np.cumsum(freq[b_lo_idx: b_hi_idx + 1])
+            b_ps = np.cumsum(freq[b_lo_idx : b_hi_idx + 1])
             width = bucket.hi - bucket.lo + 1
 
             # Map weights to exactly where the training mass is
-            local_freq = freq[b_lo_idx: b_hi_idx + 1]
+            local_freq = freq[b_lo_idx : b_hi_idx + 1]
             local_probs = local_freq / (local_freq.sum() + 1e-9)
-            x_indices = np.clip(np.array([r.x_norm * width for r in train_rows]).astype(int), 0, width - 1)
+            x_indices = np.clip(
+                np.array([r.x_norm * width for r in train_rows]).astype(int),
+                0,
+                width - 1,
+            )
             weights = 1.0 + (local_probs[x_indices] / (local_probs.max() + 1e-9)) * 5.0
 
-            val_queries = self._generate_bucket_queries(bucket, n_queries=500, rng=rng, freq=freq, mn=mn)
+            val_queries = self._generate_bucket_queries(
+                bucket, n_queries=500, rng=rng, freq=freq, mn=mn
+            )
             q_lo = np.array([q.low for q in val_queries])
             q_hi = np.array([q.high for q in val_queries])
 
             def check(mdl):
-                q_m, q_95 = self._eval_model_q_error_vec(mdl, q_lo, q_hi, bucket, b_ps, bucket.lo, width)
+                q_m, q_95 = self._eval_model_q_error_vec(
+                    mdl, q_lo, q_hi, bucket, b_ps, bucket.lo, width
+                )
                 return q_m, q_95, mdl
 
             # 1. Identity (Uniform)
             best_q, best_p95, best_model = check(None)
             if best_q < EARLY_EXIT_THRESHOLD:
-                models[i] = best_model;
+                models[i] = best_model
                 continue
 
             candidates = []
@@ -353,7 +434,9 @@ class HybridEstimator:
                 q, p95, _ = check(lin_mdl)
                 candidates.append((q, p95, lin_mdl))
 
-                m_pow = Ridge(alpha=1.0).fit(np.sqrt(X_train), y_train, sample_weight=weights)
+                m_pow = Ridge(alpha=1.0).fit(
+                    np.sqrt(X_train), y_train, sample_weight=weights
+                )
                 pow_mdl = ("power", m_pow.coef_[0], m_pow.intercept_)
                 q, p95, _ = check(pow_mdl)
                 candidates.append((q, p95, pow_mdl))
@@ -366,29 +449,35 @@ class HybridEstimator:
                     best_q, best_p95, best_model = q, p95, mdl
 
             if best_q < EARLY_EXIT_THRESHOLD:
-                models[i] = best_model;
+                models[i] = best_model
                 continue
 
             # 3. Try Cubic Poly (S-Curve)
             try:
                 poly_calc = PolynomialFeatures(degree=3, include_bias=False)
                 X_poly_train = poly_calc.fit_transform(X_train)
-                mdl_poly = Ridge(alpha=0.1).fit(X_poly_train, y_train, sample_weight=weights)
+                mdl_poly = Ridge(alpha=0.1).fit(
+                    X_poly_train, y_train, sample_weight=weights
+                )
                 poly_mdl = ("poly3", mdl_poly.coef_, mdl_poly.intercept_)
                 q, p95, _ = check(poly_mdl)
-                if q < best_q: best_q, best_p95, best_model = q, p95, poly_mdl
+                if q < best_q:
+                    best_q, best_p95, best_model = q, p95, poly_mdl
             except:
                 pass
 
             if best_q < EARLY_EXIT_THRESHOLD:
-                models[i] = best_model;
+                models[i] = best_model
                 continue
 
             # 4. Try Isotonic Regression (Guaranteed Monotonicity for Sparse/Normal)
             try:
-                iso_mdl = IsotonicRegression(out_of_bounds='clip').fit(X_train.flatten(), y_train)
+                iso_mdl = IsotonicRegression(out_of_bounds="clip").fit(
+                    X_train.flatten(), y_train
+                )
                 q, p95, _ = check(iso_mdl)
-                if q < best_q: best_q, best_p95, best_model = q, p95, iso_mdl
+                if q < best_q:
+                    best_q, best_p95, best_model = q, p95, iso_mdl
             except:
                 pass
 
@@ -397,10 +486,13 @@ class HybridEstimator:
                 try:
                     mapper = FourierFeatureMapper(num_bands=32, max_freq=1000.0)
                     X_f_train = mapper.transform(X_train)
-                    mdl_f_mlp = MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=500).fit(X_f_train, y_train)
+                    mdl_f_mlp = MLPRegressor(
+                        hidden_layer_sizes=(64, 32), max_iter=500
+                    ).fit(X_f_train, y_train)
                     mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
                     q, p95, _ = check(mdl_fourier)
-                    if q < best_q: best_model = mdl_fourier
+                    if q < best_q:
+                        best_model = mdl_fourier
                 except:
                     pass
 
@@ -415,11 +507,16 @@ class HybridEstimator:
         b = self.buckets[b_idx]
         lo = max(q_lo, b.lo)
         hi = min(q_hi, b.hi)
-        if lo > hi: return 0.0
+        if lo > hi:
+            return 0.0
         w = b.hi - b.lo + 1
         cdf_hi = self._predict_local_cdf(self.models.get(b_idx), (hi - b.lo) / w)
         prev = lo - 1
-        cdf_lo = 0.0 if prev < b.lo else self._predict_local_cdf(self.models.get(b_idx), (prev - b.lo) / w)
+        cdf_lo = (
+            0.0
+            if prev < b.lo
+            else self._predict_local_cdf(self.models.get(b_idx), (prev - b.lo) / w)
+        )
 
         model_pred = max(0.0, cdf_hi - cdf_lo) * b.count
 
@@ -433,7 +530,9 @@ class HybridEstimator:
         """Prints a summary of which models were chosen for each bucket."""
         output = []
         output.append("\n" + "=" * 80)
-        output.append(f"{'Idx':<4} | {'Range':<25} | {'Count':<10} | {'Model Type':<15} | {'Stats'}")
+        output.append(
+            f"{'Idx':<4} | {'Range':<25} | {'Count':<10} | {'Model Type':<15} | {'Stats'}"
+        )
         output.append("-" * 80)
 
         for i, b in enumerate(self.buckets):
@@ -459,7 +558,9 @@ class HybridEstimator:
                 info = "Complex Neural Net"
 
             range_str = f"[{b.lo}, {b.hi}]"
-            output.append(f"{i:<4} | {range_str:<25} | {b.count:<10} | {m_name:<15} | {info}")
+            output.append(
+                f"{i:<4} | {range_str:<25} | {b.count:<10} | {m_name:<15} | {info}"
+            )
         output.append("=" * 80 + "\n")
 
         report_text = "\n".join(output)
