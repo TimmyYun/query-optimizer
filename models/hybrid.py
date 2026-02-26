@@ -432,15 +432,15 @@ class HybridEstimator:
     def report_models(self, file_path=None):
         """Prints a summary of which models were chosen for each bucket."""
         output = []
-        output.append("\n" + "="*80)
+        output.append("\n" + "=" * 80)
         output.append(f"{'Idx':<4} | {'Range':<25} | {'Count':<10} | {'Model Type':<15} | {'Stats'}")
         output.append("-" * 80)
-        
+
         for i, b in enumerate(self.buckets):
             model = self.models.get(i)
             m_name = "Uniform"
             info = ""
-            
+
             if model is None:
                 m_name = "Uniform"
             elif isinstance(model, tuple):
@@ -457,14 +457,14 @@ class HybridEstimator:
             else:
                 m_name = "Fourier MLP"
                 info = "Complex Neural Net"
-                
+
             range_str = f"[{b.lo}, {b.hi}]"
             output.append(f"{i:<4} | {range_str:<25} | {b.count:<10} | {m_name:<15} | {info}")
-        output.append("="*80 + "\n")
-        
+        output.append("=" * 80 + "\n")
+
         report_text = "\n".join(output)
         print(report_text)
-        
+
         if file_path:
             with open(file_path, "w") as f:
                 f.write(report_text)
