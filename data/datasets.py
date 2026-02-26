@@ -626,7 +626,7 @@ def main():
     parser.add_argument("--dist", type=str, help="Distribution to generate (uniform, normal, zipf, etc).")
     parser.add_argument("--all", action="store_true", help="Generate all default datasets (1M, 10M, 60M).")
     parser.add_argument("--simple", action="store_true", help="Use traditional simple approach without micro-distributions.")
-    
+
     args = parser.parse_args()
     
     dm = DatasetManager()
