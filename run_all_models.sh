@@ -1,9 +1,8 @@
 #!/bin/bash
 
-# Multi-Model Execution Script (Strict 60M/1M/All)
+# Multi-Model Execution Script
 # ===============================================
 # Runs EquiWidth, EquiHist, and Hybrid models sequentially.
-# Always uses: 60M rows, 1M workload, all distributions.
 
 # Usage: ./run_all_models.sh <experiment_name> [extra_args...]
 # Example: ./run_all_models.sh baseline_study
@@ -16,11 +15,21 @@ fi
 EXP_NAME=$1
 shift
 
+DATASET=""
+WORKLOAD=""
 BUCKETS=""
 EXTRA_ARGS=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --dataset)
+            DATASET="$2"
+            shift 2
+            ;;
+        --workload)
+            WORKLOAD="$2"
+            shift 2
+            ;;
         --buckets)
             BUCKETS="$2"
             shift 2
@@ -32,14 +41,16 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Hardcoded Multi-Model Defaults
-ROWS=60000000
-DIST="all"
-EVAL_N=1000000
+if [ -z "$DATASET" ] || [ -z "$WORKLOAD" ]; then
+    echo "Error: --dataset and --workload arguments are required."
+    echo "Example: $0 $EXP_NAME --dataset data/generated/60000000/uniform --workload workload/100000.csv"
+    exit 1
+fi
 
 echo "===================================================="
 echo "Experiment: $EXP_NAME"
-echo "Target: $ROWS rows, $EVAL_N workload, $DIST distributions"
+echo "Dataset: $DATASET"
+echo "Workload: $WORKLOAD"
 if [ ! -z "$EXTRA_ARGS" ]; then
     echo "Extra Params: $EXTRA_ARGS"
 fi
@@ -52,9 +63,8 @@ run_model() {
     
     local cmd="poetry run python \"$script\" \
         --experiment-name \"$EXP_NAME\" \
-        --rows \"$ROWS\" \
-        --dist \"$DIST\" \
-        --eval-n \"$EVAL_N\""
+        --dataset \"$DATASET\" \
+        --workload \"$WORKLOAD\""
     
     if [ ! -z "$BUCKETS" ]; then
         cmd="$cmd --buckets $BUCKETS"

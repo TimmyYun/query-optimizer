@@ -9,9 +9,8 @@ from workload import load_workload_csv
 
 def get_common_parser(description):
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--dist", type=str, default="all", help="Data distribution (e.g., uniform, zipf, or 'all')")
-    parser.add_argument("--rows", type=int, default=60000000, help="Number of rows in the dataset")
-    parser.add_argument("--eval-n", type=str, default="1000000", help="Workload name/size to evaluate")
+    parser.add_argument("--dataset", type=str, required=True, help="Path to the dataset directory containing meta.pkl")
+    parser.add_argument("--workload", type=str, required=True, help="Path to the workload CSV file or directory")
     parser.add_argument("--out-dir", type=str, default="results", help="Base directory for results")
     parser.add_argument("--experiment-name", type=str, default=None, help="Experiment ID or name")
     parser.add_argument("--buckets", type=int, default=None, help="Force a specific number of buckets (overrides FD binning)")
@@ -32,36 +31,43 @@ def run_benchmark_suite(args, approach_fn):
         args.experiment_name = str(next_id)
         print(f"Assigning Experiment ID: {args.experiment_name}")
 
-    if args.dist == "all":
-        distributions = ["uniform", "normal", "zipf", "sparse_cluster", "anti_zipf"]
+    dataset_path = Path(args.dataset)
+    workload_path = Path(args.workload)
+    
+    # Determine if dataset_path is a single dataset or a collection of distributions
+    if (dataset_path / "meta.pkl").exists():
+        dsets = [dataset_path]
     else:
-        distributions = [args.dist]
+        dsets = sorted([d for d in dataset_path.iterdir() if d.is_dir() and (d / "meta.pkl").exists()])
         
-    for dist in distributions:
-        print(f"\n>>> Running for Distribution: {dist} <<<")
-        current_args = copy.deepcopy(args)
-        current_args.dist = dist
+    if not dsets:
+        print(f"No valid datasets (with meta.pkl) found in {dataset_path}")
+        return
+
+    for dset in dsets:
+        if dataset_path != dset:
+            ds_out_name = f"{dataset_path.name}/{dset.name}"
+        else:
+            ds_out_name = dset.name
+            
+        print(f"\n>>> Running for Dataset: {ds_out_name}, Workload: {workload_path.name} <<<")
         
-        # Setup output directory for this distribution
-        out_dir = setup_out_dir(current_args, approach_fn.__name__)
+        # Setup output directory
+        out_dir = setup_out_dir(args, ds_out_name, workload_path.stem)
         
         # Load Data
         try:
-            metadata = load_data_and_metadata(current_args.rows, dist)
-            approach_fn(current_args, out_dir, metadata)
+            metadata = load_data_and_metadata(dset)
+            approach_fn(args, out_dir, metadata)
         except Exception as e:
-            print(f"Failed to run for {dist}: {e}")
+            print(f"Failed to run for dataset {dset}: {e}")
             import traceback
             traceback.print_exc()
-            
-    # Auto-aggregate results if multiple distributions were run
-    if args.dist == "all" or len(distributions) > 1:
-        print("\n>>> Aggregating All Results <<<")
-        # Go up two levels to find the experiment root: results/{exp_id}/{rows}/{dist}
-        # Actually setup_out_dir already set args.experiment_name
-        aggregate_summaries(args.out_dir)
 
-def setup_out_dir(args, approach_name):
+    # Aggregate summaries at the end
+    aggregate_summaries(args.out_dir)
+
+def setup_out_dir(args, dataset_name, workload_name):
     base_dir = Path(args.out_dir)
     if args.experiment_name is None:
         base_dir.mkdir(parents=True, exist_ok=True)
@@ -69,26 +75,27 @@ def setup_out_dir(args, approach_name):
         next_id = max(existing_ids) + 1 if existing_ids else 1
         args.experiment_name = str(next_id)
     
-    out_dir = base_dir / args.experiment_name / str(args.rows) / args.dist
+    out_dir = base_dir / args.experiment_name / dataset_name / workload_name
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
 
-def load_data_and_metadata(rows, dist):
-    from data.datasets import DatasetManager
-    dm = DatasetManager()
-    ds_dir = dm.ensure_dataset_exists(rows, dist)
+def load_data_and_metadata(dataset_path):
+    ds_dir = Path(dataset_path)
+    if not ds_dir.exists() or not (ds_dir / "meta.pkl").exists():
+        raise FileNotFoundError(f"Dataset meta.pkl not found at {ds_dir}")
     
     with open(ds_dir / "meta.pkl", "rb") as f:
         meta = pickle.load(f)
     # mn, mx, N, freq, sample, n_bins, skew, kurt
     return meta
 
-def load_and_filter_workload(wl_name, mn, mx, freq):
-    workload_path = Path(f"workload/{wl_name}/workload.csv")
+def load_and_filter_workload(workload_path, mn, mx, freq):
+    workload_path = Path(workload_path)
+    if workload_path.is_dir():
+        workload_path = workload_path / "workload.csv"
+        
     if not workload_path.exists():
-        workload_path = Path(f"workload/{wl_name}.csv")
-        if not workload_path.exists():
-            raise FileNotFoundError(f"Workload {wl_name} not found.")
+        raise FileNotFoundError(f"Workload not found at {workload_path}.")
             
     all_queries = load_workload_csv(workload_path)
     ps = np.cumsum(freq)
@@ -162,41 +169,47 @@ def aggregate_summaries(results_dir="results"):
         print(f"Processing Experiment {experiment_id}...")
         all_data = []
 
-        for row_dir in experiment_dir.iterdir():
-            if not row_dir.is_dir() or not row_dir.name.isdigit():
+        for ds_parent_dir in experiment_dir.iterdir():
+            if not ds_parent_dir.is_dir():
                 continue
-            rows = int(row_dir.name)
-            for dist_dir in row_dir.iterdir():
-                if not dist_dir.is_dir(): continue
-                dist_name = dist_dir.name
                 
-                # Look for all summary_*.json files
-                for summary_json_path in dist_dir.glob("summary_*.json"):
-                    try:
-                        with open(summary_json_path, "r") as f:
-                            summary = json.load(f)
-                            model = summary["model"]
-                            wl_name = summary["wl_name"]
-                            metrics = summary["metrics"]
-                            
-                            all_data.append({
-                                "Distribution": dist_name,
-                                "Rows": rows,
-                                "Workload": wl_name,
-                                "Model": model,
-                                "Avg Q-Error": metrics.get("avg_q_error"),
-                                "25% Q-Error": metrics.get("p25_q_error"),
-                                "75% Q-Error": metrics.get("p75_q_error"),
-                                "95% Q-Error": metrics.get("p95_q_error"),
-                                "Median Q-Error": metrics.get("median_q_error"),
-                                "Training Time (s)": metrics.get("train_time") or metrics.get("build_time") or metrics.get("total_train_time"),
-                                "Inference Time (s)": metrics.get("infer_time")
-                            })
-                    except Exception as e:
-                        print(f"  Warning: Could not read {summary_json_path}: {e}")
+            # Handle nested dataset dirs like "60000000_hard/uniform"
+            # we can use glob to find all summary_*.json files within the experiment dir
+            for summary_json_path in experiment_dir.rglob("summary_*.json"):
+                try:
+                    with open(summary_json_path, "r") as f:
+                        summary = json.load(f)
+                        model = summary["model"]
+                        wl_name = summary["wl_name"]
+                        metrics = summary["metrics"]
+                        
+                        # Extract dataset name based on directory structure: exp_dir/ds_name/wl_name/summary...
+                        # Rel path from exp_dir
+                        rel_path = summary_json_path.relative_to(experiment_dir)
+                        # Dataset name could be multiple parts, e.g. "60000000_hard/uniform".
+                        # It's everything before the last two parts (workload_name / summary.json)
+                        if len(rel_path.parts) >= 3:
+                            dataset_name = "/".join(rel_path.parts[:-2])
+                        else:
+                            dataset_name = rel_path.parts[0]
+                        
+                        all_data.append({
+                            "Dataset": dataset_name,
+                            "Workload": wl_name,
+                            "Model": model,
+                            "Avg Q-Error": metrics.get("avg_q_error"),
+                            "25% Q-Error": metrics.get("p25_q_error"),
+                            "75% Q-Error": metrics.get("p75_q_error"),
+                            "95% Q-Error": metrics.get("p95_q_error"),
+                            "Median Q-Error": metrics.get("median_q_error"),
+                            "Training Time (s)": metrics.get("train_time") or metrics.get("build_time") or metrics.get("total_train_time"),
+                            "Inference Time (s)": metrics.get("infer_time")
+                        })
+                except Exception as e:
+                    print(f"  Warning: Could not read {summary_json_path}: {e}")
 
         if not all_data: continue
-        df_summary = pd.DataFrame(all_data).sort_values(by=["Rows", "Distribution", "Workload", "Model"])
+        df_summary = pd.DataFrame(all_data).sort_values(by=["Dataset", "Workload", "Model"])
         output_path = experiment_dir / "summary.csv"
         df_summary.to_csv(output_path, index=False)
         print(f"  Saved aggregated summary to {output_path}")

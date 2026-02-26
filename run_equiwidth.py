@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import time
 import numpy as np
+from pathlib import Path
 from models import EquiWidthHistogram, summarize
 from benchmark_utils import (
     get_common_parser, run_benchmark_suite,
@@ -17,7 +18,7 @@ def run_logic(args, out_dir, metadata):
     build_time = time.perf_counter() - t0
     
     # Load Workload
-    queries, y_true = load_and_filter_workload(args.eval_n, mn, mx, freq)
+    queries, y_true = load_and_filter_workload(args.workload, mn, mx, freq)
     
     # Evaluate
     t0 = time.perf_counter()
@@ -39,7 +40,7 @@ def run_logic(args, out_dir, metadata):
     
     print(f"Equi-Width: Median QErr={metrics['median_q_error']:.4f}, Build={build_time:.4f}s, Inf={infer_time:.4f}s")
     
-    save_benchmark_results(out_dir, args.eval_n, "EquiWidth", queries, y_true, y_pred, metrics)
+    save_benchmark_results(out_dir, Path(args.workload).stem, "EquiWidth", queries, y_true, y_pred, metrics)
 
 def main():
     parser = get_common_parser("Run EquiWidth Baseline Benchmark")

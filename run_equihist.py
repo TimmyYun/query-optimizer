@@ -19,7 +19,7 @@ def run_logic(args, out_dir, metadata):
     eh_learner = EquiHistLearner(ew_hist.buckets, learning_rate=args.lr)
     
     # Load Workload
-    queries, y_true = load_and_filter_workload(args.eval_n, mn, mx, freq)
+    queries, y_true = load_and_filter_workload(args.workload, mn, mx, freq)
     true_cardinalities = y_true * N
     
     # Evaluate with Mini-Batch Updates
@@ -60,7 +60,7 @@ def run_logic(args, out_dir, metadata):
     
     print(f"EquiHist: Median QErr={metrics['median_q_error']:.4f}, Train={metrics['total_train_time']:.4f}s, Inf={inf_time_total:.4f}s")
     
-    save_benchmark_results(out_dir, args.eval_n, "EquiHist", queries, y_true, y_pred, metrics)
+    save_benchmark_results(out_dir, Path(args.workload).stem, "EquiHist", queries, y_true, y_pred, metrics)
 
 def main():
     parser = get_common_parser("Run EquiHist Benchmark")
