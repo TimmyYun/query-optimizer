@@ -105,102 +105,60 @@ class HybridEstimator:
         q_hi = np.array([q.high for q in queries], dtype=np.float64)
         total_counts = np.zeros(n_queries)
 
-        # Pre-calculate cumulative counts for "Middle Bucket" O(1) summation
-        # b_count_cumsum[i] is the sum of counts for buckets [0...i-1]
-        b_count_cumsum = np.concatenate([[0], np.cumsum(self.b_count)])
+        for i in range(len(self.buckets)):
+            b_count = self.b_count[i]
+            if b_count == 0: continue
 
-        for q_idx in range(n_queries):
-            ql, qh = q_lo[q_idx], q_hi[q_idx]
+            b_lo, b_hi, b_width = self.b_lo[i], self.b_hi[i], self.b_width[i]
 
-            # 1. Identify which buckets the query overlaps with
-            # Find the index of the first bucket where b_hi >= ql
-            idx_start = np.searchsorted(self.b_hi, ql)
-            # Find the index of the last bucket where b_lo <= qh
-            idx_end = np.searchsorted(self.b_lo, qh, side='right') - 1
+            mask = (q_hi >= b_lo) & (q_lo <= b_hi)
+            if not np.any(mask): continue
 
-            if idx_start > idx_end:
-                continue
+            lo_clamped = np.maximum(q_lo[mask], b_lo)
+            hi_clamped = np.minimum(q_hi[mask], b_hi)
 
-            # Case A: Range is contained within a single bucket
-            if idx_start == idx_end:
-                total_counts[q_idx] = self._get_bucket_partial_count(idx_start, ql, qh)
+            x_hi = np.clip((hi_clamped - b_lo) / b_width, 0.0, 1.0)
+            x_lo_prev = (lo_clamped - 1 - b_lo) / b_width
 
-            # Case B: Range spans multiple buckets
-            else:
-                # 1. Left Edge Bucket (Partial)
-                count_left = self._get_bucket_partial_count(idx_start, ql, self.b_hi[idx_start])
+            m_type = self.mod_types[i]
 
-                # 2. Right Edge Bucket (Partial)
-                count_right = self._get_bucket_partial_count(idx_end, self.b_lo[idx_end], qh)
-
-                # 3. Middle Buckets (Full - Exact Sum)
-                # These are buckets from idx_start + 1 to idx_end - 1
-                if idx_end > idx_start + 1:
-                    count_middle = b_count_cumsum[idx_end] - b_count_cumsum[idx_start + 1]
+            def get_cdf_vec(x_arr):
+                xa = np.clip(x_arr, 0.0, 1.0)
+                if m_type == 0:
+                    return xa
+                elif m_type == 1:
+                    p = self.lin_params[i]
+                    return np.clip(xa * p[0] + p[1], 0.0, 1.0)
+                elif m_type == 2:
+                    p = self.poly_params[i]
+                    return np.clip(p[2] + p[0] * xa + p[1] * (xa ** 2), 0.0, 1.0)
+                elif m_type == 4:
+                    p = self.log_params[i]
+                    return np.clip(p[0] * np.log(xa + 1e-7) + p[1], 0.0, 1.0)
+                elif m_type == 5:
+                    p = self.power_params[i]
+                    return np.clip(p[0] * np.sqrt(xa) + p[1], 0.0, 1.0)
+                elif m_type == 6:
+                    p = self.poly3_params[i]
+                    return np.clip(p[3] + p[0] * xa + p[1] * (xa ** 2) + p[2] * (xa ** 3), 0.0, 1.0)
+                elif m_type == 7:
+                    return np.clip(self.complex_models[i].predict(xa), 0.0, 1.0)
                 else:
-                    count_middle = 0.0
+                    return np.clip(self.complex_models[i].predict(xa.reshape(-1, 1)).flatten(), 0.0, 1.0)
 
-                total_counts[q_idx] = count_left + count_middle + count_right
+            cdf_hi = get_cdf_vec(x_hi)
+            lo_mask = x_lo_prev >= 0
+            cdf_lo = np.zeros_like(cdf_hi)
+            if np.any(lo_mask):
+                cdf_lo[lo_mask] = get_cdf_vec(x_lo_prev[lo_mask])
+
+            model_pred = np.maximum(0.0, cdf_hi - cdf_lo) * b_count
+            uniform_pred = ((hi_clamped - lo_clamped + 1) / b_width) * b_count
+
+            # Using 5% uniform minimum to bound huge errors on clusters
+            total_counts[mask] += np.where(model_pred < 1e-3, uniform_pred * 0.05, model_pred)
 
         return total_counts
-
-    def _get_bucket_partial_count(self, b_idx: int, ql: float, qh: float) -> float:
-        """Calculates count for a partial overlap using the ML model."""
-        b_lo = self.b_lo[b_idx]
-        b_hi = self.b_hi[b_idx]
-        b_width = self.b_width[b_idx]
-        b_count = self.b_count[b_idx]
-
-        if b_count <= 0: return 0.0
-
-        # Normalize boundaries
-        # x_hi: clamped high point
-        # x_lo_prev: point just before the low (to subtract from CDF)
-        x_hi = np.clip((qh - b_lo) / b_width, 0.0, 1.0)
-        x_lo_prev = (ql - 1 - b_lo) / b_width
-
-        # Get CDF values (Vectorized call for just 1 or 2 points)
-        points = [x_hi]
-        if x_lo_prev >= 0:
-            points.append(x_lo_prev)
-
-        cdf_vals = self._get_cdf_for_bucket_vec(b_idx, np.array(points))
-
-        cdf_hi = cdf_vals[0]
-        cdf_lo = cdf_vals[1] if len(cdf_vals) > 1 else 0.0
-
-        model_pred = max(0.0, cdf_hi - cdf_lo) * b_count
-
-        # Safety fallback: 5% of uniform if model predicts near-zero on existing data
-        uniform_pred = ((qh - ql + 1) / b_width) * b_count
-        return max(model_pred, uniform_pred * 0.05)
-
-    def _get_cdf_for_bucket_vec(self, b_idx: int, x_arr: np.ndarray) -> np.ndarray:
-        """Internal helper to apply the specific model of a bucket."""
-        m_type = self.mod_types[b_idx]
-        xa = np.clip(x_arr, 0.0, 1.0)
-
-        if m_type == 0:  # Identity/Uniform
-            return xa
-        elif m_type == 1:  # Linear
-            p = self.lin_params[b_idx]
-            return np.clip(xa * p[0] + p[1], 0.0, 1.0)
-        elif m_type == 2:  # Poly2
-            p = self.poly_params[b_idx]
-            return np.clip(p[2] + p[0] * xa + p[1] * (xa ** 2), 0.0, 1.0)
-        elif m_type == 4:  # Log
-            p = self.log_params[b_idx]
-            return np.clip(p[0] * np.log(xa + 1e-7) + p[1], 0.0, 1.0)
-        elif m_type == 5:  # Power
-            p = self.power_params[b_idx]
-            return np.clip(p[0] * np.sqrt(xa) + p[1], 0.0, 1.0)
-        elif m_type == 6:  # Poly3
-            p = self.poly3_params[b_idx]
-            return np.clip(p[3] + p[0] * xa + p[1] * (xa ** 2) + p[2] * (xa ** 3), 0.0, 1.0)
-        elif m_type == 7:  # Isotonic
-            return np.clip(self.complex_models[b_idx].predict(xa), 0.0, 1.0)
-        else:  # MLP / Complex
-            return np.clip(self.complex_models[b_idx].predict(xa.reshape(-1, 1)).flatten(), 0.0, 1.0)
 
     def _bake_vectorized_data(self):
         n = len(self.buckets)
