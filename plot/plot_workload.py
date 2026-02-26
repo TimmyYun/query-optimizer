@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
 
-WORKLOAD_FILE = Path("workload/1000000/workload.csv")
-OUTPUT_DIR = Path("workload/1000000/plots")
+WORKLOAD_FILE = Path("workload/1000000/wide/workload.csv")
+OUTPUT_DIR = Path("workload/1000000/wide/plots")
 DOMAIN_MAX = 1000000
 
 def plot_workload_analysis():

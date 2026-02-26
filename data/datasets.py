@@ -3,11 +3,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import json
-import shutil
 import pickle
 from pathlib import Path
-from typing import Tuple, List
-from models import Bucket
+from typing import Tuple
 
 """
 Datasets Module
@@ -34,11 +32,12 @@ def clamp_int(x, lo, hi):
     return int(min(max(int(round(x)), lo), hi))
 
 
-def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, shift: int = 0) -> np.ndarray:
+def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, shift: int = 0, use_micro_dist: bool = True) -> np.ndarray:
     """
     Generates an array of integer values according to a specified distribution.
-    Uses 'True Fractal' generation: The micro-distribution inside each 1000-width
-    bucket perfectly matches the shape of the global macro-distribution.
+    By default, uses 'True Fractal' generation where the micro-distribution inside each
+    1000-width bucket perfectly matches the shape of the global macro-distribution.
+    If use_micro_dist is False, uses a usual simple generation approach.
     """
     mid = 0.5 * (lo + hi) + shift
     span = max(1, hi - lo)
@@ -47,41 +46,54 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
     bucket_size = 1000
 
     if dist == "uniform":
-        # Macro: Flat line across all buckets
-        macro_bins = rng.integers(0, span // bucket_size, size=n)
-        # Micro: Flat line inside the 1000-width bucket
-        micro_noise = rng.integers(0, bucket_size, size=n)
-        v = lo + shift + (macro_bins * bucket_size) + micro_noise
+        if use_micro_dist:
+            # Macro: Flat line across all buckets
+            macro_bins = rng.integers(0, span // bucket_size, size=n)
+            # Micro: Flat line inside the 1000-width bucket
+            micro_noise = rng.integers(0, bucket_size, size=n)
+            v = lo + shift + (macro_bins * bucket_size) + micro_noise
+        else:
+            v = rng.integers(lo + shift, hi + shift + 1, size=n)
 
     elif dist == "normal":
-        # Macro: Global bell curve
-        num_chunks = span // bucket_size
-        global_norm = rng.normal(loc=num_chunks / 2.0, scale=num_chunks / 6.0, size=n)
-        macro_bins = np.clip(np.round(global_norm), 0, num_chunks - 1).astype(np.int64)
+        if use_micro_dist:
+            # Macro: Global bell curve
+            num_chunks = span // bucket_size
+            global_norm = rng.normal(loc=num_chunks / 2.0, scale=num_chunks / 6.0, size=n)
+            macro_bins = np.clip(np.round(global_norm), 0, num_chunks - 1).astype(np.int64)
 
-        # Micro: A perfect mini bell-curve centered exactly in the middle of the bucket (500)
-        micro_noise = rng.normal(loc=bucket_size / 2.0, scale=bucket_size / 6.0, size=n)
-        micro_noise = np.clip(np.round(micro_noise), 0, bucket_size - 1)
+            # Micro: A perfect mini bell-curve centered exactly in the middle of the bucket (500)
+            micro_noise = rng.normal(loc=bucket_size / 2.0, scale=bucket_size / 6.0, size=n)
+            micro_noise = np.clip(np.round(micro_noise), 0, bucket_size - 1)
 
-        v = lo + shift + (macro_bins * bucket_size) + micro_noise
+            v = lo + shift + (macro_bins * bucket_size) + micro_noise
+        else:
+            v_float = rng.normal(loc=mid, scale=span / 6.0, size=n)
+            v = np.clip(np.round(v_float), lo + shift, hi + shift)
 
     elif dist == "zipf":
-        # Macro: Global Zipfian cliff/tail
         ndv_target = min(300_000, span)
-        macro_ranks = np.arange(1, ndv_target + 1)
-        macro_probs = 1.0 / (macro_ranks ** 1.0)
-        macro_probs /= macro_probs.sum()
-        chosen_macro_indices = rng.choice(ndv_target, size=n, p=macro_probs)
-        macro_bins = chosen_macro_indices // bucket_size
+        if use_micro_dist:
+            # Macro: Global Zipfian cliff/tail
+            macro_ranks = np.arange(1, ndv_target + 1)
+            macro_probs = 1.0 / (macro_ranks ** 1.0)
+            macro_probs /= macro_probs.sum()
+            chosen_macro_indices = rng.choice(ndv_target, size=n, p=macro_probs)
+            macro_bins = chosen_macro_indices // bucket_size
 
-        # Micro: A mini Zipf cliff inside EVERY bucket
-        # We use a standard skew (1.5) so it looks like a clean Zipf curve inside the bucket
-        micro_ranks = np.arange(1, bucket_size + 1)
-        micro_probs = 1.0 / (micro_ranks ** 1.5)
-        micro_probs /= micro_probs.sum()
-        micro_noise = rng.choice(bucket_size, size=n, p=micro_probs)
+            # Micro: A mini Zipf cliff inside EVERY bucket
+            # We use a standard skew (1.5) so it looks like a clean Zipf curve inside the bucket
+            micro_ranks = np.arange(1, bucket_size + 1)
+            micro_probs = 1.0 / (micro_ranks ** 1.5)
+            micro_probs /= micro_probs.sum()
+            micro_noise = rng.choice(bucket_size, size=n, p=micro_probs)
 
-        v = lo + shift + (macro_bins * bucket_size) + micro_noise
+            v = lo + shift + (macro_bins * bucket_size) + micro_noise
+        else:
+            ranks = np.arange(1, ndv_target + 1)
+            probs = 1.0 / (ranks ** 1.5)
+            probs /= probs.sum()
+            v = lo + shift + rng.choice(ndv_target, size=n, p=probs)
 
     elif dist == "sparse_cluster":
         # Create 50 dense clusters
@@ -515,7 +527,7 @@ class DatasetManager:
             raise FileNotFoundError(f"Dataset {dist} ({rows} rows) not found at {ds_dir}. Please run datasets.py first.")
         return ds_dir
 
-    def prepare_dataset(self, rows: int, dist: str, force_regeneration: bool = False):
+    def prepare_dataset(self, rows: int, dist: str, force_regeneration: bool = False, use_micro_dist: bool = True):
         """
         Orchestrates the creation of a dataset.
         
@@ -550,7 +562,7 @@ class DatasetManager:
             elif dist.lower() == "census":
                 vals = load_census_age(Path("data/census/USCensus1990.data.txt.csv"))
             else:
-                vals = gen_values(rng, dist, rows, 0, DOMAIN_MAX)
+                vals = gen_values(rng, dist, rows, 0, DOMAIN_MAX, use_micro_dist=use_micro_dist)
             
             save_csv_column(vals, data_path)
             
@@ -583,10 +595,7 @@ class DatasetManager:
                 
             # Plot distribution
             plot_data_distribution(vals, dist, ds_dir / "hist.png", n_bins=k)
-
-            # NEW: Plot micro-distribution (Micro)
-            if dist.lower() in ["uniform", "normal", "zipf"]:
-                plot_micro_distribution(vals, dist, ds_dir / "hist_micro.png")
+            plot_micro_distribution(vals, dist, ds_dir / "hist_micro.png")
 
         print(f"Dataset ready at {ds_dir}")
         return ds_dir
@@ -608,6 +617,7 @@ def main():
     parser.add_argument("--rows", type=int, nargs='+', help="List of row counts to generate (e.g. 10000 1000000).")
     parser.add_argument("--dist", type=str, help="Distribution to generate (uniform, normal, zipf, etc).")
     parser.add_argument("--all", action="store_true", help="Generate all default datasets (1M, 10M, 60M).")
+    parser.add_argument("--simple", action="store_true", help="Use traditional simple approach without micro-distributions.")
     
     args = parser.parse_args()
     
@@ -640,7 +650,7 @@ def main():
             start = time.time()
             try:
                 # 1. Generate Data
-                ds_dir = dm.prepare_dataset(rows, dist)
+                ds_dir = dm.prepare_dataset(rows, dist, use_micro_dist=not args.simple)
                 
             except Exception as e:
                 print(f"Failed to generate {rows} / {dist}: {e}")

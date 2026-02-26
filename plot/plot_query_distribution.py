@@ -5,8 +5,9 @@ import numpy as np
 from pathlib import Path
 import os
 
-DATA_DIR = Path("data/generated/60000000")
-WORKLOAD_FILE = Path("workload/1000000/workload.csv")
+WORKLOAD_TYPE = "wide"
+DATA_DIR = Path("data/generated/60000000_simple")
+WORKLOAD_FILE = Path(f"workload/1000000/{WORKLOAD_TYPE}/workload.csv")
 
 def plot_query_distribution(dist_name):
     print(f"[{dist_name}] Starting processing...")
@@ -101,7 +102,7 @@ def plot_query_distribution(dist_name):
     # Add text for valid query count
     plt.figtext(0.02, 0.02, f"Total Valid Queries: {valid_count}", fontsize=10)
     
-    output_path = DATA_DIR / dist_name / f"query_distribution_{dist_name}.png"
+    output_path = DATA_DIR / dist_name / f"{WORKLOAD_TYPE}_query_distribution_{dist_name}.png"
     plt.savefig(output_path, dpi=100)
     plt.close()
     print(f"[{dist_name}] Saved plot to {output_path}")
