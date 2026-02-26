@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import time
+from pathlib import Path
+
 import numpy as np
 from models import EquiWidthHistogram, EquiHistLearner, summarize
 from benchmark_utils import (
