@@ -1,0 +1,9 @@
+{
+    "model": "Finetuned_sparse_cluster",
+    "wl_name": "workload",
+    "metrics": {
+        "median_q_error": 1.096885477460243,
+        "p95_q_error": 4.353736704609473,
+        "train_time": 0.11712404100035201
+    }
+}

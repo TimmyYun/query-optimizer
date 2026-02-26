@@ -1,0 +1,9 @@
+{
+    "model": "Finetuned_anti_zipf",
+    "wl_name": "workload",
+    "metrics": {
+        "median_q_error": 1.004307459506693,
+        "p95_q_error": 1.0311552479746084,
+        "train_time": 2.7561599999989994
+    }
+}

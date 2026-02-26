@@ -3,14 +3,15 @@ import time
 import pickle
 import argparse
 import numpy as np
+import pandas as pd
 from pathlib import Path
 from models import EquiWidthHistogram, HybridEstimator, summarize
 from benchmark_utils import load_and_filter_workload, save_benchmark_results
 
 
-def load_dataset_meta(base_path: Path, rows: int, dist: str):
+def load_dataset_meta(dataset_dir: str, dist: str):
     """Loads the meta.pkl containing dataset statistics and frequency arrays."""
-    meta_path = base_path / "generated" / str(rows) / dist / "meta.pkl"
+    meta_path = Path(dataset_dir) / dist / "meta.pkl"
     if not meta_path.exists():
         raise FileNotFoundError(
             f"Metadata not found: {meta_path}. Run datasets.py first."
@@ -35,7 +36,6 @@ def detect_drift(
         if b.count == 0:
             continue
 
-        # Generate validation queries for this specific bucket using the NEW data distribution
         val_queries = hybrid_est._generate_bucket_queries(
             b, 200, rng, target_freq, target_mn
         )
@@ -49,7 +49,6 @@ def detect_drift(
         b_ps = np.cumsum(target_freq[b_lo_idx : b_hi_idx + 1])
         width = b.hi - b.lo + 1
 
-        # Evaluate the OLD model on the NEW data
         q_m, _ = hybrid_est._eval_model_q_error_vec(
             hybrid_est.models.get(i), q_lo, q_hi, b, b_ps, b.lo, width
         )
@@ -65,10 +64,16 @@ def main():
         description="Run Hybrid Model Data Shift Benchmark"
     )
     parser.add_argument(
-        "--data-dir", type=str, default="data", help="Base data directory"
+        "--dataset",
+        type=str,
+        required=True,
+        help="Base path to dataset directories (e.g., data/generated/60000000_hard)",
     )
     parser.add_argument(
-        "--rows", type=int, default=10000000, help="Row count of datasets to use"
+        "--workload",
+        type=str,
+        required=True,
+        help="Direct path to the workload.csv file",
     )
     parser.add_argument(
         "--init-dist",
@@ -94,10 +99,12 @@ def main():
     )
     args = parser.parse_args()
 
-    base_path = Path(args.data_dir)
     out_dir = Path("results/shift_scenario")
     out_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(42)
+
+    # Initialize a list to hold our summary table rows
+    summary_records = []
 
     # ==========================================
     # Phase 1: Initial Training
@@ -106,26 +113,25 @@ def main():
         f"\n{'=' * 60}\nPHASE 1: Initial Training on '{args.init_dist.upper()}'\n{'=' * 60}"
     )
 
-    # Extract init_k (FD Bins) from index 5
     init_mn, init_mx, init_N, init_freq, _, init_k, _, _ = load_dataset_meta(
-        base_path, args.rows, args.init_dist
+        args.dataset, args.init_dist
     )
     print(f"Using Freedman-Diaconis Bin Count: {init_k}")
 
-    # Build Initial Histogram and Train using init_k
     init_hist = EquiWidthHistogram.build(init_mn, init_mx, init_k, init_freq)
     model_init = HybridEstimator(init_hist.buckets)
 
     t_train_init = model_init.train(init_freq, init_mn, args.points, rng)
     print(f"Initial Training Time: {t_train_init:.4f}s")
 
-    # Evaluate Initial Model
-    wl_init_path = base_path / "workloads" / f"queries_{args.init_dist}_{args.rows}.csv"
     q_init, y_true_init = load_and_filter_workload(
-        str(wl_init_path), init_mn, init_mx, init_freq
+        args.workload, init_mn, init_mx, init_freq
     )
 
+    t0 = time.perf_counter()
     y_pred_init = model_init.predict_batch(q_init) / init_N
+    inf_time_init = time.perf_counter() - t0
+
     m_init = summarize(y_true_init, y_pred_init, f"Init_{args.init_dist}")
     print(
         f"Initial Performance: Median QErr = {m_init['QErr_median']:.4f}, p95 QErr = {m_init['QErr_p95']:.4f}"
@@ -139,20 +145,18 @@ def main():
             f"\n{'=' * 60}\nSHIFT SCENARIO: {args.init_dist} -> {target_dist}\n{'=' * 60}"
         )
         tgt_mn, tgt_mx, tgt_N, tgt_freq, _, _, _, _ = load_dataset_meta(
-            base_path, args.rows, target_dist
+            args.dataset, target_dist
         )
-        wl_tgt_path = base_path / "workloads" / f"queries_{target_dist}_{args.rows}.csv"
+
         q_tgt, y_true_tgt = load_and_filter_workload(
-            str(wl_tgt_path), tgt_mn, tgt_mx, tgt_freq
+            args.workload, tgt_mn, tgt_mx, tgt_freq
         )
 
         # ---------------------------------------------------------
-        # Phase 2: Zero-Shot Degradation (Update Histogram, Keep ML)
+        # Phase 2: Zero-Shot Degradation
         # ---------------------------------------------------------
-        # We MUST use init_k here so the new histogram boundaries exactly match the old ML models
         tgt_hist = EquiWidthHistogram.build(tgt_mn, tgt_mx, init_k, tgt_freq)
 
-        # We inject the OLD ML models into the NEW histogram
         model_shifted = HybridEstimator(
             tgt_hist.buckets, models=dict(model_init.models)
         )
@@ -191,7 +195,6 @@ def main():
             print("No finetuning required!")
             t_finetune = 0.0
 
-        # Evaluate Post-Finetune
         t0 = time.perf_counter()
         y_pred_finetuned = model_shifted.predict_batch(q_tgt) / tgt_N
         inf_time_finetuned = time.perf_counter() - t0
@@ -201,10 +204,44 @@ def main():
             f"[After Finetune]  Median QErr: {m_finetune['QErr_median']:.4f} | p95 QErr: {m_finetune['QErr_p95']:.4f}"
         )
 
-        # Save results for charting
+        # Append exhaustive unrounded data to summary table
+        summary_records.append(
+            {
+                "Dataset Count": init_N,
+                "Workload Count": len(q_tgt),
+                "Init Dist": args.init_dist,
+                "Shift Dist": target_dist,
+                # Init Metrics
+                "Init Train Time (s)": t_train_init,
+                "Init Infer Time (s)": inf_time_init,
+                "Init Avg QErr": m_init["QErr_avg"],
+                "Init 25% QErr": m_init["QErr_p25"],
+                "Init Median QErr": m_init["QErr_median"],
+                "Init 75% QErr": m_init["QErr_p75"],
+                "Init 95% QErr": m_init["QErr_p95"],
+                # Shift Metrics
+                "Shift Infer Time (s)": inf_time_shifted,
+                "Shift Avg QErr": m_shifted["QErr_avg"],
+                "Shift 25% QErr": m_shifted["QErr_p25"],
+                "Shift Median QErr": m_shifted["QErr_median"],
+                "Shift 75% QErr": m_shifted["QErr_p75"],
+                "Shift 95% QErr": m_shifted["QErr_p95"],
+                # Finetune Metrics
+                "FT Train Time (s)": t_finetune,
+                "FT Infer Time (s)": inf_time_finetuned,
+                "FT Avg QErr": m_finetune["QErr_avg"],
+                "FT 25% QErr": m_finetune["QErr_p25"],
+                "FT Median QErr": m_finetune["QErr_median"],
+                "FT 75% QErr": m_finetune["QErr_p75"],
+                "FT 95% QErr": m_finetune["QErr_p95"],
+            }
+        )
+
+        # Save individual iteration results for charting
+        workload_name = Path(args.workload).stem
         save_benchmark_results(
             out_dir,
-            f"queries_{target_dist}_{args.rows}",
+            workload_name,
             f"Shift_{args.init_dist}_to_{target_dist}",
             q_tgt,
             y_true_tgt,
@@ -216,7 +253,7 @@ def main():
         )
         save_benchmark_results(
             out_dir,
-            f"queries_{target_dist}_{args.rows}",
+            workload_name,
             f"Finetuned_{target_dist}",
             q_tgt,
             y_true_tgt,
@@ -227,6 +264,22 @@ def main():
                 "train_time": t_finetune,
             },
         )
+
+    # ==========================================
+    # Final Summary Table Output
+    # ==========================================
+    if summary_records:
+        df_summary = pd.DataFrame(summary_records)
+        print("\n" + "=" * 120)
+        print("SHIFT SCENARIO SUMMARY TABLE")
+        print("=" * 120)
+        print(df_summary.to_string(index=False))
+        print("=" * 120)
+
+        # Save to CSV
+        summary_csv_path = out_dir / f"shift_summary_{args.init_dist}.csv"
+        df_summary.to_csv(summary_csv_path, index=False)
+        print(f"\nSaved raw summary table to: {summary_csv_path}")
 
 
 if __name__ == "__main__":
