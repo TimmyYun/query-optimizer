@@ -37,7 +37,7 @@ class RangeQuery:
         """Creates a RangeQuery instance from a dictionary."""
         return RangeQuery(int(d["low"]), int(d["high"]))
 
-def generate_workload(n: int, mn: int, mx: int, seed: int = 42, max_width: int = None) -> List[RangeQuery]:
+def generate_workload(n: int, mn: int, mx: int, seed: int = 42, max_width: int = None, wide: bool = False) -> List[RangeQuery]:
     """
     Generates a list of random range queries.
 
@@ -46,28 +46,27 @@ def generate_workload(n: int, mn: int, mx: int, seed: int = 42, max_width: int =
         mn (int): Minimum value of the domain.
         mx (int): Maximum value of the domain.
         seed (int): Random seed for reproducibility.
-        max_width (int): Maximum width of range query. If None, defaults to 5% of domain.
-
-    Returns:
-        List[RangeQuery]: A list of generated RangeQuery objects.
+        max_width (int): Maximum width of range query.
+        wide (bool): If True, ignores max_width and generates ranges covering 10% to 100% of domain.
     """
     rng = np.random.default_rng(seed)
     queries = []
-    width = mx - mn
+    domain_width = mx - mn
     
-    # Determined max query width
-    if max_width is None:
-        limit_w = max(10, width // 20) # Default ~5%
-    else:
-        limit_w = max(1, max_width)
-
     for _ in range(n):
         l = rng.integers(mn, mx)
-        w = rng.integers(1, limit_w) 
+        
+        if wide:
+            # Generate a wide range: between 10% and 100% of the total domain
+            w = rng.integers(int(domain_width * 0.1), domain_width)
+        else:
+            # Use max_width logic for narrow queries
+            limit_w = max_width if max_width is not None else max(10, domain_width // 20)
+            w = rng.integers(1, limit_w)
+            
         r = min(mx, l + w)
         queries.append(RangeQuery(l, r))
     return queries
-
 
 def plot_workload_distribution(queries: list, bucket_csv_path: Path, output_path: Path, title: str = "Workload Distribution"):
     """
@@ -190,28 +189,24 @@ def load_workload_csv(input_path: Path) -> List[RangeQuery]:
             queries.append(RangeQuery(int(row["low"]), int(row["high"])))
     return queries
 
+
 def main():
-    """
-    Main execution entry point for workload generation.
-    Supports dynamic generation via CLI arguments.
-    """
     parser = argparse.ArgumentParser(description="Generate workload queries.")
-    parser.add_argument("--count", type=int, help="Single workload count (deprecated, use --counts).")
-    parser.add_argument("--counts", type=int, nargs='+', help="List of workload counts to generate (e.g. 1000 10000).")
-    parser.add_argument("--domain-max", type=int, default=1_000_000, help="Maximum value of the domain (default: 1,000,000).")
-    parser.add_argument("--plot-buckets", type=str, help="Path to histogram_buckets.csv. If provided, plots the generated workload distribution.")
-    parser.add_argument("--rows", type=int, help="Dataset size (e.g. 60000000). If provided, plots histograms for ALL distributions of this size.")
-    
+    parser.add_argument("--count", type=int, help="Single workload count.")
+    parser.add_argument("--counts", type=int, nargs='+', help="List of workload counts.")
+    parser.add_argument("--domain-max", type=int, default=1_000_000, help="Max domain value.")
+    parser.add_argument("--plot-buckets", type=str, help="Path to histogram_buckets.csv.")
+    parser.add_argument("--rows", type=int, help="Dataset size for batch plotting.")
+    # NEW FLAG ADDED HERE
+    parser.add_argument("--wide", action="store_true", help="Generate wide range queries (10-100%% of domain).")
+
     args = parser.parse_args()
 
     workload_dir = Path("workload")
     workload_dir.mkdir(parents=True, exist_ok=True)
-    
-    workload_dir = Path("workload")
-    workload_dir.mkdir(parents=True, exist_ok=True)
-    
+
     MN, MX = 0, args.domain_max
-    
+
     def handle_plotting(queries, c, workload_dir_for_count):
         # 1. Manual single bucket plot if provided
         if args.plot_buckets:
@@ -220,14 +215,14 @@ def main():
             plot_path = workload_dir_for_count / f"{dist_name}_hist.png"
             print(f"Generating plot to {plot_path} using manual buckets...")
             plot_workload_distribution(queries, bucket_path, plot_path, title=f"Workload {c} on {dist_name}")
-            
+
         # 2. Batch plotting for all distributions if --rows is provided
         if args.rows:
             dataset_root = Path("data/generated") / str(args.rows)
             if not dataset_root.exists():
                 print(f"Dataset root {dataset_root} not found. Skipping batch plots.")
                 return
-            
+
             # Common distributions
             distributions = ["uniform", "normal", "zipf", "sparse_cluster", "anti_zipf"]
             for dist in distributions:
@@ -238,12 +233,9 @@ def main():
                     plot_workload_distribution(queries, bucket_csv, plot_path, title=f"Workload {c} on {dist}")
 
     # Consolidate counts
-    counts_to_gen = []
-    if args.counts:
-        counts_to_gen.extend(args.counts)
-    if args.count:
-        counts_to_gen.append(args.count)
-        
+    counts_to_gen = args.counts if args.counts else []
+    if args.count: counts_to_gen.append(args.count)
+
     if not counts_to_gen:
         parser.print_help()
         print("\nError: --counts or --count is required.")
@@ -251,18 +243,23 @@ def main():
 
     # Generation Loop
     for c in counts_to_gen:
-        print(f"Generating workload: {c} queries (narrow)...")
-        queries = generate_workload(c, MN, MX, max_width=100)
-        
-        # Subfolder for count
-        count_dir = workload_dir / str(c)
+        mode_str = "wide" if args.wide else "narrow"
+        print(f"Generating workload: {c} queries ({mode_str})...")
+
+        # If wide is False, we default to a narrow max_width of 100 as per your previous script logic
+        limit = None if args.wide else 100
+        queries = generate_workload(c, MN, MX, max_width=limit, wide=args.wide)
+
+        # Subfolder structure: workload/{count}/{mode}/workload.csv
+        count_dir = workload_dir / str(c) / mode_str
         count_dir.mkdir(parents=True, exist_ok=True)
-        
+
         out_path = count_dir / "workload.csv"
         save_workload_csv(queries, out_path)
         print(f"Saved to {out_path}")
-        
-        handle_plotting(queries, c, count_dir)
+
+        handle_plotting(queries, c, count_dir) # Use the helper from your original script
+
 
 if __name__ == "__main__":
     main()
