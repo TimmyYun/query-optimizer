@@ -90,10 +90,18 @@ def gen_values(rng: np.random.Generator, dist: str, n: int, lo: int, hi: int, sh
 
             v = lo + shift + (macro_bins * bucket_size) + micro_noise
         else:
+            # 1. Generate ranks according to Zipf power law
             ranks = np.arange(1, ndv_target + 1)
             probs = 1.0 / (ranks ** 1.5)
             probs /= probs.sum()
-            v = lo + shift + rng.choice(ndv_target, size=n, p=probs)
+
+            # 2. Pick the 'base' values (macro-scale Zipf)
+            base_vals = rng.choice(ndv_target, size=n, p=probs)
+
+            # 3. Add a uniform random offset to each value to "smear" the micro-dist
+            # This ensures that vals % 1000 is uniform across the [0, 999] range.
+            offsets = rng.integers(0, 1000, size=n)
+            v = lo + shift + base_vals + offsets
 
     elif dist == "sparse_cluster":
         # Create 50 dense clusters
