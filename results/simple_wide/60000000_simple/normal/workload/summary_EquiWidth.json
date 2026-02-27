@@ -1,0 +1,13 @@
+{
+    "model": "EquiWidth",
+    "wl_name": "workload",
+    "metrics": {
+        "build_time": 0.003322374999697786,
+        "infer_time": 12.105830540998795,
+        "median_q_error": 1.000005401290717,
+        "p25_q_error": 1.0000017429549717,
+        "p75_q_error": 1.000017830710756,
+        "p95_q_error": 1.0001080882510613,
+        "avg_q_error": 1.004808898785043
+    }
+}

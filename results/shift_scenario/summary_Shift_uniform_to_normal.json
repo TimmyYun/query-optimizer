@@ -1,0 +1,8 @@
+{
+    "model": "Shift_uniform_to_normal",
+    "wl_name": "workload",
+    "metrics": {
+        "median_q_error": 2.179676562977932,
+        "p95_q_error": 15.692575423721022
+    }
+}

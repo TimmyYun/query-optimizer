@@ -2,7 +2,7 @@
     "model": "Shift_normal_to_sparse_cluster",
     "wl_name": "workload",
     "metrics": {
-        "median_q_error": 8.819602680341077,
-        "p95_q_error": 111.00280572737614
+        "median_q_error": 8.886201468145261,
+        "p95_q_error": 135.6255793401531
     }
 }

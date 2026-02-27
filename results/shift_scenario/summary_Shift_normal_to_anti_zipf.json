@@ -2,7 +2,7 @@
     "model": "Shift_normal_to_anti_zipf",
     "wl_name": "workload",
     "metrics": {
-        "median_q_error": 1.4380590841549368,
-        "p95_q_error": 6.631551091933128
+        "median_q_error": 1.439944175280683,
+        "p95_q_error": 7.148287616113817
     }
 }
