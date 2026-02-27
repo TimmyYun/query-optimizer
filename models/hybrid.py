@@ -260,36 +260,57 @@ class HybridEstimator:
             b_lo_idx = b.lo - mn
             b_hi_idx = b.hi - mn
 
-            # 1. Density-Based Sampling
-            local_freq = freq[b_lo_idx : b_hi_idx + 1]
-            local_probs = local_freq / (local_freq.sum() + 1e-9)
+            # # 1. Density-Based Sampling
+            # local_freq = freq[b_lo_idx : b_hi_idx + 1]
+            # local_probs = local_freq / (local_freq.sum() + 1e-9)
+            #
+            # n_dense = points_per_bucket * 2
+            # xs_dense = rng.choice(
+            #     np.arange(b.lo, b.hi + 1), size=n_dense, p=local_probs
+            # )
+            #
+            # # 2. Uniform + Edge Sampling
+            # n_unif = points_per_bucket
+            # xs_unif = rng.integers(b.lo, b.hi + 1, size=n_unif)
+            # xs_edges = np.array([b.lo, b.hi, b.lo + 1, max(b.lo, b.hi - 1)])
+            #
+            # xs_train = np.unique(np.concatenate([xs_dense, xs_unif, xs_edges]))
+            # xs_train = np.sort(xs_train)
+            #
+            # # Validation Sample
+            # xs_val = np.unique(
+            #     np.concatenate(
+            #         [
+            #             rng.choice(
+            #                 np.arange(b.lo, b.hi + 1),
+            #                 size=points_per_bucket,
+            #                 p=local_probs,
+            #             ),
+            #             rng.integers(b.lo, b.hi + 1, size=points_per_bucket),
+            #         ]
+            #     )
+            # )
 
-            n_dense = points_per_bucket * 2
-            xs_dense = rng.choice(
-                np.arange(b.lo, b.hi + 1), size=n_dense, p=local_probs
-            )
+
+            # 1. Equidistant (Grid) Sampling
+            # Forces the models to map the CDF across the entire bucket evenly
+            n_grid = points_per_bucket * 2
+            if width <= n_grid:
+                xs_grid = np.arange(b.lo, b.hi + 1)
+            else:
+                xs_grid = np.linspace(b.lo, b.hi, num=n_grid, dtype=int)
 
             # 2. Uniform + Edge Sampling
+            # Adds stochastic noise and explicitly pins the bucket boundaries
             n_unif = points_per_bucket
             xs_unif = rng.integers(b.lo, b.hi + 1, size=n_unif)
             xs_edges = np.array([b.lo, b.hi, b.lo + 1, max(b.lo, b.hi - 1)])
 
-            xs_train = np.unique(np.concatenate([xs_dense, xs_unif, xs_edges]))
+            xs_train = np.unique(np.concatenate([xs_grid, xs_unif, xs_edges]))
             xs_train = np.sort(xs_train)
 
-            # Validation Sample
-            xs_val = np.unique(
-                np.concatenate(
-                    [
-                        rng.choice(
-                            np.arange(b.lo, b.hi + 1),
-                            size=points_per_bucket,
-                            p=local_probs,
-                        ),
-                        rng.integers(b.lo, b.hi + 1, size=points_per_bucket),
-                    ]
-                )
-            )
+            # Validation Sample (Purely Uniform)
+            xs_val = np.unique(rng.integers(b.lo, b.hi + 1, size=points_per_bucket * 2))
 
             def build_rows(xs_arr):
                 base_cnt = ps[b_lo_idx - 1] if b_lo_idx > 0 else 0
