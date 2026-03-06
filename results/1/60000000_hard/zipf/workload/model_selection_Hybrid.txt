@@ -1,0 +1,2005 @@
+
+================================================================================
+Idx  | Range                     | Count      | Model Type      | Stats
+--------------------------------------------------------------------------------
+0    | [0, 149]                  | 32762400   | Fourier MLP     | Complex Neural Net
+1    | [150, 299]                | 642000     | Fourier MLP     | Complex Neural Net
+2    | [300, 449]                | 281700     | Fourier MLP     | Complex Neural Net
+3    | [450, 599]                | 170900     | Fourier MLP     | Complex Neural Net
+4    | [600, 749]                | 111900     | Fourier MLP     | Complex Neural Net
+5    | [750, 899]                | 87400      | Fourier MLP     | Complex Neural Net
+6    | [900, 1049]               | 2907700    | Fourier MLP     | Complex Neural Net
+7    | [1050, 1199]              | 180600     | Fourier MLP     | Complex Neural Net
+8    | [1200, 1349]              | 43200      | Fourier MLP     | Complex Neural Net
+9    | [1350, 1499]              | 22000      | Fourier MLP     | Complex Neural Net
+10   | [1500, 1649]              | 14400      | Fourier MLP     | Complex Neural Net
+11   | [1650, 1799]              | 10600      | Fourier MLP     | Complex Neural Net
+12   | [1800, 1949]              | 7300       | Fourier MLP     | Complex Neural Net
+13   | [1950, 2099]              | 1774100    | Fourier MLP     | Complex Neural Net
+14   | [2100, 2249]              | 50300      | Fourier MLP     | Complex Neural Net
+15   | [2250, 2399]              | 20100      | Fourier MLP     | Complex Neural Net
+16   | [2400, 2549]              | 10500      | Fourier MLP     | Complex Neural Net
+17   | [2550, 2699]              | 6500       | Fourier MLP     | Complex Neural Net
+18   | [2700, 2849]              | 5100       | Fourier MLP     | Complex Neural Net
+19   | [2850, 2999]              | 3600       | Fourier MLP     | Complex Neural Net
+20   | [3000, 3149]              | 1257700    | Fourier MLP     | Complex Neural Net
+21   | [3150, 3299]              | 22400      | Fourier MLP     | Complex Neural Net
+22   | [3300, 3449]              | 11500      | Fourier MLP     | Complex Neural Net
+23   | [3450, 3599]              | 6500       | Fourier MLP     | Complex Neural Net
+24   | [3600, 3749]              | 4100       | Fourier MLP     | Complex Neural Net
+25   | [3750, 3899]              | 2800       | Fourier MLP     | Complex Neural Net
+26   | [3900, 4049]              | 911500     | Fourier MLP     | Complex Neural Net
+27   | [4050, 4199]              | 54300      | Fourier MLP     | Complex Neural Net
+28   | [4200, 4349]              | 12500      | Fourier MLP     | Complex Neural Net
+29   | [4350, 4499]              | 7200       | Fourier MLP     | Complex Neural Net
+30   | [4500, 4649]              | 4600       | Fourier MLP     | Complex Neural Net
+31   | [4650, 4799]              | 2600       | Fourier MLP     | Complex Neural Net
+32   | [4800, 4949]              | 2800       | Fourier MLP     | Complex Neural Net
+33   | [4950, 5099]              | 773200     | Fourier MLP     | Complex Neural Net
+34   | [5100, 5249]              | 24000      | Fourier MLP     | Complex Neural Net
+35   | [5250, 5399]              | 10200      | Fourier MLP     | Complex Neural Net
+36   | [5400, 5549]              | 4000       | Fourier MLP     | Complex Neural Net
+37   | [5550, 5699]              | 3500       | Fourier MLP     | Complex Neural Net
+38   | [5700, 5849]              | 2500       | Fourier MLP     | Complex Neural Net
+39   | [5850, 5999]              | 1400       | Fourier MLP     | Complex Neural Net
+40   | [6000, 6149]              | 669600     | Fourier MLP     | Complex Neural Net
+41   | [6150, 6299]              | 12400      | Fourier MLP     | Complex Neural Net
+42   | [6300, 6449]              | 6100       | Fourier MLP     | Complex Neural Net
+43   | [6450, 6599]              | 3700       | Fourier MLP     | Complex Neural Net
+44   | [6600, 6749]              | 2500       | Fourier MLP     | Complex Neural Net
+45   | [6750, 6899]              | 1700       | Fourier MLP     | Complex Neural Net
+46   | [6900, 7049]              | 558200     | Fourier MLP     | Complex Neural Net
+47   | [7050, 7199]              | 33900      | Fourier MLP     | Complex Neural Net
+48   | [7200, 7349]              | 7800       | Fourier MLP     | Complex Neural Net
+49   | [7350, 7499]              | 3100       | Fourier MLP     | Complex Neural Net
+50   | [7500, 7649]              | 2500       | Fourier MLP     | Complex Neural Net
+51   | [7650, 7799]              | 2800       | Fourier MLP     | Complex Neural Net
+52   | [7800, 7949]              | 1300       | Fourier MLP     | Complex Neural Net
+53   | [7950, 8099]              | 515500     | Fourier MLP     | Complex Neural Net
+54   | [8100, 8249]              | 14400      | Fourier MLP     | Complex Neural Net
+55   | [8250, 8399]              | 4600       | Fourier MLP     | Complex Neural Net
+56   | [8400, 8549]              | 2900       | Fourier MLP     | Complex Neural Net
+57   | [8550, 8699]              | 1600       | Fourier MLP     | Complex Neural Net
+58   | [8700, 8849]              | 2100       | Fourier MLP     | Complex Neural Net
+59   | [8850, 8999]              | 600        | Uniform         | 
+60   | [9000, 9149]              | 451400     | Fourier MLP     | Complex Neural Net
+61   | [9150, 9299]              | 8900       | Fourier MLP     | Complex Neural Net
+62   | [9300, 9449]              | 4500       | Fourier MLP     | Complex Neural Net
+63   | [9450, 9599]              | 2100       | Fourier MLP     | Complex Neural Net
+64   | [9600, 9749]              | 2100       | Fourier MLP     | Complex Neural Net
+65   | [9750, 9899]              | 1000       | Fourier MLP     | Complex Neural Net
+66   | [9900, 10049]             | 405300     | Fourier MLP     | Complex Neural Net
+67   | [10050, 10199]            | 23300      | Fourier MLP     | Complex Neural Net
+68   | [10200, 10349]            | 5400       | Fourier MLP     | Complex Neural Net
+69   | [10350, 10499]            | 3200       | Fourier MLP     | Complex Neural Net
+70   | [10500, 10649]            | 2200       | Fourier MLP     | Complex Neural Net
+71   | [10650, 10799]            | 1500       | Fourier MLP     | Complex Neural Net
+72   | [10800, 10949]            | 800        | Fourier MLP     | Complex Neural Net
+73   | [10950, 11099]            | 366900     | Fourier MLP     | Complex Neural Net
+74   | [11100, 11249]            | 10700      | Fourier MLP     | Complex Neural Net
+75   | [11250, 11399]            | 4200       | Fourier MLP     | Complex Neural Net
+76   | [11400, 11549]            | 2100       | Fourier MLP     | Complex Neural Net
+77   | [11550, 11699]            | 1300       | Fourier MLP     | Complex Neural Net
+78   | [11700, 11849]            | 1100       | Fourier MLP     | Complex Neural Net
+79   | [11850, 11999]            | 400        | Fourier MLP     | Complex Neural Net
+80   | [12000, 12149]            | 353300     | Fourier MLP     | Complex Neural Net
+81   | [12150, 12299]            | 6500       | Fourier MLP     | Complex Neural Net
+82   | [12300, 12449]            | 2800       | Fourier MLP     | Complex Neural Net
+83   | [12450, 12599]            | 2000       | Fourier MLP     | Complex Neural Net
+84   | [12600, 12749]            | 1200       | Fourier MLP     | Complex Neural Net
+85   | [12750, 12899]            | 600        | Fourier MLP     | Complex Neural Net
+86   | [12900, 13049]            | 307900     | Fourier MLP     | Complex Neural Net
+87   | [13050, 13199]            | 18400      | Fourier MLP     | Complex Neural Net
+88   | [13200, 13349]            | 3300       | Fourier MLP     | Complex Neural Net
+89   | [13350, 13499]            | 1900       | Fourier MLP     | Complex Neural Net
+90   | [13500, 13649]            | 1300       | Fourier MLP     | Complex Neural Net
+91   | [13650, 13799]            | 800        | Fourier MLP     | Complex Neural Net
+92   | [13800, 13949]            | 1000       | Fourier MLP     | Complex Neural Net
+93   | [13950, 14099]            | 291800     | Fourier MLP     | Complex Neural Net
+94   | [14100, 14249]            | 8500       | Fourier MLP     | Complex Neural Net
+95   | [14250, 14399]            | 3500       | Fourier MLP     | Complex Neural Net
+96   | [14400, 14549]            | 2100       | Fourier MLP     | Complex Neural Net
+97   | [14550, 14699]            | 1000       | Fourier MLP     | Complex Neural Net
+98   | [14700, 14849]            | 1300       | Fourier MLP     | Complex Neural Net
+99   | [14850, 14999]            | 1100       | Fourier MLP     | Complex Neural Net
+100  | [15000, 15149]            | 280300     | Fourier MLP     | Complex Neural Net
+101  | [15150, 15299]            | 5700       | Fourier MLP     | Complex Neural Net
+102  | [15300, 15449]            | 3000       | Fourier MLP     | Complex Neural Net
+103  | [15450, 15599]            | 1000       | Fourier MLP     | Complex Neural Net
+104  | [15600, 15749]            | 1200       | Fourier MLP     | Complex Neural Net
+105  | [15750, 15899]            | 400        | Fourier MLP     | Complex Neural Net
+106  | [15900, 16049]            | 253800     | Fourier MLP     | Complex Neural Net
+107  | [16050, 16199]            | 15200      | Fourier MLP     | Complex Neural Net
+108  | [16200, 16349]            | 3500       | Fourier MLP     | Complex Neural Net
+109  | [16350, 16499]            | 2200       | Fourier MLP     | Complex Neural Net
+110  | [16500, 16649]            | 600        | Fourier MLP     | Complex Neural Net
+111  | [16650, 16799]            | 600        | Fourier MLP     | Complex Neural Net
+112  | [16800, 16949]            | 600        | Fourier MLP     | Complex Neural Net
+113  | [16950, 17099]            | 251800     | Fourier MLP     | Complex Neural Net
+114  | [17100, 17249]            | 8000       | Fourier MLP     | Complex Neural Net
+115  | [17250, 17399]            | 3400       | Fourier MLP     | Complex Neural Net
+116  | [17400, 17549]            | 1300       | Fourier MLP     | Complex Neural Net
+117  | [17550, 17699]            | 1100       | Fourier MLP     | Complex Neural Net
+118  | [17700, 17849]            | 900        | Fourier MLP     | Complex Neural Net
+119  | [17850, 17999]            | 600        | Fourier MLP     | Complex Neural Net
+120  | [18000, 18149]            | 235400     | Fourier MLP     | Complex Neural Net
+121  | [18150, 18299]            | 4600       | Fourier MLP     | Complex Neural Net
+122  | [18300, 18449]            | 1800       | Fourier MLP     | Complex Neural Net
+123  | [18450, 18599]            | 1700       | Fourier MLP     | Complex Neural Net
+124  | [18600, 18749]            | 700        | Fourier MLP     | Complex Neural Net
+125  | [18750, 18899]            | 900        | Fourier MLP     | Complex Neural Net
+126  | [18900, 19049]            | 217800     | Fourier MLP     | Complex Neural Net
+127  | [19050, 19199]            | 12200      | Fourier MLP     | Complex Neural Net
+128  | [19200, 19349]            | 2300       | Fourier MLP     | Complex Neural Net
+129  | [19350, 19499]            | 1300       | Fourier MLP     | Complex Neural Net
+130  | [19500, 19649]            | 1500       | Fourier MLP     | Complex Neural Net
+131  | [19650, 19799]            | 900        | Fourier MLP     | Complex Neural Net
+132  | [19800, 19949]            | 700        | Fourier MLP     | Complex Neural Net
+133  | [19950, 20099]            | 215200     | Fourier MLP     | Complex Neural Net
+134  | [20100, 20249]            | 6800       | Fourier MLP     | Complex Neural Net
+135  | [20250, 20399]            | 2100       | Fourier MLP     | Complex Neural Net
+136  | [20400, 20549]            | 1900       | Fourier MLP     | Complex Neural Net
+137  | [20550, 20699]            | 1000       | Fourier MLP     | Complex Neural Net
+138  | [20700, 20849]            | 700        | Fourier MLP     | Complex Neural Net
+139  | [20850, 20999]            | 900        | Fourier MLP     | Complex Neural Net
+140  | [21000, 21149]            | 207100     | Fourier MLP     | Complex Neural Net
+141  | [21150, 21299]            | 3700       | Fourier MLP     | Complex Neural Net
+142  | [21300, 21449]            | 2000       | Fourier MLP     | Complex Neural Net
+143  | [21450, 21599]            | 1700       | Fourier MLP     | Complex Neural Net
+144  | [21600, 21749]            | 800        | Fourier MLP     | Complex Neural Net
+145  | [21750, 21899]            | 500        | Fourier MLP     | Complex Neural Net
+146  | [21900, 22049]            | 186800     | Fourier MLP     | Complex Neural Net
+147  | [22050, 22199]            | 13900      | Fourier MLP     | Complex Neural Net
+148  | [22200, 22349]            | 2400       | Fourier MLP     | Complex Neural Net
+149  | [22350, 22499]            | 1400       | Fourier MLP     | Complex Neural Net
+150  | [22500, 22649]            | 1300       | Fourier MLP     | Complex Neural Net
+151  | [22650, 22799]            | 800        | Fourier MLP     | Complex Neural Net
+152  | [22800, 22949]            | 300        | Fourier MLP     | Complex Neural Net
+153  | [22950, 23099]            | 187600     | Fourier MLP     | Complex Neural Net
+154  | [23100, 23249]            | 5500       | Fourier MLP     | Complex Neural Net
+155  | [23250, 23399]            | 2300       | Fourier MLP     | Complex Neural Net
+156  | [23400, 23549]            | 500        | Fourier MLP     | Complex Neural Net
+157  | [23550, 23699]            | 600        | Fourier MLP     | Complex Neural Net
+158  | [23700, 23849]            | 500        | Fourier MLP     | Complex Neural Net
+159  | [23850, 23999]            | 400        | Fourier MLP     | Complex Neural Net
+160  | [24000, 24149]            | 174300     | Fourier MLP     | Complex Neural Net
+161  | [24150, 24299]            | 3100       | Fourier MLP     | Complex Neural Net
+162  | [24300, 24449]            | 1000       | Fourier MLP     | Complex Neural Net
+163  | [24450, 24599]            | 1100       | Fourier MLP     | Complex Neural Net
+164  | [24600, 24749]            | 800        | Fourier MLP     | Complex Neural Net
+165  | [24750, 24899]            | 500        | Fourier MLP     | Complex Neural Net
+166  | [24900, 25049]            | 165900     | Fourier MLP     | Complex Neural Net
+167  | [25050, 25199]            | 10000      | Fourier MLP     | Complex Neural Net
+168  | [25200, 25349]            | 1800       | Fourier MLP     | Complex Neural Net
+169  | [25350, 25499]            | 1800       | Fourier MLP     | Complex Neural Net
+170  | [25500, 25649]            | 1100       | Fourier MLP     | Complex Neural Net
+171  | [25650, 25799]            | 400        | Fourier MLP     | Complex Neural Net
+172  | [25800, 25949]            | 700        | Fourier MLP     | Complex Neural Net
+173  | [25950, 26099]            | 161900     | Fourier MLP     | Complex Neural Net
+174  | [26100, 26249]            | 4300       | Fourier MLP     | Complex Neural Net
+175  | [26250, 26399]            | 2600       | Fourier MLP     | Complex Neural Net
+176  | [26400, 26549]            | 1000       | Fourier MLP     | Complex Neural Net
+177  | [26550, 26699]            | 800        | Fourier MLP     | Complex Neural Net
+178  | [26700, 26849]            | 400        | Fourier MLP     | Complex Neural Net
+179  | [26850, 26999]            | 500        | Fourier MLP     | Complex Neural Net
+180  | [27000, 27149]            | 157100     | Fourier MLP     | Complex Neural Net
+181  | [27150, 27299]            | 3000       | Fourier MLP     | Complex Neural Net
+182  | [27300, 27449]            | 1000       | Fourier MLP     | Complex Neural Net
+183  | [27450, 27599]            | 800        | Fourier MLP     | Complex Neural Net
+184  | [27600, 27749]            | 400        | Fourier MLP     | Complex Neural Net
+185  | [27750, 27899]            | 400        | Fourier MLP     | Complex Neural Net
+186  | [27900, 28049]            | 153800     | Fourier MLP     | Complex Neural Net
+187  | [28050, 28199]            | 7600       | Fourier MLP     | Complex Neural Net
+188  | [28200, 28349]            | 2100       | Fourier MLP     | Complex Neural Net
+189  | [28350, 28499]            | 1300       | Fourier MLP     | Complex Neural Net
+190  | [28500, 28649]            | 300        | Fourier MLP     | Complex Neural Net
+191  | [28650, 28799]            | 400        | Fourier MLP     | Complex Neural Net
+192  | [28800, 28949]            | 500        | Fourier MLP     | Complex Neural Net
+193  | [28950, 29099]            | 144700     | Fourier MLP     | Complex Neural Net
+194  | [29100, 29249]            | 2900       | Fourier MLP     | Complex Neural Net
+195  | [29250, 29399]            | 2500       | Fourier MLP     | Complex Neural Net
+196  | [29400, 29549]            | 200        | Fourier MLP     | Complex Neural Net
+197  | [29550, 29699]            | 900        | Fourier MLP     | Complex Neural Net
+198  | [29700, 29849]            | 200        | Fourier MLP     | Complex Neural Net
+199  | [29850, 29999]            | 500        | Fourier MLP     | Complex Neural Net
+200  | [30000, 30149]            | 139400     | Fourier MLP     | Complex Neural Net
+201  | [30150, 30299]            | 3000       | Fourier MLP     | Complex Neural Net
+202  | [30300, 30449]            | 1700       | Fourier MLP     | Complex Neural Net
+203  | [30450, 30599]            | 400        | Fourier MLP     | Complex Neural Net
+204  | [30600, 30749]            | 400        | Fourier MLP     | Complex Neural Net
+205  | [30750, 30899]            | 400        | Fourier MLP     | Complex Neural Net
+206  | [30900, 31049]            | 131000     | Fourier MLP     | Complex Neural Net
+207  | [31050, 31199]            | 6900       | Fourier MLP     | Complex Neural Net
+208  | [31200, 31349]            | 2000       | Fourier MLP     | Complex Neural Net
+209  | [31350, 31499]            | 600        | Fourier MLP     | Complex Neural Net
+210  | [31500, 31649]            | 400        | Fourier MLP     | Complex Neural Net
+211  | [31650, 31799]            | 200        | Fourier MLP     | Complex Neural Net
+212  | [31800, 31949]            | 100        | Fourier MLP     | Complex Neural Net
+213  | [31950, 32099]            | 133100     | Fourier MLP     | Complex Neural Net
+214  | [32100, 32249]            | 4200       | Fourier MLP     | Complex Neural Net
+215  | [32250, 32399]            | 1100       | Fourier MLP     | Complex Neural Net
+216  | [32400, 32549]            | 800        | Fourier MLP     | Complex Neural Net
+217  | [32550, 32699]            | 300        | Fourier MLP     | Complex Neural Net
+218  | [32700, 32849]            | 100        | Fourier MLP     | Complex Neural Net
+219  | [32850, 32999]            | 200        | Fourier MLP     | Complex Neural Net
+220  | [33000, 33149]            | 130700     | Fourier MLP     | Complex Neural Net
+221  | [33150, 33299]            | 3000       | Fourier MLP     | Complex Neural Net
+222  | [33300, 33449]            | 1400       | Fourier MLP     | Complex Neural Net
+223  | [33450, 33599]            | 800        | Fourier MLP     | Complex Neural Net
+224  | [33600, 33749]            | 400        | Fourier MLP     | Complex Neural Net
+225  | [33750, 33899]            | 700        | Fourier MLP     | Complex Neural Net
+226  | [33900, 34049]            | 122200     | Fourier MLP     | Complex Neural Net
+227  | [34050, 34199]            | 6200       | Fourier MLP     | Complex Neural Net
+228  | [34200, 34349]            | 2500       | Fourier MLP     | Complex Neural Net
+229  | [34350, 34499]            | 800        | Fourier MLP     | Complex Neural Net
+230  | [34500, 34649]            | 300        | Fourier MLP     | Complex Neural Net
+231  | [34650, 34799]            | 200        | Fourier MLP     | Complex Neural Net
+232  | [34800, 34949]            | 300        | Fourier MLP     | Complex Neural Net
+233  | [34950, 35099]            | 126800     | Fourier MLP     | Complex Neural Net
+234  | [35100, 35249]            | 3100       | Fourier MLP     | Complex Neural Net
+235  | [35250, 35399]            | 1400       | Fourier MLP     | Complex Neural Net
+236  | [35400, 35549]            | 700        | Fourier MLP     | Complex Neural Net
+237  | [35550, 35699]            | 700        | Fourier MLP     | Complex Neural Net
+238  | [35700, 35849]            | 500        | Fourier MLP     | Complex Neural Net
+239  | [35850, 35999]            | 200        | Fourier MLP     | Complex Neural Net
+240  | [36000, 36149]            | 122100     | Fourier MLP     | Complex Neural Net
+241  | [36150, 36299]            | 1300       | Fourier MLP     | Complex Neural Net
+242  | [36300, 36449]            | 1300       | Fourier MLP     | Complex Neural Net
+243  | [36450, 36599]            | 600        | Fourier MLP     | Complex Neural Net
+244  | [36600, 36749]            | 300        | Uniform         | 
+245  | [36750, 36899]            | 100        | Uniform         | 
+246  | [36900, 37049]            | 106400     | Fourier MLP     | Complex Neural Net
+247  | [37050, 37199]            | 8400       | Fourier MLP     | Complex Neural Net
+248  | [37200, 37349]            | 1300       | Fourier MLP     | Complex Neural Net
+249  | [37350, 37499]            | 700        | Fourier MLP     | Complex Neural Net
+250  | [37500, 37649]            | 300        | Fourier MLP     | Complex Neural Net
+251  | [37650, 37799]            | 200        | Uniform         | 
+252  | [37800, 37949]            | 100        | Fourier MLP     | Complex Neural Net
+253  | [37950, 38099]            | 112000     | Fourier MLP     | Complex Neural Net
+254  | [38100, 38249]            | 2300       | Fourier MLP     | Complex Neural Net
+255  | [38250, 38399]            | 1100       | Fourier MLP     | Complex Neural Net
+256  | [38400, 38549]            | 300        | Fourier MLP     | Complex Neural Net
+257  | [38550, 38699]            | 500        | Fourier MLP     | Complex Neural Net
+258  | [38700, 38849]            | 700        | Fourier MLP     | Complex Neural Net
+259  | [38850, 38999]            | 300        | Fourier MLP     | Complex Neural Net
+260  | [39000, 39149]            | 114200     | Fourier MLP     | Complex Neural Net
+261  | [39150, 39299]            | 2000       | Fourier MLP     | Complex Neural Net
+262  | [39300, 39449]            | 800        | Fourier MLP     | Complex Neural Net
+263  | [39450, 39599]            | 400        | Fourier MLP     | Complex Neural Net
+264  | [39600, 39749]            | 400        | Fourier MLP     | Complex Neural Net
+265  | [39750, 39899]            | 800        | Fourier MLP     | Complex Neural Net
+266  | [39900, 40049]            | 105700     | Fourier MLP     | Complex Neural Net
+267  | [40050, 40199]            | 6600       | Fourier MLP     | Complex Neural Net
+268  | [40200, 40349]            | 1800       | Fourier MLP     | Complex Neural Net
+269  | [40350, 40499]            | 800        | Fourier MLP     | Complex Neural Net
+270  | [40500, 40649]            | 700        | Fourier MLP     | Complex Neural Net
+271  | [40650, 40799]            | 0          | Uniform         | 
+272  | [40800, 40949]            | 300        | Fourier MLP     | Complex Neural Net
+273  | [40950, 41099]            | 99000      | Fourier MLP     | Complex Neural Net
+274  | [41100, 41249]            | 2300       | Fourier MLP     | Complex Neural Net
+275  | [41250, 41399]            | 1800       | Fourier MLP     | Complex Neural Net
+276  | [41400, 41549]            | 1200       | Fourier MLP     | Complex Neural Net
+277  | [41550, 41699]            | 500        | Fourier MLP     | Complex Neural Net
+278  | [41700, 41849]            | 400        | Fourier MLP     | Complex Neural Net
+279  | [41850, 41999]            | 300        | Fourier MLP     | Complex Neural Net
+280  | [42000, 42149]            | 98400      | Fourier MLP     | Complex Neural Net
+281  | [42150, 42299]            | 1800       | Fourier MLP     | Complex Neural Net
+282  | [42300, 42449]            | 600        | Fourier MLP     | Complex Neural Net
+283  | [42450, 42599]            | 800        | Fourier MLP     | Complex Neural Net
+284  | [42600, 42749]            | 600        | Fourier MLP     | Complex Neural Net
+285  | [42750, 42899]            | 200        | Fourier MLP     | Complex Neural Net
+286  | [42900, 43049]            | 92900      | Fourier MLP     | Complex Neural Net
+287  | [43050, 43199]            | 6100       | Fourier MLP     | Complex Neural Net
+288  | [43200, 43349]            | 1300       | Fourier MLP     | Complex Neural Net
+289  | [43350, 43499]            | 500        | Fourier MLP     | Complex Neural Net
+290  | [43500, 43649]            | 900        | Fourier MLP     | Complex Neural Net
+291  | [43650, 43799]            | 300        | Fourier MLP     | Complex Neural Net
+292  | [43800, 43949]            | 300        | Fourier MLP     | Complex Neural Net
+293  | [43950, 44099]            | 93600      | Fourier MLP     | Complex Neural Net
+294  | [44100, 44249]            | 2300       | Fourier MLP     | Complex Neural Net
+295  | [44250, 44399]            | 1200       | Fourier MLP     | Complex Neural Net
+296  | [44400, 44549]            | 400        | Fourier MLP     | Complex Neural Net
+297  | [44550, 44699]            | 400        | Fourier MLP     | Complex Neural Net
+298  | [44700, 44849]            | 200        | Fourier MLP     | Complex Neural Net
+299  | [44850, 44999]            | 0          | Uniform         | 
+300  | [45000, 45149]            | 95400      | Fourier MLP     | Complex Neural Net
+301  | [45150, 45299]            | 3000       | Fourier MLP     | Complex Neural Net
+302  | [45300, 45449]            | 700        | Fourier MLP     | Complex Neural Net
+303  | [45450, 45599]            | 600        | Fourier MLP     | Complex Neural Net
+304  | [45600, 45749]            | 900        | Fourier MLP     | Complex Neural Net
+305  | [45750, 45899]            | 100        | Fourier MLP     | Complex Neural Net
+306  | [45900, 46049]            | 88800      | Fourier MLP     | Complex Neural Net
+307  | [46050, 46199]            | 6300       | Fourier MLP     | Complex Neural Net
+308  | [46200, 46349]            | 1300       | Fourier MLP     | Complex Neural Net
+309  | [46350, 46499]            | 600        | Fourier MLP     | Complex Neural Net
+310  | [46500, 46649]            | 800        | Fourier MLP     | Complex Neural Net
+311  | [46650, 46799]            | 100        | Fourier MLP     | Complex Neural Net
+312  | [46800, 46949]            | 0          | Uniform         | 
+313  | [46950, 47099]            | 97300      | Fourier MLP     | Complex Neural Net
+314  | [47100, 47249]            | 3400       | Fourier MLP     | Complex Neural Net
+315  | [47250, 47399]            | 1100       | Fourier MLP     | Complex Neural Net
+316  | [47400, 47549]            | 300        | Fourier MLP     | Complex Neural Net
+317  | [47550, 47699]            | 400        | Fourier MLP     | Complex Neural Net
+318  | [47700, 47849]            | 100        | Fourier MLP     | Complex Neural Net
+319  | [47850, 47999]            | 400        | Fourier MLP     | Complex Neural Net
+320  | [48000, 48149]            | 90700      | Fourier MLP     | Complex Neural Net
+321  | [48150, 48299]            | 1700       | Fourier MLP     | Complex Neural Net
+322  | [48300, 48449]            | 1200       | Fourier MLP     | Complex Neural Net
+323  | [48450, 48599]            | 100        | Fourier MLP     | Complex Neural Net
+324  | [48600, 48749]            | 300        | Fourier MLP     | Complex Neural Net
+325  | [48750, 48899]            | 200        | Uniform         | 
+326  | [48900, 49049]            | 86300      | Fourier MLP     | Complex Neural Net
+327  | [49050, 49199]            | 5100       | Fourier MLP     | Complex Neural Net
+328  | [49200, 49349]            | 1500       | Fourier MLP     | Complex Neural Net
+329  | [49350, 49499]            | 1100       | Fourier MLP     | Complex Neural Net
+330  | [49500, 49649]            | 400        | Fourier MLP     | Complex Neural Net
+331  | [49650, 49799]            | 300        | Fourier MLP     | Complex Neural Net
+332  | [49800, 49949]            | 200        | Fourier MLP     | Complex Neural Net
+333  | [49950, 50099]            | 79700      | Fourier MLP     | Complex Neural Net
+334  | [50100, 50249]            | 2800       | Fourier MLP     | Complex Neural Net
+335  | [50250, 50399]            | 1000       | Fourier MLP     | Complex Neural Net
+336  | [50400, 50549]            | 400        | Fourier MLP     | Complex Neural Net
+337  | [50550, 50699]            | 300        | Fourier MLP     | Complex Neural Net
+338  | [50700, 50849]            | 300        | Fourier MLP     | Complex Neural Net
+339  | [50850, 50999]            | 300        | Fourier MLP     | Complex Neural Net
+340  | [51000, 51149]            | 82200      | Fourier MLP     | Complex Neural Net
+341  | [51150, 51299]            | 1400       | Fourier MLP     | Complex Neural Net
+342  | [51300, 51449]            | 900        | Fourier MLP     | Complex Neural Net
+343  | [51450, 51599]            | 700        | Fourier MLP     | Complex Neural Net
+344  | [51600, 51749]            | 500        | Fourier MLP     | Complex Neural Net
+345  | [51750, 51899]            | 400        | Fourier MLP     | Complex Neural Net
+346  | [51900, 52049]            | 81500      | Fourier MLP     | Complex Neural Net
+347  | [52050, 52199]            | 5600       | Fourier MLP     | Complex Neural Net
+348  | [52200, 52349]            | 600        | Fourier MLP     | Complex Neural Net
+349  | [52350, 52499]            | 700        | Fourier MLP     | Complex Neural Net
+350  | [52500, 52649]            | 200        | Fourier MLP     | Complex Neural Net
+351  | [52650, 52799]            | 700        | Fourier MLP     | Complex Neural Net
+352  | [52800, 52949]            | 200        | Fourier MLP     | Complex Neural Net
+353  | [52950, 53099]            | 78000      | Fourier MLP     | Complex Neural Net
+354  | [53100, 53249]            | 2100       | Fourier MLP     | Complex Neural Net
+355  | [53250, 53399]            | 900        | Fourier MLP     | Complex Neural Net
+356  | [53400, 53549]            | 900        | Fourier MLP     | Complex Neural Net
+357  | [53550, 53699]            | 200        | Fourier MLP     | Complex Neural Net
+358  | [53700, 53849]            | 400        | Fourier MLP     | Complex Neural Net
+359  | [53850, 53999]            | 100        | Uniform         | 
+360  | [54000, 54149]            | 77200      | Fourier MLP     | Complex Neural Net
+361  | [54150, 54299]            | 2500       | Fourier MLP     | Complex Neural Net
+362  | [54300, 54449]            | 700        | Fourier MLP     | Complex Neural Net
+363  | [54450, 54599]            | 200        | Fourier MLP     | Complex Neural Net
+364  | [54600, 54749]            | 600        | Fourier MLP     | Complex Neural Net
+365  | [54750, 54899]            | 400        | Fourier MLP     | Complex Neural Net
+366  | [54900, 55049]            | 72800      | Fourier MLP     | Complex Neural Net
+367  | [55050, 55199]            | 3800       | Fourier MLP     | Complex Neural Net
+368  | [55200, 55349]            | 900        | Fourier MLP     | Complex Neural Net
+369  | [55350, 55499]            | 800        | Fourier MLP     | Complex Neural Net
+370  | [55500, 55649]            | 200        | Fourier MLP     | Complex Neural Net
+371  | [55650, 55799]            | 300        | Fourier MLP     | Complex Neural Net
+372  | [55800, 55949]            | 400        | Fourier MLP     | Complex Neural Net
+373  | [55950, 56099]            | 72800      | Fourier MLP     | Complex Neural Net
+374  | [56100, 56249]            | 1400       | Fourier MLP     | Complex Neural Net
+375  | [56250, 56399]            | 900        | Fourier MLP     | Complex Neural Net
+376  | [56400, 56549]            | 800        | Fourier MLP     | Complex Neural Net
+377  | [56550, 56699]            | 100        | Uniform         | 
+378  | [56700, 56849]            | 200        | Fourier MLP     | Complex Neural Net
+379  | [56850, 56999]            | 100        | Fourier MLP     | Complex Neural Net
+380  | [57000, 57149]            | 79200      | Fourier MLP     | Complex Neural Net
+381  | [57150, 57299]            | 1900       | Fourier MLP     | Complex Neural Net
+382  | [57300, 57449]            | 500        | Fourier MLP     | Complex Neural Net
+383  | [57450, 57599]            | 300        | Fourier MLP     | Complex Neural Net
+384  | [57600, 57749]            | 400        | Fourier MLP     | Complex Neural Net
+385  | [57750, 57899]            | 100        | Uniform         | 
+386  | [57900, 58049]            | 74900      | Fourier MLP     | Complex Neural Net
+387  | [58050, 58199]            | 5300       | Fourier MLP     | Complex Neural Net
+388  | [58200, 58349]            | 1400       | Fourier MLP     | Complex Neural Net
+389  | [58350, 58499]            | 800        | Fourier MLP     | Complex Neural Net
+390  | [58500, 58649]            | 200        | Fourier MLP     | Complex Neural Net
+391  | [58650, 58799]            | 200        | Fourier MLP     | Complex Neural Net
+392  | [58800, 58949]            | 400        | Fourier MLP     | Complex Neural Net
+393  | [58950, 59099]            | 66300      | Fourier MLP     | Complex Neural Net
+394  | [59100, 59249]            | 2400       | Fourier MLP     | Complex Neural Net
+395  | [59250, 59399]            | 1000       | Fourier MLP     | Complex Neural Net
+396  | [59400, 59549]            | 200        | Fourier MLP     | Complex Neural Net
+397  | [59550, 59699]            | 600        | Fourier MLP     | Complex Neural Net
+398  | [59700, 59849]            | 100        | Fourier MLP     | Complex Neural Net
+399  | [59850, 59999]            | 200        | Fourier MLP     | Complex Neural Net
+400  | [60000, 60149]            | 72700      | Fourier MLP     | Complex Neural Net
+401  | [60150, 60299]            | 1500       | Fourier MLP     | Complex Neural Net
+402  | [60300, 60449]            | 800        | Fourier MLP     | Complex Neural Net
+403  | [60450, 60599]            | 200        | Fourier MLP     | Complex Neural Net
+404  | [60600, 60749]            | 600        | Fourier MLP     | Complex Neural Net
+405  | [60750, 60899]            | 200        | Fourier MLP     | Complex Neural Net
+406  | [60900, 61049]            | 67900      | Fourier MLP     | Complex Neural Net
+407  | [61050, 61199]            | 3100       | Fourier MLP     | Complex Neural Net
+408  | [61200, 61349]            | 1100       | Fourier MLP     | Complex Neural Net
+409  | [61350, 61499]            | 300        | Fourier MLP     | Complex Neural Net
+410  | [61500, 61649]            | 400        | Fourier MLP     | Complex Neural Net
+411  | [61650, 61799]            | 100        | Fourier MLP     | Complex Neural Net
+412  | [61800, 61949]            | 100        | Fourier MLP     | Complex Neural Net
+413  | [61950, 62099]            | 65000      | Fourier MLP     | Complex Neural Net
+414  | [62100, 62249]            | 2800       | Fourier MLP     | Complex Neural Net
+415  | [62250, 62399]            | 900        | Fourier MLP     | Complex Neural Net
+416  | [62400, 62549]            | 300        | Fourier MLP     | Complex Neural Net
+417  | [62550, 62699]            | 700        | Fourier MLP     | Complex Neural Net
+418  | [62700, 62849]            | 200        | Fourier MLP     | Complex Neural Net
+419  | [62850, 62999]            | 100        | Fourier MLP     | Complex Neural Net
+420  | [63000, 63149]            | 70900      | Fourier MLP     | Complex Neural Net
+421  | [63150, 63299]            | 1500       | Fourier MLP     | Complex Neural Net
+422  | [63300, 63449]            | 300        | Fourier MLP     | Complex Neural Net
+423  | [63450, 63599]            | 300        | Fourier MLP     | Complex Neural Net
+424  | [63600, 63749]            | 400        | Fourier MLP     | Complex Neural Net
+425  | [63750, 63899]            | 100        | Fourier MLP     | Complex Neural Net
+426  | [63900, 64049]            | 63400      | Fourier MLP     | Complex Neural Net
+427  | [64050, 64199]            | 4000       | Fourier MLP     | Complex Neural Net
+428  | [64200, 64349]            | 1100       | Fourier MLP     | Complex Neural Net
+429  | [64350, 64499]            | 600        | Fourier MLP     | Complex Neural Net
+430  | [64500, 64649]            | 0          | Uniform         | 
+431  | [64650, 64799]            | 300        | Fourier MLP     | Complex Neural Net
+432  | [64800, 64949]            | 0          | Uniform         | 
+433  | [64950, 65099]            | 66900      | Fourier MLP     | Complex Neural Net
+434  | [65100, 65249]            | 800        | Fourier MLP     | Complex Neural Net
+435  | [65250, 65399]            | 600        | Fourier MLP     | Complex Neural Net
+436  | [65400, 65549]            | 300        | Fourier MLP     | Complex Neural Net
+437  | [65550, 65699]            | 0          | Uniform         | 
+438  | [65700, 65849]            | 100        | Fourier MLP     | Complex Neural Net
+439  | [65850, 65999]            | 100        | Fourier MLP     | Complex Neural Net
+440  | [66000, 66149]            | 63300      | Fourier MLP     | Complex Neural Net
+441  | [66150, 66299]            | 1400       | Fourier MLP     | Complex Neural Net
+442  | [66300, 66449]            | 500        | Fourier MLP     | Complex Neural Net
+443  | [66450, 66599]            | 300        | Fourier MLP     | Complex Neural Net
+444  | [66600, 66749]            | 600        | Fourier MLP     | Complex Neural Net
+445  | [66750, 66899]            | 100        | Fourier MLP     | Complex Neural Net
+446  | [66900, 67049]            | 60300      | Fourier MLP     | Complex Neural Net
+447  | [67050, 67199]            | 3300       | Fourier MLP     | Complex Neural Net
+448  | [67200, 67349]            | 1400       | Fourier MLP     | Complex Neural Net
+449  | [67350, 67499]            | 400        | Fourier MLP     | Complex Neural Net
+450  | [67500, 67649]            | 0          | Uniform         | 
+451  | [67650, 67799]            | 0          | Uniform         | 
+452  | [67800, 67949]            | 300        | Fourier MLP     | Complex Neural Net
+453  | [67950, 68099]            | 63600      | Fourier MLP     | Complex Neural Net
+454  | [68100, 68249]            | 1600       | Fourier MLP     | Complex Neural Net
+455  | [68250, 68399]            | 500        | Fourier MLP     | Complex Neural Net
+456  | [68400, 68549]            | 700        | Fourier MLP     | Complex Neural Net
+457  | [68550, 68699]            | 200        | Fourier MLP     | Complex Neural Net
+458  | [68700, 68849]            | 100        | Fourier MLP     | Complex Neural Net
+459  | [68850, 68999]            | 100        | Fourier MLP     | Complex Neural Net
+460  | [69000, 69149]            | 60500      | Fourier MLP     | Complex Neural Net
+461  | [69150, 69299]            | 900        | Fourier MLP     | Complex Neural Net
+462  | [69300, 69449]            | 200        | Fourier MLP     | Complex Neural Net
+463  | [69450, 69599]            | 600        | Fourier MLP     | Complex Neural Net
+464  | [69600, 69749]            | 200        | Fourier MLP     | Complex Neural Net
+465  | [69750, 69899]            | 100        | Fourier MLP     | Complex Neural Net
+466  | [69900, 70049]            | 59300      | Fourier MLP     | Complex Neural Net
+467  | [70050, 70199]            | 3700       | Fourier MLP     | Complex Neural Net
+468  | [70200, 70349]            | 400        | Fourier MLP     | Complex Neural Net
+469  | [70350, 70499]            | 600        | Fourier MLP     | Complex Neural Net
+470  | [70500, 70649]            | 0          | Uniform         | 
+471  | [70650, 70799]            | 200        | Fourier MLP     | Complex Neural Net
+472  | [70800, 70949]            | 200        | Fourier MLP     | Complex Neural Net
+473  | [70950, 71099]            | 60000      | Fourier MLP     | Complex Neural Net
+474  | [71100, 71249]            | 1600       | Fourier MLP     | Complex Neural Net
+475  | [71250, 71399]            | 300        | Fourier MLP     | Complex Neural Net
+476  | [71400, 71549]            | 300        | Fourier MLP     | Complex Neural Net
+477  | [71550, 71699]            | 100        | Uniform         | 
+478  | [71700, 71849]            | 100        | Fourier MLP     | Complex Neural Net
+479  | [71850, 71999]            | 400        | Fourier MLP     | Complex Neural Net
+480  | [72000, 72149]            | 62400      | Fourier MLP     | Complex Neural Net
+481  | [72150, 72299]            | 1200       | Fourier MLP     | Complex Neural Net
+482  | [72300, 72449]            | 200        | Fourier MLP     | Complex Neural Net
+483  | [72450, 72599]            | 300        | Fourier MLP     | Complex Neural Net
+484  | [72600, 72749]            | 200        | Fourier MLP     | Complex Neural Net
+485  | [72750, 72899]            | 200        | Fourier MLP     | Complex Neural Net
+486  | [72900, 73049]            | 56700      | Fourier MLP     | Complex Neural Net
+487  | [73050, 73199]            | 2300       | Fourier MLP     | Complex Neural Net
+488  | [73200, 73349]            | 700        | Fourier MLP     | Complex Neural Net
+489  | [73350, 73499]            | 300        | Uniform         | 
+490  | [73500, 73649]            | 100        | Fourier MLP     | Complex Neural Net
+491  | [73650, 73799]            | 200        | Fourier MLP     | Complex Neural Net
+492  | [73800, 73949]            | 200        | Fourier MLP     | Complex Neural Net
+493  | [73950, 74099]            | 57500      | Fourier MLP     | Complex Neural Net
+494  | [74100, 74249]            | 1700       | Fourier MLP     | Complex Neural Net
+495  | [74250, 74399]            | 900        | Fourier MLP     | Complex Neural Net
+496  | [74400, 74549]            | 500        | Fourier MLP     | Complex Neural Net
+497  | [74550, 74699]            | 200        | Fourier MLP     | Complex Neural Net
+498  | [74700, 74849]            | 0          | Uniform         | 
+499  | [74850, 74999]            | 0          | Uniform         | 
+500  | [75000, 75149]            | 54700      | Fourier MLP     | Complex Neural Net
+501  | [75150, 75299]            | 1100       | Fourier MLP     | Complex Neural Net
+502  | [75300, 75449]            | 300        | Fourier MLP     | Complex Neural Net
+503  | [75450, 75599]            | 300        | Fourier MLP     | Complex Neural Net
+504  | [75600, 75749]            | 300        | Fourier MLP     | Complex Neural Net
+505  | [75750, 75899]            | 100        | Fourier MLP     | Complex Neural Net
+506  | [75900, 76049]            | 53200      | Fourier MLP     | Complex Neural Net
+507  | [76050, 76199]            | 3700       | Fourier MLP     | Complex Neural Net
+508  | [76200, 76349]            | 1100       | Fourier MLP     | Complex Neural Net
+509  | [76350, 76499]            | 400        | Fourier MLP     | Complex Neural Net
+510  | [76500, 76649]            | 200        | Fourier MLP     | Complex Neural Net
+511  | [76650, 76799]            | 0          | Uniform         | 
+512  | [76800, 76949]            | 0          | Uniform         | 
+513  | [76950, 77099]            | 51200      | Fourier MLP     | Complex Neural Net
+514  | [77100, 77249]            | 1700       | Fourier MLP     | Complex Neural Net
+515  | [77250, 77399]            | 800        | Fourier MLP     | Complex Neural Net
+516  | [77400, 77549]            | 500        | Fourier MLP     | Complex Neural Net
+517  | [77550, 77699]            | 100        | Fourier MLP     | Complex Neural Net
+518  | [77700, 77849]            | 100        | Fourier MLP     | Complex Neural Net
+519  | [77850, 77999]            | 100        | Fourier MLP     | Complex Neural Net
+520  | [78000, 78149]            | 55100      | Fourier MLP     | Complex Neural Net
+521  | [78150, 78299]            | 500        | Fourier MLP     | Complex Neural Net
+522  | [78300, 78449]            | 1100       | Fourier MLP     | Complex Neural Net
+523  | [78450, 78599]            | 300        | Fourier MLP     | Complex Neural Net
+524  | [78600, 78749]            | 300        | Fourier MLP     | Complex Neural Net
+525  | [78750, 78899]            | 100        | Fourier MLP     | Complex Neural Net
+526  | [78900, 79049]            | 52400      | Fourier MLP     | Complex Neural Net
+527  | [79050, 79199]            | 3400       | Fourier MLP     | Complex Neural Net
+528  | [79200, 79349]            | 300        | Fourier MLP     | Complex Neural Net
+529  | [79350, 79499]            | 600        | Fourier MLP     | Complex Neural Net
+530  | [79500, 79649]            | 300        | Fourier MLP     | Complex Neural Net
+531  | [79650, 79799]            | 200        | Fourier MLP     | Complex Neural Net
+532  | [79800, 79949]            | 200        | Fourier MLP     | Complex Neural Net
+533  | [79950, 80099]            | 52600      | Fourier MLP     | Complex Neural Net
+534  | [80100, 80249]            | 1100       | Fourier MLP     | Complex Neural Net
+535  | [80250, 80399]            | 400        | Fourier MLP     | Complex Neural Net
+536  | [80400, 80549]            | 200        | Fourier MLP     | Complex Neural Net
+537  | [80550, 80699]            | 200        | Uniform         | 
+538  | [80700, 80849]            | 400        | Fourier MLP     | Complex Neural Net
+539  | [80850, 80999]            | 0          | Uniform         | 
+540  | [81000, 81149]            | 56000      | Fourier MLP     | Complex Neural Net
+541  | [81150, 81299]            | 1100       | Fourier MLP     | Complex Neural Net
+542  | [81300, 81449]            | 300        | Fourier MLP     | Complex Neural Net
+543  | [81450, 81599]            | 300        | Fourier MLP     | Complex Neural Net
+544  | [81600, 81749]            | 400        | Fourier MLP     | Complex Neural Net
+545  | [81750, 81899]            | 300        | Fourier MLP     | Complex Neural Net
+546  | [81900, 82049]            | 55300      | Fourier MLP     | Complex Neural Net
+547  | [82050, 82199]            | 2800       | Fourier MLP     | Complex Neural Net
+548  | [82200, 82349]            | 600        | Fourier MLP     | Complex Neural Net
+549  | [82350, 82499]            | 300        | Fourier MLP     | Complex Neural Net
+550  | [82500, 82649]            | 200        | Fourier MLP     | Complex Neural Net
+551  | [82650, 82799]            | 100        | Uniform         | 
+552  | [82800, 82949]            | 0          | Uniform         | 
+553  | [82950, 83099]            | 47600      | Fourier MLP     | Complex Neural Net
+554  | [83100, 83249]            | 1400       | Fourier MLP     | Complex Neural Net
+555  | [83250, 83399]            | 200        | Fourier MLP     | Complex Neural Net
+556  | [83400, 83549]            | 300        | Fourier MLP     | Complex Neural Net
+557  | [83550, 83699]            | 400        | Fourier MLP     | Complex Neural Net
+558  | [83700, 83849]            | 100        | Fourier MLP     | Complex Neural Net
+559  | [83850, 83999]            | 0          | Uniform         | 
+560  | [84000, 84149]            | 51400      | Fourier MLP     | Complex Neural Net
+561  | [84150, 84299]            | 1100       | Fourier MLP     | Complex Neural Net
+562  | [84300, 84449]            | 800        | Fourier MLP     | Complex Neural Net
+563  | [84450, 84599]            | 400        | Fourier MLP     | Complex Neural Net
+564  | [84600, 84749]            | 200        | Fourier MLP     | Complex Neural Net
+565  | [84750, 84899]            | 300        | Fourier MLP     | Complex Neural Net
+566  | [84900, 85049]            | 46600      | Fourier MLP     | Complex Neural Net
+567  | [85050, 85199]            | 3000       | Fourier MLP     | Complex Neural Net
+568  | [85200, 85349]            | 400        | Fourier MLP     | Complex Neural Net
+569  | [85350, 85499]            | 500        | Fourier MLP     | Complex Neural Net
+570  | [85500, 85649]            | 100        | Fourier MLP     | Complex Neural Net
+571  | [85650, 85799]            | 100        | Fourier MLP     | Complex Neural Net
+572  | [85800, 85949]            | 300        | Fourier MLP     | Complex Neural Net
+573  | [85950, 86099]            | 49600      | Fourier MLP     | Complex Neural Net
+574  | [86100, 86249]            | 1300       | Fourier MLP     | Complex Neural Net
+575  | [86250, 86399]            | 500        | Fourier MLP     | Complex Neural Net
+576  | [86400, 86549]            | 600        | Fourier MLP     | Complex Neural Net
+577  | [86550, 86699]            | 100        | Uniform         | 
+578  | [86700, 86849]            | 200        | Fourier MLP     | Complex Neural Net
+579  | [86850, 86999]            | 0          | Uniform         | 
+580  | [87000, 87149]            | 51000      | Fourier MLP     | Complex Neural Net
+581  | [87150, 87299]            | 1200       | Fourier MLP     | Complex Neural Net
+582  | [87300, 87449]            | 300        | Fourier MLP     | Complex Neural Net
+583  | [87450, 87599]            | 300        | Fourier MLP     | Complex Neural Net
+584  | [87600, 87749]            | 100        | Fourier MLP     | Complex Neural Net
+585  | [87750, 87899]            | 100        | Uniform         | 
+586  | [87900, 88049]            | 47500      | Fourier MLP     | Complex Neural Net
+587  | [88050, 88199]            | 3400       | Fourier MLP     | Complex Neural Net
+588  | [88200, 88349]            | 1100       | Fourier MLP     | Complex Neural Net
+589  | [88350, 88499]            | 500        | Fourier MLP     | Complex Neural Net
+590  | [88500, 88649]            | 100        | Uniform         | 
+591  | [88650, 88799]            | 0          | Uniform         | 
+592  | [88800, 88949]            | 300        | Fourier MLP     | Complex Neural Net
+593  | [88950, 89099]            | 50500      | Fourier MLP     | Complex Neural Net
+594  | [89100, 89249]            | 1800       | Fourier MLP     | Complex Neural Net
+595  | [89250, 89399]            | 400        | Fourier MLP     | Complex Neural Net
+596  | [89400, 89549]            | 200        | Fourier MLP     | Complex Neural Net
+597  | [89550, 89699]            | 300        | Fourier MLP     | Complex Neural Net
+598  | [89700, 89849]            | 200        | Uniform         | 
+599  | [89850, 89999]            | 0          | Uniform         | 
+600  | [90000, 90149]            | 50500      | Fourier MLP     | Complex Neural Net
+601  | [90150, 90299]            | 1300       | Fourier MLP     | Complex Neural Net
+602  | [90300, 90449]            | 500        | Fourier MLP     | Complex Neural Net
+603  | [90450, 90599]            | 500        | Fourier MLP     | Complex Neural Net
+604  | [90600, 90749]            | 200        | Fourier MLP     | Complex Neural Net
+605  | [90750, 90899]            | 0          | Uniform         | 
+606  | [90900, 91049]            | 44800      | Fourier MLP     | Complex Neural Net
+607  | [91050, 91199]            | 1500       | Fourier MLP     | Complex Neural Net
+608  | [91200, 91349]            | 300        | Fourier MLP     | Complex Neural Net
+609  | [91350, 91499]            | 200        | Fourier MLP     | Complex Neural Net
+610  | [91500, 91649]            | 600        | Fourier MLP     | Complex Neural Net
+611  | [91650, 91799]            | 400        | Fourier MLP     | Complex Neural Net
+612  | [91800, 91949]            | 300        | Fourier MLP     | Complex Neural Net
+613  | [91950, 92099]            | 46200      | Fourier MLP     | Complex Neural Net
+614  | [92100, 92249]            | 800        | Fourier MLP     | Complex Neural Net
+615  | [92250, 92399]            | 800        | Fourier MLP     | Complex Neural Net
+616  | [92400, 92549]            | 300        | Fourier MLP     | Complex Neural Net
+617  | [92550, 92699]            | 600        | Fourier MLP     | Complex Neural Net
+618  | [92700, 92849]            | 0          | Uniform         | 
+619  | [92850, 92999]            | 0          | Uniform         | 
+620  | [93000, 93149]            | 47600      | Fourier MLP     | Complex Neural Net
+621  | [93150, 93299]            | 900        | Fourier MLP     | Complex Neural Net
+622  | [93300, 93449]            | 500        | Fourier MLP     | Complex Neural Net
+623  | [93450, 93599]            | 300        | Fourier MLP     | Complex Neural Net
+624  | [93600, 93749]            | 100        | Fourier MLP     | Complex Neural Net
+625  | [93750, 93899]            | 400        | Fourier MLP     | Complex Neural Net
+626  | [93900, 94049]            | 44200      | Fourier MLP     | Complex Neural Net
+627  | [94050, 94199]            | 2200       | Fourier MLP     | Complex Neural Net
+628  | [94200, 94349]            | 800        | Fourier MLP     | Complex Neural Net
+629  | [94350, 94499]            | 300        | Fourier MLP     | Complex Neural Net
+630  | [94500, 94649]            | 200        | Fourier MLP     | Complex Neural Net
+631  | [94650, 94799]            | 100        | Fourier MLP     | Complex Neural Net
+632  | [94800, 94949]            | 100        | Fourier MLP     | Complex Neural Net
+633  | [94950, 95099]            | 47200      | Fourier MLP     | Complex Neural Net
+634  | [95100, 95249]            | 1100       | Fourier MLP     | Complex Neural Net
+635  | [95250, 95399]            | 100        | Fourier MLP     | Complex Neural Net
+636  | [95400, 95549]            | 100        | Fourier MLP     | Complex Neural Net
+637  | [95550, 95699]            | 100        | Fourier MLP     | Complex Neural Net
+638  | [95700, 95849]            | 200        | Fourier MLP     | Complex Neural Net
+639  | [95850, 95999]            | 100        | Uniform         | 
+640  | [96000, 96149]            | 47700      | Fourier MLP     | Complex Neural Net
+641  | [96150, 96299]            | 800        | Fourier MLP     | Complex Neural Net
+642  | [96300, 96449]            | 100        | Uniform         | 
+643  | [96450, 96599]            | 300        | Fourier MLP     | Complex Neural Net
+644  | [96600, 96749]            | 400        | Fourier MLP     | Complex Neural Net
+645  | [96750, 96899]            | 0          | Uniform         | 
+646  | [96900, 97049]            | 43000      | Fourier MLP     | Complex Neural Net
+647  | [97050, 97199]            | 2300       | Fourier MLP     | Complex Neural Net
+648  | [97200, 97349]            | 700        | Fourier MLP     | Complex Neural Net
+649  | [97350, 97499]            | 400        | Fourier MLP     | Complex Neural Net
+650  | [97500, 97649]            | 0          | Uniform         | 
+651  | [97650, 97799]            | 400        | Fourier MLP     | Complex Neural Net
+652  | [97800, 97949]            | 100        | Fourier MLP     | Complex Neural Net
+653  | [97950, 98099]            | 45000      | Fourier MLP     | Complex Neural Net
+654  | [98100, 98249]            | 1400       | Fourier MLP     | Complex Neural Net
+655  | [98250, 98399]            | 700        | Fourier MLP     | Complex Neural Net
+656  | [98400, 98549]            | 400        | Fourier MLP     | Complex Neural Net
+657  | [98550, 98699]            | 100        | Fourier MLP     | Complex Neural Net
+658  | [98700, 98849]            | 0          | Uniform         | 
+659  | [98850, 98999]            | 200        | Fourier MLP     | Complex Neural Net
+660  | [99000, 99149]            | 43200      | Fourier MLP     | Complex Neural Net
+661  | [99150, 99299]            | 1100       | Fourier MLP     | Complex Neural Net
+662  | [99300, 99449]            | 600        | Fourier MLP     | Complex Neural Net
+663  | [99450, 99599]            | 200        | Uniform         | 
+664  | [99600, 99749]            | 100        | Fourier MLP     | Complex Neural Net
+665  | [99750, 99899]            | 100        | Fourier MLP     | Complex Neural Net
+666  | [99900, 100049]           | 39100      | Fourier MLP     | Complex Neural Net
+667  | [100050, 100199]          | 1900       | Fourier MLP     | Complex Neural Net
+668  | [100200, 100349]          | 700        | Fourier MLP     | Complex Neural Net
+669  | [100350, 100499]          | 300        | Fourier MLP     | Complex Neural Net
+670  | [100500, 100649]          | 300        | Fourier MLP     | Complex Neural Net
+671  | [100650, 100799]          | 100        | Fourier MLP     | Complex Neural Net
+672  | [100800, 100949]          | 100        | Fourier MLP     | Complex Neural Net
+673  | [100950, 101099]          | 42500      | Fourier MLP     | Complex Neural Net
+674  | [101100, 101249]          | 1400       | Fourier MLP     | Complex Neural Net
+675  | [101250, 101399]          | 500        | Fourier MLP     | Complex Neural Net
+676  | [101400, 101549]          | 0          | Uniform         | 
+677  | [101550, 101699]          | 0          | Uniform         | 
+678  | [101700, 101849]          | 100        | Fourier MLP     | Complex Neural Net
+679  | [101850, 101999]          | 0          | Uniform         | 
+680  | [102000, 102149]          | 44900      | Fourier MLP     | Complex Neural Net
+681  | [102150, 102299]          | 900        | Fourier MLP     | Complex Neural Net
+682  | [102300, 102449]          | 400        | Fourier MLP     | Complex Neural Net
+683  | [102450, 102599]          | 200        | Fourier MLP     | Complex Neural Net
+684  | [102600, 102749]          | 300        | Fourier MLP     | Complex Neural Net
+685  | [102750, 102899]          | 100        | Fourier MLP     | Complex Neural Net
+686  | [102900, 103049]          | 41100      | Fourier MLP     | Complex Neural Net
+687  | [103050, 103199]          | 3300       | Fourier MLP     | Complex Neural Net
+688  | [103200, 103349]          | 400        | Fourier MLP     | Complex Neural Net
+689  | [103350, 103499]          | 0          | Uniform         | 
+690  | [103500, 103649]          | 300        | Fourier MLP     | Complex Neural Net
+691  | [103650, 103799]          | 200        | Fourier MLP     | Complex Neural Net
+692  | [103800, 103949]          | 0          | Uniform         | 
+693  | [103950, 104099]          | 41200      | Fourier MLP     | Complex Neural Net
+694  | [104100, 104249]          | 700        | Fourier MLP     | Complex Neural Net
+695  | [104250, 104399]          | 300        | Fourier MLP     | Complex Neural Net
+696  | [104400, 104549]          | 0          | Uniform         | 
+697  | [104550, 104699]          | 100        | Uniform         | 
+698  | [104700, 104849]          | 200        | Fourier MLP     | Complex Neural Net
+699  | [104850, 104999]          | 200        | Fourier MLP     | Complex Neural Net
+700  | [105000, 105149]          | 43800      | Fourier MLP     | Complex Neural Net
+701  | [105150, 105299]          | 900        | Fourier MLP     | Complex Neural Net
+702  | [105300, 105449]          | 600        | Fourier MLP     | Complex Neural Net
+703  | [105450, 105599]          | 200        | Fourier MLP     | Complex Neural Net
+704  | [105600, 105749]          | 100        | Fourier MLP     | Complex Neural Net
+705  | [105750, 105899]          | 0          | Uniform         | 
+706  | [105900, 106049]          | 38000      | Fourier MLP     | Complex Neural Net
+707  | [106050, 106199]          | 3300       | Fourier MLP     | Complex Neural Net
+708  | [106200, 106349]          | 500        | Fourier MLP     | Complex Neural Net
+709  | [106350, 106499]          | 100        | Uniform         | 
+710  | [106500, 106649]          | 0          | Uniform         | 
+711  | [106650, 106799]          | 100        | Fourier MLP     | Complex Neural Net
+712  | [106800, 106949]          | 100        | Uniform         | 
+713  | [106950, 107099]          | 38600      | Fourier MLP     | Complex Neural Net
+714  | [107100, 107249]          | 1000       | Fourier MLP     | Complex Neural Net
+715  | [107250, 107399]          | 500        | Fourier MLP     | Complex Neural Net
+716  | [107400, 107549]          | 200        | Fourier MLP     | Complex Neural Net
+717  | [107550, 107699]          | 0          | Uniform         | 
+718  | [107700, 107849]          | 400        | Fourier MLP     | Complex Neural Net
+719  | [107850, 107999]          | 0          | Uniform         | 
+720  | [108000, 108149]          | 40900      | Fourier MLP     | Complex Neural Net
+721  | [108150, 108299]          | 700        | Fourier MLP     | Complex Neural Net
+722  | [108300, 108449]          | 300        | Fourier MLP     | Complex Neural Net
+723  | [108450, 108599]          | 300        | Fourier MLP     | Complex Neural Net
+724  | [108600, 108749]          | 100        | Fourier MLP     | Complex Neural Net
+725  | [108750, 108899]          | 0          | Uniform         | 
+726  | [108900, 109049]          | 38200      | Fourier MLP     | Complex Neural Net
+727  | [109050, 109199]          | 2900       | Fourier MLP     | Complex Neural Net
+728  | [109200, 109349]          | 500        | Fourier MLP     | Complex Neural Net
+729  | [109350, 109499]          | 200        | Fourier MLP     | Complex Neural Net
+730  | [109500, 109649]          | 200        | Fourier MLP     | Complex Neural Net
+731  | [109650, 109799]          | 300        | Fourier MLP     | Complex Neural Net
+732  | [109800, 109949]          | 200        | Fourier MLP     | Complex Neural Net
+733  | [109950, 110099]          | 37200      | Fourier MLP     | Complex Neural Net
+734  | [110100, 110249]          | 1400       | Fourier MLP     | Complex Neural Net
+735  | [110250, 110399]          | 400        | Fourier MLP     | Complex Neural Net
+736  | [110400, 110549]          | 200        | Fourier MLP     | Complex Neural Net
+737  | [110550, 110699]          | 300        | Fourier MLP     | Complex Neural Net
+738  | [110700, 110849]          | 100        | Fourier MLP     | Complex Neural Net
+739  | [110850, 110999]          | 100        | Fourier MLP     | Complex Neural Net
+740  | [111000, 111149]          | 36800      | Fourier MLP     | Complex Neural Net
+741  | [111150, 111299]          | 1200       | Fourier MLP     | Complex Neural Net
+742  | [111300, 111449]          | 400        | Fourier MLP     | Complex Neural Net
+743  | [111450, 111599]          | 200        | Fourier MLP     | Complex Neural Net
+744  | [111600, 111749]          | 0          | Uniform         | 
+745  | [111750, 111899]          | 0          | Uniform         | 
+746  | [111900, 112049]          | 36000      | Fourier MLP     | Complex Neural Net
+747  | [112050, 112199]          | 1600       | Fourier MLP     | Complex Neural Net
+748  | [112200, 112349]          | 700        | Fourier MLP     | Complex Neural Net
+749  | [112350, 112499]          | 200        | Fourier MLP     | Complex Neural Net
+750  | [112500, 112649]          | 300        | Fourier MLP     | Complex Neural Net
+751  | [112650, 112799]          | 200        | Fourier MLP     | Complex Neural Net
+752  | [112800, 112949]          | 200        | Fourier MLP     | Complex Neural Net
+753  | [112950, 113099]          | 36100      | Fourier MLP     | Complex Neural Net
+754  | [113100, 113249]          | 1000       | Fourier MLP     | Complex Neural Net
+755  | [113250, 113399]          | 600        | Fourier MLP     | Complex Neural Net
+756  | [113400, 113549]          | 200        | Fourier MLP     | Complex Neural Net
+757  | [113550, 113699]          | 200        | Fourier MLP     | Complex Neural Net
+758  | [113700, 113849]          | 300        | Fourier MLP     | Complex Neural Net
+759  | [113850, 113999]          | 0          | Uniform         | 
+760  | [114000, 114149]          | 41200      | Fourier MLP     | Complex Neural Net
+761  | [114150, 114299]          | 800        | Fourier MLP     | Complex Neural Net
+762  | [114300, 114449]          | 400        | Fourier MLP     | Complex Neural Net
+763  | [114450, 114599]          | 200        | Fourier MLP     | Complex Neural Net
+764  | [114600, 114749]          | 100        | Fourier MLP     | Complex Neural Net
+765  | [114750, 114899]          | 0          | Uniform         | 
+766  | [114900, 115049]          | 32600      | Fourier MLP     | Complex Neural Net
+767  | [115050, 115199]          | 2800       | Fourier MLP     | Complex Neural Net
+768  | [115200, 115349]          | 1100       | Fourier MLP     | Complex Neural Net
+769  | [115350, 115499]          | 200        | Fourier MLP     | Complex Neural Net
+770  | [115500, 115649]          | 100        | Fourier MLP     | Complex Neural Net
+771  | [115650, 115799]          | 100        | Fourier MLP     | Complex Neural Net
+772  | [115800, 115949]          | 100        | Uniform         | 
+773  | [115950, 116099]          | 37400      | Fourier MLP     | Complex Neural Net
+774  | [116100, 116249]          | 1000       | Fourier MLP     | Complex Neural Net
+775  | [116250, 116399]          | 500        | Fourier MLP     | Complex Neural Net
+776  | [116400, 116549]          | 0          | Uniform         | 
+777  | [116550, 116699]          | 0          | Uniform         | 
+778  | [116700, 116849]          | 0          | Uniform         | 
+779  | [116850, 116999]          | 0          | Uniform         | 
+780  | [117000, 117149]          | 36300      | Fourier MLP     | Complex Neural Net
+781  | [117150, 117299]          | 800        | Fourier MLP     | Complex Neural Net
+782  | [117300, 117449]          | 200        | Fourier MLP     | Complex Neural Net
+783  | [117450, 117599]          | 0          | Uniform         | 
+784  | [117600, 117749]          | 100        | Uniform         | 
+785  | [117750, 117899]          | 0          | Uniform         | 
+786  | [117900, 118049]          | 35600      | Fourier MLP     | Complex Neural Net
+787  | [118050, 118199]          | 1800       | Fourier MLP     | Complex Neural Net
+788  | [118200, 118349]          | 700        | Fourier MLP     | Complex Neural Net
+789  | [118350, 118499]          | 500        | Fourier MLP     | Complex Neural Net
+790  | [118500, 118649]          | 100        | Fourier MLP     | Complex Neural Net
+791  | [118650, 118799]          | 0          | Uniform         | 
+792  | [118800, 118949]          | 200        | Fourier MLP     | Complex Neural Net
+793  | [118950, 119099]          | 34600      | Fourier MLP     | Complex Neural Net
+794  | [119100, 119249]          | 1400       | Fourier MLP     | Complex Neural Net
+795  | [119250, 119399]          | 800        | Fourier MLP     | Complex Neural Net
+796  | [119400, 119549]          | 400        | Fourier MLP     | Complex Neural Net
+797  | [119550, 119699]          | 200        | Fourier MLP     | Complex Neural Net
+798  | [119700, 119849]          | 100        | Fourier MLP     | Complex Neural Net
+799  | [119850, 119999]          | 0          | Uniform         | 
+800  | [120000, 120149]          | 36500      | Fourier MLP     | Complex Neural Net
+801  | [120150, 120299]          | 600        | Fourier MLP     | Complex Neural Net
+802  | [120300, 120449]          | 300        | Fourier MLP     | Complex Neural Net
+803  | [120450, 120599]          | 0          | Uniform         | 
+804  | [120600, 120749]          | 100        | Fourier MLP     | Complex Neural Net
+805  | [120750, 120899]          | 0          | Uniform         | 
+806  | [120900, 121049]          | 36600      | Fourier MLP     | Complex Neural Net
+807  | [121050, 121199]          | 2100       | Fourier MLP     | Complex Neural Net
+808  | [121200, 121349]          | 600        | Fourier MLP     | Complex Neural Net
+809  | [121350, 121499]          | 500        | Fourier MLP     | Complex Neural Net
+810  | [121500, 121649]          | 200        | Fourier MLP     | Complex Neural Net
+811  | [121650, 121799]          | 200        | Fourier MLP     | Complex Neural Net
+812  | [121800, 121949]          | 100        | Fourier MLP     | Complex Neural Net
+813  | [121950, 122099]          | 34000      | Fourier MLP     | Complex Neural Net
+814  | [122100, 122249]          | 1400       | Fourier MLP     | Complex Neural Net
+815  | [122250, 122399]          | 200        | Fourier MLP     | Complex Neural Net
+816  | [122400, 122549]          | 200        | Fourier MLP     | Complex Neural Net
+817  | [122550, 122699]          | 300        | Fourier MLP     | Complex Neural Net
+818  | [122700, 122849]          | 100        | Fourier MLP     | Complex Neural Net
+819  | [122850, 122999]          | 0          | Uniform         | 
+820  | [123000, 123149]          | 35500      | Fourier MLP     | Complex Neural Net
+821  | [123150, 123299]          | 700        | Fourier MLP     | Complex Neural Net
+822  | [123300, 123449]          | 300        | Fourier MLP     | Complex Neural Net
+823  | [123450, 123599]          | 300        | Fourier MLP     | Complex Neural Net
+824  | [123600, 123749]          | 100        | Fourier MLP     | Complex Neural Net
+825  | [123750, 123899]          | 0          | Uniform         | 
+826  | [123900, 124049]          | 33400      | Fourier MLP     | Complex Neural Net
+827  | [124050, 124199]          | 2100       | Fourier MLP     | Complex Neural Net
+828  | [124200, 124349]          | 400        | Fourier MLP     | Complex Neural Net
+829  | [124350, 124499]          | 100        | Fourier MLP     | Complex Neural Net
+830  | [124500, 124649]          | 100        | Fourier MLP     | Complex Neural Net
+831  | [124650, 124799]          | 0          | Uniform         | 
+832  | [124800, 124949]          | 0          | Uniform         | 
+833  | [124950, 125099]          | 33600      | Fourier MLP     | Complex Neural Net
+834  | [125100, 125249]          | 800        | Fourier MLP     | Complex Neural Net
+835  | [125250, 125399]          | 600        | Fourier MLP     | Complex Neural Net
+836  | [125400, 125549]          | 100        | Fourier MLP     | Complex Neural Net
+837  | [125550, 125699]          | 100        | Fourier MLP     | Complex Neural Net
+838  | [125700, 125849]          | 0          | Uniform         | 
+839  | [125850, 125999]          | 0          | Uniform         | 
+840  | [126000, 126149]          | 32900      | Fourier MLP     | Complex Neural Net
+841  | [126150, 126299]          | 900        | Fourier MLP     | Complex Neural Net
+842  | [126300, 126449]          | 400        | Fourier MLP     | Complex Neural Net
+843  | [126450, 126599]          | 100        | Uniform         | 
+844  | [126600, 126749]          | 100        | Fourier MLP     | Complex Neural Net
+845  | [126750, 126899]          | 200        | Fourier MLP     | Complex Neural Net
+846  | [126900, 127049]          | 29400      | Fourier MLP     | Complex Neural Net
+847  | [127050, 127199]          | 2600       | Fourier MLP     | Complex Neural Net
+848  | [127200, 127349]          | 500        | Fourier MLP     | Complex Neural Net
+849  | [127350, 127499]          | 600        | Fourier MLP     | Complex Neural Net
+850  | [127500, 127649]          | 0          | Uniform         | 
+851  | [127650, 127799]          | 0          | Uniform         | 
+852  | [127800, 127949]          | 100        | Uniform         | 
+853  | [127950, 128099]          | 34000      | Fourier MLP     | Complex Neural Net
+854  | [128100, 128249]          | 1300       | Fourier MLP     | Complex Neural Net
+855  | [128250, 128399]          | 600        | Fourier MLP     | Complex Neural Net
+856  | [128400, 128549]          | 100        | Fourier MLP     | Complex Neural Net
+857  | [128550, 128699]          | 100        | Fourier MLP     | Complex Neural Net
+858  | [128700, 128849]          | 100        | Fourier MLP     | Complex Neural Net
+859  | [128850, 128999]          | 100        | Uniform         | 
+860  | [129000, 129149]          | 37900      | Fourier MLP     | Complex Neural Net
+861  | [129150, 129299]          | 800        | Fourier MLP     | Complex Neural Net
+862  | [129300, 129449]          | 300        | Fourier MLP     | Complex Neural Net
+863  | [129450, 129599]          | 0          | Uniform         | 
+864  | [129600, 129749]          | 100        | Fourier MLP     | Complex Neural Net
+865  | [129750, 129899]          | 0          | Uniform         | 
+866  | [129900, 130049]          | 31100      | Fourier MLP     | Complex Neural Net
+867  | [130050, 130199]          | 2000       | Fourier MLP     | Complex Neural Net
+868  | [130200, 130349]          | 400        | Fourier MLP     | Complex Neural Net
+869  | [130350, 130499]          | 300        | Fourier MLP     | Complex Neural Net
+870  | [130500, 130649]          | 300        | Fourier MLP     | Complex Neural Net
+871  | [130650, 130799]          | 0          | Uniform         | 
+872  | [130800, 130949]          | 0          | Uniform         | 
+873  | [130950, 131099]          | 31500      | Fourier MLP     | Complex Neural Net
+874  | [131100, 131249]          | 800        | Fourier MLP     | Complex Neural Net
+875  | [131250, 131399]          | 300        | Fourier MLP     | Complex Neural Net
+876  | [131400, 131549]          | 100        | Uniform         | 
+877  | [131550, 131699]          | 0          | Uniform         | 
+878  | [131700, 131849]          | 0          | Uniform         | 
+879  | [131850, 131999]          | 0          | Uniform         | 
+880  | [132000, 132149]          | 30300      | Fourier MLP     | Complex Neural Net
+881  | [132150, 132299]          | 400        | Fourier MLP     | Complex Neural Net
+882  | [132300, 132449]          | 400        | Fourier MLP     | Complex Neural Net
+883  | [132450, 132599]          | 300        | Fourier MLP     | Complex Neural Net
+884  | [132600, 132749]          | 200        | Fourier MLP     | Complex Neural Net
+885  | [132750, 132899]          | 100        | Uniform         | 
+886  | [132900, 133049]          | 33900      | Fourier MLP     | Complex Neural Net
+887  | [133050, 133199]          | 1300       | Fourier MLP     | Complex Neural Net
+888  | [133200, 133349]          | 200        | Fourier MLP     | Complex Neural Net
+889  | [133350, 133499]          | 200        | Fourier MLP     | Complex Neural Net
+890  | [133500, 133649]          | 200        | Uniform         | 
+891  | [133650, 133799]          | 200        | Fourier MLP     | Complex Neural Net
+892  | [133800, 133949]          | 0          | Uniform         | 
+893  | [133950, 134099]          | 29500      | Fourier MLP     | Complex Neural Net
+894  | [134100, 134249]          | 1600       | Fourier MLP     | Complex Neural Net
+895  | [134250, 134399]          | 600        | Fourier MLP     | Complex Neural Net
+896  | [134400, 134549]          | 400        | Fourier MLP     | Complex Neural Net
+897  | [134550, 134699]          | 100        | Fourier MLP     | Complex Neural Net
+898  | [134700, 134849]          | 0          | Uniform         | 
+899  | [134850, 134999]          | 200        | Fourier MLP     | Complex Neural Net
+900  | [135000, 135149]          | 32400      | Fourier MLP     | Complex Neural Net
+901  | [135150, 135299]          | 400        | Uniform         | 
+902  | [135300, 135449]          | 200        | Fourier MLP     | Complex Neural Net
+903  | [135450, 135599]          | 400        | Fourier MLP     | Complex Neural Net
+904  | [135600, 135749]          | 0          | Uniform         | 
+905  | [135750, 135899]          | 100        | Fourier MLP     | Complex Neural Net
+906  | [135900, 136049]          | 35900      | Fourier MLP     | Complex Neural Net
+907  | [136050, 136199]          | 1600       | Fourier MLP     | Complex Neural Net
+908  | [136200, 136349]          | 600        | Fourier MLP     | Complex Neural Net
+909  | [136350, 136499]          | 100        | Fourier MLP     | Complex Neural Net
+910  | [136500, 136649]          | 200        | Fourier MLP     | Complex Neural Net
+911  | [136650, 136799]          | 100        | Fourier MLP     | Complex Neural Net
+912  | [136800, 136949]          | 0          | Uniform         | 
+913  | [136950, 137099]          | 33700      | Fourier MLP     | Complex Neural Net
+914  | [137100, 137249]          | 1400       | Fourier MLP     | Complex Neural Net
+915  | [137250, 137399]          | 400        | Fourier MLP     | Complex Neural Net
+916  | [137400, 137549]          | 100        | Fourier MLP     | Complex Neural Net
+917  | [137550, 137699]          | 200        | Fourier MLP     | Complex Neural Net
+918  | [137700, 137849]          | 100        | Uniform         | 
+919  | [137850, 137999]          | 100        | Fourier MLP     | Complex Neural Net
+920  | [138000, 138149]          | 32100      | Fourier MLP     | Complex Neural Net
+921  | [138150, 138299]          | 400        | Fourier MLP     | Complex Neural Net
+922  | [138300, 138449]          | 200        | Fourier MLP     | Complex Neural Net
+923  | [138450, 138599]          | 100        | Fourier MLP     | Complex Neural Net
+924  | [138600, 138749]          | 100        | Uniform         | 
+925  | [138750, 138899]          | 200        | Fourier MLP     | Complex Neural Net
+926  | [138900, 139049]          | 28700      | Fourier MLP     | Complex Neural Net
+927  | [139050, 139199]          | 1400       | Fourier MLP     | Complex Neural Net
+928  | [139200, 139349]          | 200        | Fourier MLP     | Complex Neural Net
+929  | [139350, 139499]          | 300        | Fourier MLP     | Complex Neural Net
+930  | [139500, 139649]          | 300        | Fourier MLP     | Complex Neural Net
+931  | [139650, 139799]          | 100        | Fourier MLP     | Complex Neural Net
+932  | [139800, 139949]          | 0          | Uniform         | 
+933  | [139950, 140099]          | 29500      | Fourier MLP     | Complex Neural Net
+934  | [140100, 140249]          | 500        | Fourier MLP     | Complex Neural Net
+935  | [140250, 140399]          | 600        | Fourier MLP     | Complex Neural Net
+936  | [140400, 140549]          | 100        | Fourier MLP     | Complex Neural Net
+937  | [140550, 140699]          | 200        | Fourier MLP     | Complex Neural Net
+938  | [140700, 140849]          | 0          | Uniform         | 
+939  | [140850, 140999]          | 100        | Fourier MLP     | Complex Neural Net
+940  | [141000, 141149]          | 32700      | Fourier MLP     | Complex Neural Net
+941  | [141150, 141299]          | 600        | Fourier MLP     | Complex Neural Net
+942  | [141300, 141449]          | 200        | Uniform         | 
+943  | [141450, 141599]          | 200        | Fourier MLP     | Complex Neural Net
+944  | [141600, 141749]          | 0          | Uniform         | 
+945  | [141750, 141899]          | 100        | Uniform         | 
+946  | [141900, 142049]          | 26700      | Fourier MLP     | Complex Neural Net
+947  | [142050, 142199]          | 900        | Fourier MLP     | Complex Neural Net
+948  | [142200, 142349]          | 200        | Fourier MLP     | Complex Neural Net
+949  | [142350, 142499]          | 200        | Fourier MLP     | Complex Neural Net
+950  | [142500, 142649]          | 100        | Fourier MLP     | Complex Neural Net
+951  | [142650, 142799]          | 0          | Uniform         | 
+952  | [142800, 142949]          | 0          | Uniform         | 
+953  | [142950, 143099]          | 33200      | Fourier MLP     | Complex Neural Net
+954  | [143100, 143249]          | 800        | Fourier MLP     | Complex Neural Net
+955  | [143250, 143399]          | 200        | Fourier MLP     | Complex Neural Net
+956  | [143400, 143549]          | 200        | Fourier MLP     | Complex Neural Net
+957  | [143550, 143699]          | 100        | Fourier MLP     | Complex Neural Net
+958  | [143700, 143849]          | 0          | Uniform         | 
+959  | [143850, 143999]          | 100        | Fourier MLP     | Complex Neural Net
+960  | [144000, 144149]          | 31600      | Fourier MLP     | Complex Neural Net
+961  | [144150, 144299]          | 900        | Fourier MLP     | Complex Neural Net
+962  | [144300, 144449]          | 100        | Uniform         | 
+963  | [144450, 144599]          | 0          | Uniform         | 
+964  | [144600, 144749]          | 100        | Fourier MLP     | Complex Neural Net
+965  | [144750, 144899]          | 100        | Fourier MLP     | Complex Neural Net
+966  | [144900, 145049]          | 27100      | Fourier MLP     | Complex Neural Net
+967  | [145050, 145199]          | 1800       | Fourier MLP     | Complex Neural Net
+968  | [145200, 145349]          | 700        | Fourier MLP     | Complex Neural Net
+969  | [145350, 145499]          | 100        | Uniform         | 
+970  | [145500, 145649]          | 0          | Uniform         | 
+971  | [145650, 145799]          | 100        | Uniform         | 
+972  | [145800, 145949]          | 0          | Uniform         | 
+973  | [145950, 146099]          | 27000      | Fourier MLP     | Complex Neural Net
+974  | [146100, 146249]          | 1300       | Fourier MLP     | Complex Neural Net
+975  | [146250, 146399]          | 300        | Fourier MLP     | Complex Neural Net
+976  | [146400, 146549]          | 200        | Fourier MLP     | Complex Neural Net
+977  | [146550, 146699]          | 100        | Fourier MLP     | Complex Neural Net
+978  | [146700, 146849]          | 100        | Fourier MLP     | Complex Neural Net
+979  | [146850, 146999]          | 300        | Fourier MLP     | Complex Neural Net
+980  | [147000, 147149]          | 27400      | Fourier MLP     | Complex Neural Net
+981  | [147150, 147299]          | 500        | Fourier MLP     | Complex Neural Net
+982  | [147300, 147449]          | 200        | Fourier MLP     | Complex Neural Net
+983  | [147450, 147599]          | 300        | Fourier MLP     | Complex Neural Net
+984  | [147600, 147749]          | 0          | Uniform         | 
+985  | [147750, 147899]          | 100        | Fourier MLP     | Complex Neural Net
+986  | [147900, 148049]          | 27600      | Fourier MLP     | Complex Neural Net
+987  | [148050, 148199]          | 1600       | Fourier MLP     | Complex Neural Net
+988  | [148200, 148349]          | 300        | Fourier MLP     | Complex Neural Net
+989  | [148350, 148499]          | 300        | Fourier MLP     | Complex Neural Net
+990  | [148500, 148649]          | 200        | Fourier MLP     | Complex Neural Net
+991  | [148650, 148799]          | 200        | Fourier MLP     | Complex Neural Net
+992  | [148800, 148949]          | 0          | Uniform         | 
+993  | [148950, 149099]          | 29900      | Fourier MLP     | Complex Neural Net
+994  | [149100, 149249]          | 1300       | Fourier MLP     | Complex Neural Net
+995  | [149250, 149399]          | 1000       | Fourier MLP     | Complex Neural Net
+996  | [149400, 149549]          | 500        | Fourier MLP     | Complex Neural Net
+997  | [149550, 149699]          | 0          | Uniform         | 
+998  | [149700, 149849]          | 0          | Uniform         | 
+999  | [149850, 149999]          | 100        | Fourier MLP     | Complex Neural Net
+1000 | [150000, 150149]          | 29100      | Fourier MLP     | Complex Neural Net
+1001 | [150150, 150299]          | 500        | Fourier MLP     | Complex Neural Net
+1002 | [150300, 150449]          | 400        | Fourier MLP     | Complex Neural Net
+1003 | [150450, 150599]          | 100        | Fourier MLP     | Complex Neural Net
+1004 | [150600, 150749]          | 100        | Uniform         | 
+1005 | [150750, 150899]          | 100        | Fourier MLP     | Complex Neural Net
+1006 | [150900, 151049]          | 26300      | Fourier MLP     | Complex Neural Net
+1007 | [151050, 151199]          | 1500       | Fourier MLP     | Complex Neural Net
+1008 | [151200, 151349]          | 300        | Fourier MLP     | Complex Neural Net
+1009 | [151350, 151499]          | 200        | Fourier MLP     | Complex Neural Net
+1010 | [151500, 151649]          | 100        | Uniform         | 
+1011 | [151650, 151799]          | 100        | Uniform         | 
+1012 | [151800, 151949]          | 0          | Uniform         | 
+1013 | [151950, 152099]          | 29100      | Fourier MLP     | Complex Neural Net
+1014 | [152100, 152249]          | 800        | Fourier MLP     | Complex Neural Net
+1015 | [152250, 152399]          | 100        | Uniform         | 
+1016 | [152400, 152549]          | 300        | Fourier MLP     | Complex Neural Net
+1017 | [152550, 152699]          | 300        | Fourier MLP     | Complex Neural Net
+1018 | [152700, 152849]          | 0          | Uniform         | 
+1019 | [152850, 152999]          | 100        | Fourier MLP     | Complex Neural Net
+1020 | [153000, 153149]          | 27000      | Fourier MLP     | Complex Neural Net
+1021 | [153150, 153299]          | 200        | Fourier MLP     | Complex Neural Net
+1022 | [153300, 153449]          | 100        | Fourier MLP     | Complex Neural Net
+1023 | [153450, 153599]          | 100        | Fourier MLP     | Complex Neural Net
+1024 | [153600, 153749]          | 300        | Fourier MLP     | Complex Neural Net
+1025 | [153750, 153899]          | 0          | Uniform         | 
+1026 | [153900, 154049]          | 25100      | Fourier MLP     | Complex Neural Net
+1027 | [154050, 154199]          | 2000       | Fourier MLP     | Complex Neural Net
+1028 | [154200, 154349]          | 300        | Fourier MLP     | Complex Neural Net
+1029 | [154350, 154499]          | 500        | Fourier MLP     | Complex Neural Net
+1030 | [154500, 154649]          | 0          | Uniform         | 
+1031 | [154650, 154799]          | 0          | Uniform         | 
+1032 | [154800, 154949]          | 0          | Uniform         | 
+1033 | [154950, 155099]          | 30400      | Fourier MLP     | Complex Neural Net
+1034 | [155100, 155249]          | 1000       | Fourier MLP     | Complex Neural Net
+1035 | [155250, 155399]          | 200        | Fourier MLP     | Complex Neural Net
+1036 | [155400, 155549]          | 300        | Fourier MLP     | Complex Neural Net
+1037 | [155550, 155699]          | 0          | Uniform         | 
+1038 | [155700, 155849]          | 100        | Fourier MLP     | Complex Neural Net
+1039 | [155850, 155999]          | 0          | Uniform         | 
+1040 | [156000, 156149]          | 29300      | Fourier MLP     | Complex Neural Net
+1041 | [156150, 156299]          | 800        | Fourier MLP     | Complex Neural Net
+1042 | [156300, 156449]          | 100        | Fourier MLP     | Complex Neural Net
+1043 | [156450, 156599]          | 300        | Fourier MLP     | Complex Neural Net
+1044 | [156600, 156749]          | 0          | Uniform         | 
+1045 | [156750, 156899]          | 0          | Uniform         | 
+1046 | [156900, 157049]          | 25900      | Fourier MLP     | Complex Neural Net
+1047 | [157050, 157199]          | 1700       | Fourier MLP     | Complex Neural Net
+1048 | [157200, 157349]          | 100        | Uniform         | 
+1049 | [157350, 157499]          | 100        | Fourier MLP     | Complex Neural Net
+1050 | [157500, 157649]          | 200        | Uniform         | 
+1051 | [157650, 157799]          | 100        | Fourier MLP     | Complex Neural Net
+1052 | [157800, 157949]          | 0          | Uniform         | 
+1053 | [157950, 158099]          | 24400      | Fourier MLP     | Complex Neural Net
+1054 | [158100, 158249]          | 900        | Fourier MLP     | Complex Neural Net
+1055 | [158250, 158399]          | 200        | Fourier MLP     | Complex Neural Net
+1056 | [158400, 158549]          | 100        | Uniform         | 
+1057 | [158550, 158699]          | 0          | Uniform         | 
+1058 | [158700, 158849]          | 0          | Uniform         | 
+1059 | [158850, 158999]          | 0          | Uniform         | 
+1060 | [159000, 159149]          | 29500      | Fourier MLP     | Complex Neural Net
+1061 | [159150, 159299]          | 400        | Fourier MLP     | Complex Neural Net
+1062 | [159300, 159449]          | 0          | Uniform         | 
+1063 | [159450, 159599]          | 100        | Fourier MLP     | Complex Neural Net
+1064 | [159600, 159749]          | 100        | Fourier MLP     | Complex Neural Net
+1065 | [159750, 159899]          | 0          | Uniform         | 
+1066 | [159900, 160049]          | 25500      | Fourier MLP     | Complex Neural Net
+1067 | [160050, 160199]          | 1500       | Fourier MLP     | Complex Neural Net
+1068 | [160200, 160349]          | 300        | Fourier MLP     | Complex Neural Net
+1069 | [160350, 160499]          | 100        | Uniform         | 
+1070 | [160500, 160649]          | 100        | Uniform         | 
+1071 | [160650, 160799]          | 300        | Fourier MLP     | Complex Neural Net
+1072 | [160800, 160949]          | 0          | Uniform         | 
+1073 | [160950, 161099]          | 27400      | Fourier MLP     | Complex Neural Net
+1074 | [161100, 161249]          | 1000       | Fourier MLP     | Complex Neural Net
+1075 | [161250, 161399]          | 400        | Fourier MLP     | Complex Neural Net
+1076 | [161400, 161549]          | 100        | Fourier MLP     | Complex Neural Net
+1077 | [161550, 161699]          | 0          | Uniform         | 
+1078 | [161700, 161849]          | 100        | Fourier MLP     | Complex Neural Net
+1079 | [161850, 161999]          | 0          | Uniform         | 
+1080 | [162000, 162149]          | 25800      | Fourier MLP     | Complex Neural Net
+1081 | [162150, 162299]          | 600        | Fourier MLP     | Complex Neural Net
+1082 | [162300, 162449]          | 200        | Fourier MLP     | Complex Neural Net
+1083 | [162450, 162599]          | 0          | Uniform         | 
+1084 | [162600, 162749]          | 0          | Uniform         | 
+1085 | [162750, 162899]          | 100        | Fourier MLP     | Complex Neural Net
+1086 | [162900, 163049]          | 26000      | Fourier MLP     | Complex Neural Net
+1087 | [163050, 163199]          | 1100       | Fourier MLP     | Complex Neural Net
+1088 | [163200, 163349]          | 300        | Fourier MLP     | Complex Neural Net
+1089 | [163350, 163499]          | 400        | Fourier MLP     | Complex Neural Net
+1090 | [163500, 163649]          | 300        | Fourier MLP     | Complex Neural Net
+1091 | [163650, 163799]          | 300        | Fourier MLP     | Complex Neural Net
+1092 | [163800, 163949]          | 100        | Fourier MLP     | Complex Neural Net
+1093 | [163950, 164099]          | 25300      | Fourier MLP     | Complex Neural Net
+1094 | [164100, 164249]          | 800        | Fourier MLP     | Complex Neural Net
+1095 | [164250, 164399]          | 500        | Fourier MLP     | Complex Neural Net
+1096 | [164400, 164549]          | 100        | Fourier MLP     | Complex Neural Net
+1097 | [164550, 164699]          | 200        | Fourier MLP     | Complex Neural Net
+1098 | [164700, 164849]          | 100        | Fourier MLP     | Complex Neural Net
+1099 | [164850, 164999]          | 0          | Uniform         | 
+1100 | [165000, 165149]          | 27400      | Fourier MLP     | Complex Neural Net
+1101 | [165150, 165299]          | 700        | Fourier MLP     | Complex Neural Net
+1102 | [165300, 165449]          | 0          | Uniform         | 
+1103 | [165450, 165599]          | 400        | Fourier MLP     | Complex Neural Net
+1104 | [165600, 165749]          | 0          | Uniform         | 
+1105 | [165750, 165899]          | 100        | Uniform         | 
+1106 | [165900, 166049]          | 25800      | Fourier MLP     | Complex Neural Net
+1107 | [166050, 166199]          | 1600       | Fourier MLP     | Complex Neural Net
+1108 | [166200, 166349]          | 600        | Fourier MLP     | Complex Neural Net
+1109 | [166350, 166499]          | 0          | Uniform         | 
+1110 | [166500, 166649]          | 200        | Fourier MLP     | Complex Neural Net
+1111 | [166650, 166799]          | 0          | Uniform         | 
+1112 | [166800, 166949]          | 100        | Fourier MLP     | Complex Neural Net
+1113 | [166950, 167099]          | 27700      | Fourier MLP     | Complex Neural Net
+1114 | [167100, 167249]          | 700        | Fourier MLP     | Complex Neural Net
+1115 | [167250, 167399]          | 100        | Uniform         | 
+1116 | [167400, 167549]          | 200        | Fourier MLP     | Complex Neural Net
+1117 | [167550, 167699]          | 0          | Uniform         | 
+1118 | [167700, 167849]          | 100        | Fourier MLP     | Complex Neural Net
+1119 | [167850, 167999]          | 0          | Uniform         | 
+1120 | [168000, 168149]          | 25600      | Fourier MLP     | Complex Neural Net
+1121 | [168150, 168299]          | 1000       | Fourier MLP     | Complex Neural Net
+1122 | [168300, 168449]          | 100        | Uniform         | 
+1123 | [168450, 168599]          | 0          | Uniform         | 
+1124 | [168600, 168749]          | 0          | Uniform         | 
+1125 | [168750, 168899]          | 0          | Uniform         | 
+1126 | [168900, 169049]          | 20700      | Fourier MLP     | Complex Neural Net
+1127 | [169050, 169199]          | 1200       | Fourier MLP     | Complex Neural Net
+1128 | [169200, 169349]          | 200        | Fourier MLP     | Complex Neural Net
+1129 | [169350, 169499]          | 300        | Fourier MLP     | Complex Neural Net
+1130 | [169500, 169649]          | 200        | Uniform         | 
+1131 | [169650, 169799]          | 200        | Fourier MLP     | Complex Neural Net
+1132 | [169800, 169949]          | 0          | Uniform         | 
+1133 | [169950, 170099]          | 24400      | Fourier MLP     | Complex Neural Net
+1134 | [170100, 170249]          | 500        | Fourier MLP     | Complex Neural Net
+1135 | [170250, 170399]          | 300        | Fourier MLP     | Complex Neural Net
+1136 | [170400, 170549]          | 100        | Fourier MLP     | Complex Neural Net
+1137 | [170550, 170699]          | 500        | Fourier MLP     | Complex Neural Net
+1138 | [170700, 170849]          | 0          | Uniform         | 
+1139 | [170850, 170999]          | 0          | Uniform         | 
+1140 | [171000, 171149]          | 24300      | Fourier MLP     | Complex Neural Net
+1141 | [171150, 171299]          | 300        | Fourier MLP     | Complex Neural Net
+1142 | [171300, 171449]          | 100        | Fourier MLP     | Complex Neural Net
+1143 | [171450, 171599]          | 100        | Fourier MLP     | Complex Neural Net
+1144 | [171600, 171749]          | 0          | Uniform         | 
+1145 | [171750, 171899]          | 0          | Uniform         | 
+1146 | [171900, 172049]          | 25100      | Fourier MLP     | Complex Neural Net
+1147 | [172050, 172199]          | 1500       | Fourier MLP     | Complex Neural Net
+1148 | [172200, 172349]          | 600        | Fourier MLP     | Complex Neural Net
+1149 | [172350, 172499]          | 200        | Fourier MLP     | Complex Neural Net
+1150 | [172500, 172649]          | 100        | Fourier MLP     | Complex Neural Net
+1151 | [172650, 172799]          | 100        | Fourier MLP     | Complex Neural Net
+1152 | [172800, 172949]          | 0          | Uniform         | 
+1153 | [172950, 173099]          | 23900      | Fourier MLP     | Complex Neural Net
+1154 | [173100, 173249]          | 500        | Fourier MLP     | Complex Neural Net
+1155 | [173250, 173399]          | 100        | Fourier MLP     | Complex Neural Net
+1156 | [173400, 173549]          | 200        | Fourier MLP     | Complex Neural Net
+1157 | [173550, 173699]          | 200        | Fourier MLP     | Complex Neural Net
+1158 | [173700, 173849]          | 300        | Fourier MLP     | Complex Neural Net
+1159 | [173850, 173999]          | 0          | Uniform         | 
+1160 | [174000, 174149]          | 23200      | Fourier MLP     | Complex Neural Net
+1161 | [174150, 174299]          | 200        | Fourier MLP     | Complex Neural Net
+1162 | [174300, 174449]          | 200        | Fourier MLP     | Complex Neural Net
+1163 | [174450, 174599]          | 200        | Fourier MLP     | Complex Neural Net
+1164 | [174600, 174749]          | 100        | Fourier MLP     | Complex Neural Net
+1165 | [174750, 174899]          | 0          | Uniform         | 
+1166 | [174900, 175049]          | 26200      | Fourier MLP     | Complex Neural Net
+1167 | [175050, 175199]          | 1800       | Fourier MLP     | Complex Neural Net
+1168 | [175200, 175349]          | 300        | Fourier MLP     | Complex Neural Net
+1169 | [175350, 175499]          | 100        | Fourier MLP     | Complex Neural Net
+1170 | [175500, 175649]          | 100        | Fourier MLP     | Complex Neural Net
+1171 | [175650, 175799]          | 100        | Fourier MLP     | Complex Neural Net
+1172 | [175800, 175949]          | 100        | Fourier MLP     | Complex Neural Net
+1173 | [175950, 176099]          | 23300      | Fourier MLP     | Complex Neural Net
+1174 | [176100, 176249]          | 700        | Fourier MLP     | Complex Neural Net
+1175 | [176250, 176399]          | 300        | Fourier MLP     | Complex Neural Net
+1176 | [176400, 176549]          | 200        | Fourier MLP     | Complex Neural Net
+1177 | [176550, 176699]          | 100        | Fourier MLP     | Complex Neural Net
+1178 | [176700, 176849]          | 300        | Fourier MLP     | Complex Neural Net
+1179 | [176850, 176999]          | 0          | Uniform         | 
+1180 | [177000, 177149]          | 23100      | Fourier MLP     | Complex Neural Net
+1181 | [177150, 177299]          | 700        | Fourier MLP     | Complex Neural Net
+1182 | [177300, 177449]          | 100        | Fourier MLP     | Complex Neural Net
+1183 | [177450, 177599]          | 200        | Uniform         | 
+1184 | [177600, 177749]          | 0          | Uniform         | 
+1185 | [177750, 177899]          | 0          | Uniform         | 
+1186 | [177900, 178049]          | 22900      | Fourier MLP     | Complex Neural Net
+1187 | [178050, 178199]          | 1600       | Fourier MLP     | Complex Neural Net
+1188 | [178200, 178349]          | 300        | Fourier MLP     | Complex Neural Net
+1189 | [178350, 178499]          | 100        | Fourier MLP     | Complex Neural Net
+1190 | [178500, 178649]          | 300        | Fourier MLP     | Complex Neural Net
+1191 | [178650, 178799]          | 100        | Fourier MLP     | Complex Neural Net
+1192 | [178800, 178949]          | 0          | Uniform         | 
+1193 | [178950, 179099]          | 23800      | Fourier MLP     | Complex Neural Net
+1194 | [179100, 179249]          | 1100       | Fourier MLP     | Complex Neural Net
+1195 | [179250, 179399]          | 200        | Fourier MLP     | Complex Neural Net
+1196 | [179400, 179549]          | 100        | Uniform         | 
+1197 | [179550, 179699]          | 0          | Uniform         | 
+1198 | [179700, 179849]          | 100        | Fourier MLP     | Complex Neural Net
+1199 | [179850, 179999]          | 0          | Uniform         | 
+1200 | [180000, 180149]          | 24500      | Fourier MLP     | Complex Neural Net
+1201 | [180150, 180299]          | 500        | Fourier MLP     | Complex Neural Net
+1202 | [180300, 180449]          | 0          | Uniform         | 
+1203 | [180450, 180599]          | 100        | Uniform         | 
+1204 | [180600, 180749]          | 200        | Fourier MLP     | Complex Neural Net
+1205 | [180750, 180899]          | 100        | Uniform         | 
+1206 | [180900, 181049]          | 27500      | Fourier MLP     | Complex Neural Net
+1207 | [181050, 181199]          | 1600       | Fourier MLP     | Complex Neural Net
+1208 | [181200, 181349]          | 1200       | Fourier MLP     | Complex Neural Net
+1209 | [181350, 181499]          | 0          | Uniform         | 
+1210 | [181500, 181649]          | 100        | Fourier MLP     | Complex Neural Net
+1211 | [181650, 181799]          | 100        | Fourier MLP     | Complex Neural Net
+1212 | [181800, 181949]          | 100        | Uniform         | 
+1213 | [181950, 182099]          | 22600      | Fourier MLP     | Complex Neural Net
+1214 | [182100, 182249]          | 400        | Fourier MLP     | Complex Neural Net
+1215 | [182250, 182399]          | 400        | Fourier MLP     | Complex Neural Net
+1216 | [182400, 182549]          | 300        | Fourier MLP     | Complex Neural Net
+1217 | [182550, 182699]          | 0          | Uniform         | 
+1218 | [182700, 182849]          | 0          | Uniform         | 
+1219 | [182850, 182999]          | 100        | Fourier MLP     | Complex Neural Net
+1220 | [183000, 183149]          | 22300      | Fourier MLP     | Complex Neural Net
+1221 | [183150, 183299]          | 500        | Fourier MLP     | Complex Neural Net
+1222 | [183300, 183449]          | 0          | Uniform         | 
+1223 | [183450, 183599]          | 100        | Uniform         | 
+1224 | [183600, 183749]          | 0          | Uniform         | 
+1225 | [183750, 183899]          | 100        | Fourier MLP     | Complex Neural Net
+1226 | [183900, 184049]          | 20400      | Fourier MLP     | Complex Neural Net
+1227 | [184050, 184199]          | 800        | Fourier MLP     | Complex Neural Net
+1228 | [184200, 184349]          | 500        | Fourier MLP     | Complex Neural Net
+1229 | [184350, 184499]          | 200        | Fourier MLP     | Complex Neural Net
+1230 | [184500, 184649]          | 100        | Uniform         | 
+1231 | [184650, 184799]          | 100        | Uniform         | 
+1232 | [184800, 184949]          | 200        | Fourier MLP     | Complex Neural Net
+1233 | [184950, 185099]          | 20900      | Fourier MLP     | Complex Neural Net
+1234 | [185100, 185249]          | 1300       | Fourier MLP     | Complex Neural Net
+1235 | [185250, 185399]          | 300        | Fourier MLP     | Complex Neural Net
+1236 | [185400, 185549]          | 0          | Uniform         | 
+1237 | [185550, 185699]          | 200        | Fourier MLP     | Complex Neural Net
+1238 | [185700, 185849]          | 0          | Uniform         | 
+1239 | [185850, 185999]          | 100        | Fourier MLP     | Complex Neural Net
+1240 | [186000, 186149]          | 24200      | Fourier MLP     | Complex Neural Net
+1241 | [186150, 186299]          | 500        | Fourier MLP     | Complex Neural Net
+1242 | [186300, 186449]          | 100        | Fourier MLP     | Complex Neural Net
+1243 | [186450, 186599]          | 100        | Fourier MLP     | Complex Neural Net
+1244 | [186600, 186749]          | 100        | Uniform         | 
+1245 | [186750, 186899]          | 100        | Fourier MLP     | Complex Neural Net
+1246 | [186900, 187049]          | 23900      | Fourier MLP     | Complex Neural Net
+1247 | [187050, 187199]          | 1500       | Fourier MLP     | Complex Neural Net
+1248 | [187200, 187349]          | 400        | Fourier MLP     | Complex Neural Net
+1249 | [187350, 187499]          | 100        | Uniform         | 
+1250 | [187500, 187649]          | 200        | Fourier MLP     | Complex Neural Net
+1251 | [187650, 187799]          | 200        | Fourier MLP     | Complex Neural Net
+1252 | [187800, 187949]          | 100        | Uniform         | 
+1253 | [187950, 188099]          | 21500      | Fourier MLP     | Complex Neural Net
+1254 | [188100, 188249]          | 300        | Fourier MLP     | Complex Neural Net
+1255 | [188250, 188399]          | 300        | Fourier MLP     | Complex Neural Net
+1256 | [188400, 188549]          | 0          | Uniform         | 
+1257 | [188550, 188699]          | 0          | Uniform         | 
+1258 | [188700, 188849]          | 100        | Fourier MLP     | Complex Neural Net
+1259 | [188850, 188999]          | 0          | Uniform         | 
+1260 | [189000, 189149]          | 24700      | Fourier MLP     | Complex Neural Net
+1261 | [189150, 189299]          | 100        | Uniform         | 
+1262 | [189300, 189449]          | 500        | Fourier MLP     | Complex Neural Net
+1263 | [189450, 189599]          | 100        | Fourier MLP     | Complex Neural Net
+1264 | [189600, 189749]          | 0          | Uniform         | 
+1265 | [189750, 189899]          | 0          | Uniform         | 
+1266 | [189900, 190049]          | 22400      | Fourier MLP     | Complex Neural Net
+1267 | [190050, 190199]          | 1600       | Fourier MLP     | Complex Neural Net
+1268 | [190200, 190349]          | 200        | Fourier MLP     | Complex Neural Net
+1269 | [190350, 190499]          | 100        | Fourier MLP     | Complex Neural Net
+1270 | [190500, 190649]          | 0          | Uniform         | 
+1271 | [190650, 190799]          | 100        | Uniform         | 
+1272 | [190800, 190949]          | 0          | Uniform         | 
+1273 | [190950, 191099]          | 20400      | Fourier MLP     | Complex Neural Net
+1274 | [191100, 191249]          | 500        | Fourier MLP     | Complex Neural Net
+1275 | [191250, 191399]          | 100        | Fourier MLP     | Complex Neural Net
+1276 | [191400, 191549]          | 400        | Fourier MLP     | Complex Neural Net
+1277 | [191550, 191699]          | 100        | Fourier MLP     | Complex Neural Net
+1278 | [191700, 191849]          | 0          | Uniform         | 
+1279 | [191850, 191999]          | 0          | Uniform         | 
+1280 | [192000, 192149]          | 24500      | Fourier MLP     | Complex Neural Net
+1281 | [192150, 192299]          | 700        | Fourier MLP     | Complex Neural Net
+1282 | [192300, 192449]          | 100        | Fourier MLP     | Complex Neural Net
+1283 | [192450, 192599]          | 400        | Fourier MLP     | Complex Neural Net
+1284 | [192600, 192749]          | 100        | Fourier MLP     | Complex Neural Net
+1285 | [192750, 192899]          | 0          | Uniform         | 
+1286 | [192900, 193049]          | 21800      | Fourier MLP     | Complex Neural Net
+1287 | [193050, 193199]          | 1400       | Fourier MLP     | Complex Neural Net
+1288 | [193200, 193349]          | 200        | Fourier MLP     | Complex Neural Net
+1289 | [193350, 193499]          | 100        | Fourier MLP     | Complex Neural Net
+1290 | [193500, 193649]          | 300        | Fourier MLP     | Complex Neural Net
+1291 | [193650, 193799]          | 0          | Uniform         | 
+1292 | [193800, 193949]          | 200        | Fourier MLP     | Complex Neural Net
+1293 | [193950, 194099]          | 20500      | Fourier MLP     | Complex Neural Net
+1294 | [194100, 194249]          | 300        | Fourier MLP     | Complex Neural Net
+1295 | [194250, 194399]          | 200        | Fourier MLP     | Complex Neural Net
+1296 | [194400, 194549]          | 0          | Uniform         | 
+1297 | [194550, 194699]          | 200        | Fourier MLP     | Complex Neural Net
+1298 | [194700, 194849]          | 0          | Uniform         | 
+1299 | [194850, 194999]          | 0          | Uniform         | 
+1300 | [195000, 195149]          | 24800      | Fourier MLP     | Complex Neural Net
+1301 | [195150, 195299]          | 700        | Fourier MLP     | Complex Neural Net
+1302 | [195300, 195449]          | 200        | Fourier MLP     | Complex Neural Net
+1303 | [195450, 195599]          | 200        | Fourier MLP     | Complex Neural Net
+1304 | [195600, 195749]          | 100        | Fourier MLP     | Complex Neural Net
+1305 | [195750, 195899]          | 0          | Uniform         | 
+1306 | [195900, 196049]          | 22000      | Fourier MLP     | Complex Neural Net
+1307 | [196050, 196199]          | 1100       | Fourier MLP     | Complex Neural Net
+1308 | [196200, 196349]          | 0          | Uniform         | 
+1309 | [196350, 196499]          | 200        | Fourier MLP     | Complex Neural Net
+1310 | [196500, 196649]          | 300        | Fourier MLP     | Complex Neural Net
+1311 | [196650, 196799]          | 200        | Fourier MLP     | Complex Neural Net
+1312 | [196800, 196949]          | 100        | Fourier MLP     | Complex Neural Net
+1313 | [196950, 197099]          | 20800      | Fourier MLP     | Complex Neural Net
+1314 | [197100, 197249]          | 400        | Fourier MLP     | Complex Neural Net
+1315 | [197250, 197399]          | 400        | Fourier MLP     | Complex Neural Net
+1316 | [197400, 197549]          | 0          | Uniform         | 
+1317 | [197550, 197699]          | 100        | Uniform         | 
+1318 | [197700, 197849]          | 100        | Fourier MLP     | Complex Neural Net
+1319 | [197850, 197999]          | 100        | Fourier MLP     | Complex Neural Net
+1320 | [198000, 198149]          | 19800      | Fourier MLP     | Complex Neural Net
+1321 | [198150, 198299]          | 300        | Uniform         | 
+1322 | [198300, 198449]          | 200        | Fourier MLP     | Complex Neural Net
+1323 | [198450, 198599]          | 0          | Uniform         | 
+1324 | [198600, 198749]          | 0          | Uniform         | 
+1325 | [198750, 198899]          | 0          | Uniform         | 
+1326 | [198900, 199049]          | 20400      | Fourier MLP     | Complex Neural Net
+1327 | [199050, 199199]          | 1100       | Fourier MLP     | Complex Neural Net
+1328 | [199200, 199349]          | 100        | Fourier MLP     | Complex Neural Net
+1329 | [199350, 199499]          | 100        | Uniform         | 
+1330 | [199500, 199649]          | 100        | Fourier MLP     | Complex Neural Net
+1331 | [199650, 199799]          | 0          | Uniform         | 
+1332 | [199800, 199949]          | 0          | Uniform         | 
+1333 | [199950, 200099]          | 19400      | Fourier MLP     | Complex Neural Net
+1334 | [200100, 200249]          | 400        | Fourier MLP     | Complex Neural Net
+1335 | [200250, 200399]          | 400        | Fourier MLP     | Complex Neural Net
+1336 | [200400, 200549]          | 200        | Uniform         | 
+1337 | [200550, 200699]          | 0          | Uniform         | 
+1338 | [200700, 200849]          | 0          | Uniform         | 
+1339 | [200850, 200999]          | 0          | Uniform         | 
+1340 | [201000, 201149]          | 20000      | Fourier MLP     | Complex Neural Net
+1341 | [201150, 201299]          | 200        | Fourier MLP     | Complex Neural Net
+1342 | [201300, 201449]          | 100        | Fourier MLP     | Complex Neural Net
+1343 | [201450, 201599]          | 100        | Fourier MLP     | Complex Neural Net
+1344 | [201600, 201749]          | 100        | Fourier MLP     | Complex Neural Net
+1345 | [201750, 201899]          | 400        | Fourier MLP     | Complex Neural Net
+1346 | [201900, 202049]          | 19100      | Fourier MLP     | Complex Neural Net
+1347 | [202050, 202199]          | 900        | Fourier MLP     | Complex Neural Net
+1348 | [202200, 202349]          | 0          | Uniform         | 
+1349 | [202350, 202499]          | 200        | Fourier MLP     | Complex Neural Net
+1350 | [202500, 202649]          | 0          | Uniform         | 
+1351 | [202650, 202799]          | 0          | Uniform         | 
+1352 | [202800, 202949]          | 100        | Uniform         | 
+1353 | [202950, 203099]          | 23800      | Fourier MLP     | Complex Neural Net
+1354 | [203100, 203249]          | 600        | Fourier MLP     | Complex Neural Net
+1355 | [203250, 203399]          | 200        | Fourier MLP     | Complex Neural Net
+1356 | [203400, 203549]          | 200        | Uniform         | 
+1357 | [203550, 203699]          | 100        | Fourier MLP     | Complex Neural Net
+1358 | [203700, 203849]          | 0          | Uniform         | 
+1359 | [203850, 203999]          | 100        | Fourier MLP     | Complex Neural Net
+1360 | [204000, 204149]          | 21200      | Fourier MLP     | Complex Neural Net
+1361 | [204150, 204299]          | 600        | Fourier MLP     | Complex Neural Net
+1362 | [204300, 204449]          | 200        | Fourier MLP     | Complex Neural Net
+1363 | [204450, 204599]          | 600        | Fourier MLP     | Complex Neural Net
+1364 | [204600, 204749]          | 0          | Uniform         | 
+1365 | [204750, 204899]          | 0          | Uniform         | 
+1366 | [204900, 205049]          | 17900      | Fourier MLP     | Complex Neural Net
+1367 | [205050, 205199]          | 1800       | Fourier MLP     | Complex Neural Net
+1368 | [205200, 205349]          | 300        | Fourier MLP     | Complex Neural Net
+1369 | [205350, 205499]          | 400        | Fourier MLP     | Complex Neural Net
+1370 | [205500, 205649]          | 0          | Uniform         | 
+1371 | [205650, 205799]          | 100        | Fourier MLP     | Complex Neural Net
+1372 | [205800, 205949]          | 0          | Uniform         | 
+1373 | [205950, 206099]          | 24100      | Fourier MLP     | Complex Neural Net
+1374 | [206100, 206249]          | 800        | Fourier MLP     | Complex Neural Net
+1375 | [206250, 206399]          | 0          | Uniform         | 
+1376 | [206400, 206549]          | 0          | Uniform         | 
+1377 | [206550, 206699]          | 100        | Fourier MLP     | Complex Neural Net
+1378 | [206700, 206849]          | 200        | Fourier MLP     | Complex Neural Net
+1379 | [206850, 206999]          | 0          | Uniform         | 
+1380 | [207000, 207149]          | 18400      | Fourier MLP     | Complex Neural Net
+1381 | [207150, 207299]          | 600        | Fourier MLP     | Complex Neural Net
+1382 | [207300, 207449]          | 300        | Fourier MLP     | Complex Neural Net
+1383 | [207450, 207599]          | 400        | Fourier MLP     | Complex Neural Net
+1384 | [207600, 207749]          | 100        | Linear          | coef=0.0644, int=0.9542
+1385 | [207750, 207899]          | 100        | Uniform         | 
+1386 | [207900, 208049]          | 19400      | Fourier MLP     | Complex Neural Net
+1387 | [208050, 208199]          | 1700       | Fourier MLP     | Complex Neural Net
+1388 | [208200, 208349]          | 100        | Uniform         | 
+1389 | [208350, 208499]          | 200        | Fourier MLP     | Complex Neural Net
+1390 | [208500, 208649]          | 0          | Uniform         | 
+1391 | [208650, 208799]          | 0          | Uniform         | 
+1392 | [208800, 208949]          | 100        | Fourier MLP     | Complex Neural Net
+1393 | [208950, 209099]          | 20000      | Fourier MLP     | Complex Neural Net
+1394 | [209100, 209249]          | 600        | Fourier MLP     | Complex Neural Net
+1395 | [209250, 209399]          | 100        | Fourier MLP     | Complex Neural Net
+1396 | [209400, 209549]          | 100        | Fourier MLP     | Complex Neural Net
+1397 | [209550, 209699]          | 0          | Uniform         | 
+1398 | [209700, 209849]          | 0          | Uniform         | 
+1399 | [209850, 209999]          | 0          | Uniform         | 
+1400 | [210000, 210149]          | 21300      | Fourier MLP     | Complex Neural Net
+1401 | [210150, 210299]          | 200        | Fourier MLP     | Complex Neural Net
+1402 | [210300, 210449]          | 300        | Fourier MLP     | Complex Neural Net
+1403 | [210450, 210599]          | 100        | Fourier MLP     | Complex Neural Net
+1404 | [210600, 210749]          | 100        | Uniform         | 
+1405 | [210750, 210899]          | 100        | Fourier MLP     | Complex Neural Net
+1406 | [210900, 211049]          | 19000      | Fourier MLP     | Complex Neural Net
+1407 | [211050, 211199]          | 1200       | Fourier MLP     | Complex Neural Net
+1408 | [211200, 211349]          | 300        | Fourier MLP     | Complex Neural Net
+1409 | [211350, 211499]          | 100        | Fourier MLP     | Complex Neural Net
+1410 | [211500, 211649]          | 200        | Fourier MLP     | Complex Neural Net
+1411 | [211650, 211799]          | 100        | Uniform         | 
+1412 | [211800, 211949]          | 0          | Uniform         | 
+1413 | [211950, 212099]          | 19300      | Fourier MLP     | Complex Neural Net
+1414 | [212100, 212249]          | 1000       | Fourier MLP     | Complex Neural Net
+1415 | [212250, 212399]          | 400        | Fourier MLP     | Complex Neural Net
+1416 | [212400, 212549]          | 300        | Fourier MLP     | Complex Neural Net
+1417 | [212550, 212699]          | 200        | Fourier MLP     | Complex Neural Net
+1418 | [212700, 212849]          | 0          | Uniform         | 
+1419 | [212850, 212999]          | 0          | Uniform         | 
+1420 | [213000, 213149]          | 18500      | Fourier MLP     | Complex Neural Net
+1421 | [213150, 213299]          | 200        | Fourier MLP     | Complex Neural Net
+1422 | [213300, 213449]          | 0          | Uniform         | 
+1423 | [213450, 213599]          | 200        | Fourier MLP     | Complex Neural Net
+1424 | [213600, 213749]          | 100        | Fourier MLP     | Complex Neural Net
+1425 | [213750, 213899]          | 0          | Uniform         | 
+1426 | [213900, 214049]          | 18800      | Fourier MLP     | Complex Neural Net
+1427 | [214050, 214199]          | 1300       | Fourier MLP     | Complex Neural Net
+1428 | [214200, 214349]          | 200        | Uniform         | 
+1429 | [214350, 214499]          | 200        | Fourier MLP     | Complex Neural Net
+1430 | [214500, 214649]          | 0          | Uniform         | 
+1431 | [214650, 214799]          | 100        | Fourier MLP     | Complex Neural Net
+1432 | [214800, 214949]          | 0          | Uniform         | 
+1433 | [214950, 215099]          | 18900      | Fourier MLP     | Complex Neural Net
+1434 | [215100, 215249]          | 500        | Fourier MLP     | Complex Neural Net
+1435 | [215250, 215399]          | 300        | Fourier MLP     | Complex Neural Net
+1436 | [215400, 215549]          | 100        | Uniform         | 
+1437 | [215550, 215699]          | 0          | Uniform         | 
+1438 | [215700, 215849]          | 0          | Uniform         | 
+1439 | [215850, 215999]          | 0          | Uniform         | 
+1440 | [216000, 216149]          | 22400      | Fourier MLP     | Complex Neural Net
+1441 | [216150, 216299]          | 400        | Fourier MLP     | Complex Neural Net
+1442 | [216300, 216449]          | 0          | Uniform         | 
+1443 | [216450, 216599]          | 0          | Uniform         | 
+1444 | [216600, 216749]          | 100        | Fourier MLP     | Complex Neural Net
+1445 | [216750, 216899]          | 0          | Uniform         | 
+1446 | [216900, 217049]          | 16400      | Fourier MLP     | Complex Neural Net
+1447 | [217050, 217199]          | 900        | Fourier MLP     | Complex Neural Net
+1448 | [217200, 217349]          | 200        | Fourier MLP     | Complex Neural Net
+1449 | [217350, 217499]          | 300        | Fourier MLP     | Complex Neural Net
+1450 | [217500, 217649]          | 0          | Uniform         | 
+1451 | [217650, 217799]          | 0          | Uniform         | 
+1452 | [217800, 217949]          | 0          | Uniform         | 
+1453 | [217950, 218099]          | 20500      | Fourier MLP     | Complex Neural Net
+1454 | [218100, 218249]          | 400        | Fourier MLP     | Complex Neural Net
+1455 | [218250, 218399]          | 300        | Fourier MLP     | Complex Neural Net
+1456 | [218400, 218549]          | 200        | Fourier MLP     | Complex Neural Net
+1457 | [218550, 218699]          | 200        | Fourier MLP     | Complex Neural Net
+1458 | [218700, 218849]          | 100        | Fourier MLP     | Complex Neural Net
+1459 | [218850, 218999]          | 100        | Uniform         | 
+1460 | [219000, 219149]          | 19900      | Fourier MLP     | Complex Neural Net
+1461 | [219150, 219299]          | 400        | Fourier MLP     | Complex Neural Net
+1462 | [219300, 219449]          | 200        | Fourier MLP     | Complex Neural Net
+1463 | [219450, 219599]          | 100        | Fourier MLP     | Complex Neural Net
+1464 | [219600, 219749]          | 100        | Fourier MLP     | Complex Neural Net
+1465 | [219750, 219899]          | 0          | Uniform         | 
+1466 | [219900, 220049]          | 17900      | Fourier MLP     | Complex Neural Net
+1467 | [220050, 220199]          | 800        | Fourier MLP     | Complex Neural Net
+1468 | [220200, 220349]          | 300        | Fourier MLP     | Complex Neural Net
+1469 | [220350, 220499]          | 100        | Uniform         | 
+1470 | [220500, 220649]          | 0          | Uniform         | 
+1471 | [220650, 220799]          | 100        | Fourier MLP     | Complex Neural Net
+1472 | [220800, 220949]          | 0          | Uniform         | 
+1473 | [220950, 221099]          | 21400      | Fourier MLP     | Complex Neural Net
+1474 | [221100, 221249]          | 100        | Fourier MLP     | Complex Neural Net
+1475 | [221250, 221399]          | 400        | Fourier MLP     | Complex Neural Net
+1476 | [221400, 221549]          | 100        | Fourier MLP     | Complex Neural Net
+1477 | [221550, 221699]          | 0          | Uniform         | 
+1478 | [221700, 221849]          | 0          | Uniform         | 
+1479 | [221850, 221999]          | 100        | Uniform         | 
+1480 | [222000, 222149]          | 19500      | Fourier MLP     | Complex Neural Net
+1481 | [222150, 222299]          | 600        | Fourier MLP     | Complex Neural Net
+1482 | [222300, 222449]          | 0          | Uniform         | 
+1483 | [222450, 222599]          | 100        | Fourier MLP     | Complex Neural Net
+1484 | [222600, 222749]          | 0          | Uniform         | 
+1485 | [222750, 222899]          | 200        | Fourier MLP     | Complex Neural Net
+1486 | [222900, 223049]          | 18700      | Fourier MLP     | Complex Neural Net
+1487 | [223050, 223199]          | 800        | Fourier MLP     | Complex Neural Net
+1488 | [223200, 223349]          | 100        | Fourier MLP     | Complex Neural Net
+1489 | [223350, 223499]          | 200        | Fourier MLP     | Complex Neural Net
+1490 | [223500, 223649]          | 0          | Uniform         | 
+1491 | [223650, 223799]          | 100        | Fourier MLP     | Complex Neural Net
+1492 | [223800, 223949]          | 0          | Uniform         | 
+1493 | [223950, 224099]          | 21800      | Fourier MLP     | Complex Neural Net
+1494 | [224100, 224249]          | 900        | Fourier MLP     | Complex Neural Net
+1495 | [224250, 224399]          | 100        | Uniform         | 
+1496 | [224400, 224549]          | 0          | Uniform         | 
+1497 | [224550, 224699]          | 100        | Fourier MLP     | Complex Neural Net
+1498 | [224700, 224849]          | 0          | Uniform         | 
+1499 | [224850, 224999]          | 0          | Uniform         | 
+1500 | [225000, 225149]          | 18300      | Fourier MLP     | Complex Neural Net
+1501 | [225150, 225299]          | 500        | Fourier MLP     | Complex Neural Net
+1502 | [225300, 225449]          | 100        | Fourier MLP     | Complex Neural Net
+1503 | [225450, 225599]          | 200        | Fourier MLP     | Complex Neural Net
+1504 | [225600, 225749]          | 0          | Uniform         | 
+1505 | [225750, 225899]          | 0          | Uniform         | 
+1506 | [225900, 226049]          | 17700      | Fourier MLP     | Complex Neural Net
+1507 | [226050, 226199]          | 1300       | Fourier MLP     | Complex Neural Net
+1508 | [226200, 226349]          | 0          | Uniform         | 
+1509 | [226350, 226499]          | 0          | Uniform         | 
+1510 | [226500, 226649]          | 100        | Fourier MLP     | Complex Neural Net
+1511 | [226650, 226799]          | 0          | Uniform         | 
+1512 | [226800, 226949]          | 100        | Fourier MLP     | Complex Neural Net
+1513 | [226950, 227099]          | 18500      | Fourier MLP     | Complex Neural Net
+1514 | [227100, 227249]          | 600        | Fourier MLP     | Complex Neural Net
+1515 | [227250, 227399]          | 300        | Fourier MLP     | Complex Neural Net
+1516 | [227400, 227549]          | 200        | Fourier MLP     | Complex Neural Net
+1517 | [227550, 227699]          | 0          | Uniform         | 
+1518 | [227700, 227849]          | 0          | Uniform         | 
+1519 | [227850, 227999]          | 0          | Uniform         | 
+1520 | [228000, 228149]          | 19500      | Fourier MLP     | Complex Neural Net
+1521 | [228150, 228299]          | 300        | Fourier MLP     | Complex Neural Net
+1522 | [228300, 228449]          | 100        | Fourier MLP     | Complex Neural Net
+1523 | [228450, 228599]          | 100        | Uniform         | 
+1524 | [228600, 228749]          | 0          | Uniform         | 
+1525 | [228750, 228899]          | 200        | Fourier MLP     | Complex Neural Net
+1526 | [228900, 229049]          | 17500      | Fourier MLP     | Complex Neural Net
+1527 | [229050, 229199]          | 1100       | Fourier MLP     | Complex Neural Net
+1528 | [229200, 229349]          | 200        | Fourier MLP     | Complex Neural Net
+1529 | [229350, 229499]          | 300        | Fourier MLP     | Complex Neural Net
+1530 | [229500, 229649]          | 0          | Uniform         | 
+1531 | [229650, 229799]          | 0          | Uniform         | 
+1532 | [229800, 229949]          | 0          | Uniform         | 
+1533 | [229950, 230099]          | 18100      | Fourier MLP     | Complex Neural Net
+1534 | [230100, 230249]          | 500        | Fourier MLP     | Complex Neural Net
+1535 | [230250, 230399]          | 300        | Fourier MLP     | Complex Neural Net
+1536 | [230400, 230549]          | 0          | Uniform         | 
+1537 | [230550, 230699]          | 100        | Fourier MLP     | Complex Neural Net
+1538 | [230700, 230849]          | 200        | Fourier MLP     | Complex Neural Net
+1539 | [230850, 230999]          | 200        | Fourier MLP     | Complex Neural Net
+1540 | [231000, 231149]          | 19000      | Fourier MLP     | Complex Neural Net
+1541 | [231150, 231299]          | 500        | Fourier MLP     | Complex Neural Net
+1542 | [231300, 231449]          | 500        | Fourier MLP     | Complex Neural Net
+1543 | [231450, 231599]          | 100        | Fourier MLP     | Complex Neural Net
+1544 | [231600, 231749]          | 0          | Uniform         | 
+1545 | [231750, 231899]          | 200        | Uniform         | 
+1546 | [231900, 232049]          | 19000      | Fourier MLP     | Complex Neural Net
+1547 | [232050, 232199]          | 800        | Fourier MLP     | Complex Neural Net
+1548 | [232200, 232349]          | 300        | Fourier MLP     | Complex Neural Net
+1549 | [232350, 232499]          | 0          | Uniform         | 
+1550 | [232500, 232649]          | 0          | Uniform         | 
+1551 | [232650, 232799]          | 0          | Uniform         | 
+1552 | [232800, 232949]          | 100        | Fourier MLP     | Complex Neural Net
+1553 | [232950, 233099]          | 18100      | Fourier MLP     | Complex Neural Net
+1554 | [233100, 233249]          | 600        | Fourier MLP     | Complex Neural Net
+1555 | [233250, 233399]          | 100        | Uniform         | 
+1556 | [233400, 233549]          | 100        | Fourier MLP     | Complex Neural Net
+1557 | [233550, 233699]          | 200        | Fourier MLP     | Complex Neural Net
+1558 | [233700, 233849]          | 0          | Uniform         | 
+1559 | [233850, 233999]          | 0          | Uniform         | 
+1560 | [234000, 234149]          | 18800      | Fourier MLP     | Complex Neural Net
+1561 | [234150, 234299]          | 300        | Fourier MLP     | Complex Neural Net
+1562 | [234300, 234449]          | 100        | Uniform         | 
+1563 | [234450, 234599]          | 0          | Uniform         | 
+1564 | [234600, 234749]          | 0          | Uniform         | 
+1565 | [234750, 234899]          | 100        | Uniform         | 
+1566 | [234900, 235049]          | 20400      | Fourier MLP     | Complex Neural Net
+1567 | [235050, 235199]          | 800        | Fourier MLP     | Complex Neural Net
+1568 | [235200, 235349]          | 300        | Fourier MLP     | Complex Neural Net
+1569 | [235350, 235499]          | 0          | Uniform         | 
+1570 | [235500, 235649]          | 100        | Uniform         | 
+1571 | [235650, 235799]          | 100        | Fourier MLP     | Complex Neural Net
+1572 | [235800, 235949]          | 0          | Uniform         | 
+1573 | [235950, 236099]          | 17900      | Fourier MLP     | Complex Neural Net
+1574 | [236100, 236249]          | 700        | Fourier MLP     | Complex Neural Net
+1575 | [236250, 236399]          | 200        | Uniform         | 
+1576 | [236400, 236549]          | 300        | Fourier MLP     | Complex Neural Net
+1577 | [236550, 236699]          | 0          | Uniform         | 
+1578 | [236700, 236849]          | 0          | Uniform         | 
+1579 | [236850, 236999]          | 0          | Uniform         | 
+1580 | [237000, 237149]          | 16100      | Fourier MLP     | Complex Neural Net
+1581 | [237150, 237299]          | 300        | Fourier MLP     | Complex Neural Net
+1582 | [237300, 237449]          | 100        | Fourier MLP     | Complex Neural Net
+1583 | [237450, 237599]          | 200        | Fourier MLP     | Complex Neural Net
+1584 | [237600, 237749]          | 0          | Uniform         | 
+1585 | [237750, 237899]          | 0          | Uniform         | 
+1586 | [237900, 238049]          | 18800      | Fourier MLP     | Complex Neural Net
+1587 | [238050, 238199]          | 400        | Fourier MLP     | Complex Neural Net
+1588 | [238200, 238349]          | 100        | Fourier MLP     | Complex Neural Net
+1589 | [238350, 238499]          | 100        | Fourier MLP     | Complex Neural Net
+1590 | [238500, 238649]          | 0          | Uniform         | 
+1591 | [238650, 238799]          | 300        | Fourier MLP     | Complex Neural Net
+1592 | [238800, 238949]          | 200        | Fourier MLP     | Complex Neural Net
+1593 | [238950, 239099]          | 18100      | Fourier MLP     | Complex Neural Net
+1594 | [239100, 239249]          | 300        | Fourier MLP     | Complex Neural Net
+1595 | [239250, 239399]          | 200        | Uniform         | 
+1596 | [239400, 239549]          | 100        | Fourier MLP     | Complex Neural Net
+1597 | [239550, 239699]          | 300        | Fourier MLP     | Complex Neural Net
+1598 | [239700, 239849]          | 0          | Uniform         | 
+1599 | [239850, 239999]          | 0          | Uniform         | 
+1600 | [240000, 240149]          | 16300      | Fourier MLP     | Complex Neural Net
+1601 | [240150, 240299]          | 100        | Uniform         | 
+1602 | [240300, 240449]          | 300        | Fourier MLP     | Complex Neural Net
+1603 | [240450, 240599]          | 0          | Uniform         | 
+1604 | [240600, 240749]          | 0          | Uniform         | 
+1605 | [240750, 240899]          | 100        | Fourier MLP     | Complex Neural Net
+1606 | [240900, 241049]          | 18600      | Fourier MLP     | Complex Neural Net
+1607 | [241050, 241199]          | 800        | Fourier MLP     | Complex Neural Net
+1608 | [241200, 241349]          | 400        | Fourier MLP     | Complex Neural Net
+1609 | [241350, 241499]          | 0          | Uniform         | 
+1610 | [241500, 241649]          | 0          | Uniform         | 
+1611 | [241650, 241799]          | 100        | Uniform         | 
+1612 | [241800, 241949]          | 100        | Fourier MLP     | Complex Neural Net
+1613 | [241950, 242099]          | 19400      | Fourier MLP     | Complex Neural Net
+1614 | [242100, 242249]          | 300        | Fourier MLP     | Complex Neural Net
+1615 | [242250, 242399]          | 200        | Fourier MLP     | Complex Neural Net
+1616 | [242400, 242549]          | 0          | Uniform         | 
+1617 | [242550, 242699]          | 100        | Fourier MLP     | Complex Neural Net
+1618 | [242700, 242849]          | 0          | Uniform         | 
+1619 | [242850, 242999]          | 0          | Uniform         | 
+1620 | [243000, 243149]          | 17800      | Fourier MLP     | Complex Neural Net
+1621 | [243150, 243299]          | 700        | Fourier MLP     | Complex Neural Net
+1622 | [243300, 243449]          | 200        | Fourier MLP     | Complex Neural Net
+1623 | [243450, 243599]          | 0          | Uniform         | 
+1624 | [243600, 243749]          | 0          | Uniform         | 
+1625 | [243750, 243899]          | 100        | Uniform         | 
+1626 | [243900, 244049]          | 20300      | Fourier MLP     | Complex Neural Net
+1627 | [244050, 244199]          | 1000       | Fourier MLP     | Complex Neural Net
+1628 | [244200, 244349]          | 200        | Fourier MLP     | Complex Neural Net
+1629 | [244350, 244499]          | 100        | Fourier MLP     | Complex Neural Net
+1630 | [244500, 244649]          | 100        | Uniform         | 
+1631 | [244650, 244799]          | 0          | Uniform         | 
+1632 | [244800, 244949]          | 0          | Uniform         | 
+1633 | [244950, 245099]          | 15700      | Fourier MLP     | Complex Neural Net
+1634 | [245100, 245249]          | 700        | Fourier MLP     | Complex Neural Net
+1635 | [245250, 245399]          | 0          | Uniform         | 
+1636 | [245400, 245549]          | 300        | Fourier MLP     | Complex Neural Net
+1637 | [245550, 245699]          | 0          | Uniform         | 
+1638 | [245700, 245849]          | 100        | Fourier MLP     | Complex Neural Net
+1639 | [245850, 245999]          | 200        | Fourier MLP     | Complex Neural Net
+1640 | [246000, 246149]          | 16700      | Fourier MLP     | Complex Neural Net
+1641 | [246150, 246299]          | 500        | Fourier MLP     | Complex Neural Net
+1642 | [246300, 246449]          | 200        | Fourier MLP     | Complex Neural Net
+1643 | [246450, 246599]          | 0          | Uniform         | 
+1644 | [246600, 246749]          | 0          | Uniform         | 
+1645 | [246750, 246899]          | 100        | Uniform         | 
+1646 | [246900, 247049]          | 16800      | Fourier MLP     | Complex Neural Net
+1647 | [247050, 247199]          | 900        | Fourier MLP     | Complex Neural Net
+1648 | [247200, 247349]          | 400        | Fourier MLP     | Complex Neural Net
+1649 | [247350, 247499]          | 200        | Fourier MLP     | Complex Neural Net
+1650 | [247500, 247649]          | 200        | Fourier MLP     | Complex Neural Net
+1651 | [247650, 247799]          | 100        | Fourier MLP     | Complex Neural Net
+1652 | [247800, 247949]          | 0          | Uniform         | 
+1653 | [247950, 248099]          | 16500      | Fourier MLP     | Complex Neural Net
+1654 | [248100, 248249]          | 300        | Fourier MLP     | Complex Neural Net
+1655 | [248250, 248399]          | 200        | Fourier MLP     | Complex Neural Net
+1656 | [248400, 248549]          | 0          | Uniform         | 
+1657 | [248550, 248699]          | 0          | Uniform         | 
+1658 | [248700, 248849]          | 0          | Uniform         | 
+1659 | [248850, 248999]          | 200        | Fourier MLP     | Complex Neural Net
+1660 | [249000, 249149]          | 18100      | Fourier MLP     | Complex Neural Net
+1661 | [249150, 249299]          | 500        | Fourier MLP     | Complex Neural Net
+1662 | [249300, 249449]          | 300        | Fourier MLP     | Complex Neural Net
+1663 | [249450, 249599]          | 0          | Uniform         | 
+1664 | [249600, 249749]          | 0          | Uniform         | 
+1665 | [249750, 249899]          | 100        | Fourier MLP     | Complex Neural Net
+1666 | [249900, 250049]          | 18100      | Fourier MLP     | Complex Neural Net
+1667 | [250050, 250199]          | 1400       | Fourier MLP     | Complex Neural Net
+1668 | [250200, 250349]          | 300        | Fourier MLP     | Complex Neural Net
+1669 | [250350, 250499]          | 0          | Uniform         | 
+1670 | [250500, 250649]          | 0          | Uniform         | 
+1671 | [250650, 250799]          | 0          | Uniform         | 
+1672 | [250800, 250949]          | 100        | Fourier MLP     | Complex Neural Net
+1673 | [250950, 251099]          | 17600      | Fourier MLP     | Complex Neural Net
+1674 | [251100, 251249]          | 400        | Fourier MLP     | Complex Neural Net
+1675 | [251250, 251399]          | 100        | Fourier MLP     | Complex Neural Net
+1676 | [251400, 251549]          | 0          | Uniform         | 
+1677 | [251550, 251699]          | 300        | Fourier MLP     | Complex Neural Net
+1678 | [251700, 251849]          | 0          | Uniform         | 
+1679 | [251850, 251999]          | 100        | Fourier MLP     | Complex Neural Net
+1680 | [252000, 252149]          | 18900      | Fourier MLP     | Complex Neural Net
+1681 | [252150, 252299]          | 500        | Fourier MLP     | Complex Neural Net
+1682 | [252300, 252449]          | 200        | Uniform         | 
+1683 | [252450, 252599]          | 200        | Fourier MLP     | Complex Neural Net
+1684 | [252600, 252749]          | 0          | Uniform         | 
+1685 | [252750, 252899]          | 100        | Fourier MLP     | Complex Neural Net
+1686 | [252900, 253049]          | 16500      | Fourier MLP     | Complex Neural Net
+1687 | [253050, 253199]          | 700        | Fourier MLP     | Complex Neural Net
+1688 | [253200, 253349]          | 200        | Fourier MLP     | Complex Neural Net
+1689 | [253350, 253499]          | 200        | Fourier MLP     | Complex Neural Net
+1690 | [253500, 253649]          | 200        | Fourier MLP     | Complex Neural Net
+1691 | [253650, 253799]          | 100        | Fourier MLP     | Complex Neural Net
+1692 | [253800, 253949]          | 100        | Uniform         | 
+1693 | [253950, 254099]          | 15200      | Fourier MLP     | Complex Neural Net
+1694 | [254100, 254249]          | 600        | Fourier MLP     | Complex Neural Net
+1695 | [254250, 254399]          | 0          | Uniform         | 
+1696 | [254400, 254549]          | 0          | Uniform         | 
+1697 | [254550, 254699]          | 100        | Fourier MLP     | Complex Neural Net
+1698 | [254700, 254849]          | 200        | Fourier MLP     | Complex Neural Net
+1699 | [254850, 254999]          | 100        | Uniform         | 
+1700 | [255000, 255149]          | 15400      | Fourier MLP     | Complex Neural Net
+1701 | [255150, 255299]          | 500        | Fourier MLP     | Complex Neural Net
+1702 | [255300, 255449]          | 300        | Fourier MLP     | Complex Neural Net
+1703 | [255450, 255599]          | 0          | Uniform         | 
+1704 | [255600, 255749]          | 100        | Fourier MLP     | Complex Neural Net
+1705 | [255750, 255899]          | 100        | Fourier MLP     | Complex Neural Net
+1706 | [255900, 256049]          | 15200      | Fourier MLP     | Complex Neural Net
+1707 | [256050, 256199]          | 1100       | Fourier MLP     | Complex Neural Net
+1708 | [256200, 256349]          | 200        | Fourier MLP     | Complex Neural Net
+1709 | [256350, 256499]          | 200        | Fourier MLP     | Complex Neural Net
+1710 | [256500, 256649]          | 200        | Fourier MLP     | Complex Neural Net
+1711 | [256650, 256799]          | 0          | Uniform         | 
+1712 | [256800, 256949]          | 0          | Uniform         | 
+1713 | [256950, 257099]          | 18600      | Fourier MLP     | Complex Neural Net
+1714 | [257100, 257249]          | 400        | Fourier MLP     | Complex Neural Net
+1715 | [257250, 257399]          | 200        | Fourier MLP     | Complex Neural Net
+1716 | [257400, 257549]          | 0          | Uniform         | 
+1717 | [257550, 257699]          | 200        | Fourier MLP     | Complex Neural Net
+1718 | [257700, 257849]          | 0          | Uniform         | 
+1719 | [257850, 257999]          | 0          | Uniform         | 
+1720 | [258000, 258149]          | 17500      | Fourier MLP     | Complex Neural Net
+1721 | [258150, 258299]          | 300        | Fourier MLP     | Complex Neural Net
+1722 | [258300, 258449]          | 0          | Uniform         | 
+1723 | [258450, 258599]          | 300        | Fourier MLP     | Complex Neural Net
+1724 | [258600, 258749]          | 0          | Uniform         | 
+1725 | [258750, 258899]          | 0          | Uniform         | 
+1726 | [258900, 259049]          | 17100      | Fourier MLP     | Complex Neural Net
+1727 | [259050, 259199]          | 1300       | Fourier MLP     | Complex Neural Net
+1728 | [259200, 259349]          | 100        | Uniform         | 
+1729 | [259350, 259499]          | 300        | Fourier MLP     | Complex Neural Net
+1730 | [259500, 259649]          | 300        | Fourier MLP     | Complex Neural Net
+1731 | [259650, 259799]          | 0          | Uniform         | 
+1732 | [259800, 259949]          | 0          | Uniform         | 
+1733 | [259950, 260099]          | 16200      | Fourier MLP     | Complex Neural Net
+1734 | [260100, 260249]          | 1100       | Fourier MLP     | Complex Neural Net
+1735 | [260250, 260399]          | 300        | Fourier MLP     | Complex Neural Net
+1736 | [260400, 260549]          | 100        | Fourier MLP     | Complex Neural Net
+1737 | [260550, 260699]          | 0          | Uniform         | 
+1738 | [260700, 260849]          | 0          | Uniform         | 
+1739 | [260850, 260999]          | 0          | Uniform         | 
+1740 | [261000, 261149]          | 16000      | Fourier MLP     | Complex Neural Net
+1741 | [261150, 261299]          | 200        | Fourier MLP     | Complex Neural Net
+1742 | [261300, 261449]          | 0          | Uniform         | 
+1743 | [261450, 261599]          | 100        | Fourier MLP     | Complex Neural Net
+1744 | [261600, 261749]          | 100        | Fourier MLP     | Complex Neural Net
+1745 | [261750, 261899]          | 100        | Fourier MLP     | Complex Neural Net
+1746 | [261900, 262049]          | 16600      | Fourier MLP     | Complex Neural Net
+1747 | [262050, 262199]          | 1300       | Fourier MLP     | Complex Neural Net
+1748 | [262200, 262349]          | 500        | Fourier MLP     | Complex Neural Net
+1749 | [262350, 262499]          | 100        | Uniform         | 
+1750 | [262500, 262649]          | 0          | Uniform         | 
+1751 | [262650, 262799]          | 0          | Uniform         | 
+1752 | [262800, 262949]          | 100        | Uniform         | 
+1753 | [262950, 263099]          | 15400      | Fourier MLP     | Complex Neural Net
+1754 | [263100, 263249]          | 400        | Fourier MLP     | Complex Neural Net
+1755 | [263250, 263399]          | 0          | Uniform         | 
+1756 | [263400, 263549]          | 0          | Uniform         | 
+1757 | [263550, 263699]          | 0          | Uniform         | 
+1758 | [263700, 263849]          | 100        | Fourier MLP     | Complex Neural Net
+1759 | [263850, 263999]          | 0          | Uniform         | 
+1760 | [264000, 264149]          | 15100      | Fourier MLP     | Complex Neural Net
+1761 | [264150, 264299]          | 200        | Fourier MLP     | Complex Neural Net
+1762 | [264300, 264449]          | 200        | Uniform         | 
+1763 | [264450, 264599]          | 100        | Uniform         | 
+1764 | [264600, 264749]          | 0          | Uniform         | 
+1765 | [264750, 264899]          | 0          | Uniform         | 
+1766 | [264900, 265049]          | 16400      | Fourier MLP     | Complex Neural Net
+1767 | [265050, 265199]          | 1200       | Fourier MLP     | Complex Neural Net
+1768 | [265200, 265349]          | 200        | Fourier MLP     | Complex Neural Net
+1769 | [265350, 265499]          | 100        | Fourier MLP     | Complex Neural Net
+1770 | [265500, 265649]          | 100        | Uniform         | 
+1771 | [265650, 265799]          | 0          | Uniform         | 
+1772 | [265800, 265949]          | 100        | Uniform         | 
+1773 | [265950, 266099]          | 16700      | Fourier MLP     | Complex Neural Net
+1774 | [266100, 266249]          | 200        | Fourier MLP     | Complex Neural Net
+1775 | [266250, 266399]          | 200        | Fourier MLP     | Complex Neural Net
+1776 | [266400, 266549]          | 100        | Fourier MLP     | Complex Neural Net
+1777 | [266550, 266699]          | 0          | Uniform         | 
+1778 | [266700, 266849]          | 0          | Uniform         | 
+1779 | [266850, 266999]          | 0          | Uniform         | 
+1780 | [267000, 267149]          | 17200      | Fourier MLP     | Complex Neural Net
+1781 | [267150, 267299]          | 400        | Fourier MLP     | Complex Neural Net
+1782 | [267300, 267449]          | 0          | Uniform         | 
+1783 | [267450, 267599]          | 200        | Fourier MLP     | Complex Neural Net
+1784 | [267600, 267749]          | 0          | Uniform         | 
+1785 | [267750, 267899]          | 0          | Uniform         | 
+1786 | [267900, 268049]          | 16900      | Fourier MLP     | Complex Neural Net
+1787 | [268050, 268199]          | 800        | Fourier MLP     | Complex Neural Net
+1788 | [268200, 268349]          | 300        | Fourier MLP     | Complex Neural Net
+1789 | [268350, 268499]          | 100        | Fourier MLP     | Complex Neural Net
+1790 | [268500, 268649]          | 100        | Fourier MLP     | Complex Neural Net
+1791 | [268650, 268799]          | 0          | Uniform         | 
+1792 | [268800, 268949]          | 0          | Uniform         | 
+1793 | [268950, 269099]          | 17100      | Fourier MLP     | Complex Neural Net
+1794 | [269100, 269249]          | 200        | Fourier MLP     | Complex Neural Net
+1795 | [269250, 269399]          | 200        | Fourier MLP     | Complex Neural Net
+1796 | [269400, 269549]          | 100        | Fourier MLP     | Complex Neural Net
+1797 | [269550, 269699]          | 0          | Uniform         | 
+1798 | [269700, 269849]          | 0          | Uniform         | 
+1799 | [269850, 269999]          | 0          | Uniform         | 
+1800 | [270000, 270149]          | 16200      | Fourier MLP     | Complex Neural Net
+1801 | [270150, 270299]          | 300        | Fourier MLP     | Complex Neural Net
+1802 | [270300, 270449]          | 100        | Fourier MLP     | Complex Neural Net
+1803 | [270450, 270599]          | 200        | Fourier MLP     | Complex Neural Net
+1804 | [270600, 270749]          | 100        | Fourier MLP     | Complex Neural Net
+1805 | [270750, 270899]          | 0          | Uniform         | 
+1806 | [270900, 271049]          | 14800      | Fourier MLP     | Complex Neural Net
+1807 | [271050, 271199]          | 1400       | Fourier MLP     | Complex Neural Net
+1808 | [271200, 271349]          | 0          | Uniform         | 
+1809 | [271350, 271499]          | 0          | Uniform         | 
+1810 | [271500, 271649]          | 0          | Uniform         | 
+1811 | [271650, 271799]          | 200        | Fourier MLP     | Complex Neural Net
+1812 | [271800, 271949]          | 0          | Uniform         | 
+1813 | [271950, 272099]          | 15200      | Fourier MLP     | Complex Neural Net
+1814 | [272100, 272249]          | 700        | Fourier MLP     | Complex Neural Net
+1815 | [272250, 272399]          | 300        | Fourier MLP     | Complex Neural Net
+1816 | [272400, 272549]          | 100        | Fourier MLP     | Complex Neural Net
+1817 | [272550, 272699]          | 0          | Uniform         | 
+1818 | [272700, 272849]          | 0          | Uniform         | 
+1819 | [272850, 272999]          | 0          | Uniform         | 
+1820 | [273000, 273149]          | 16900      | Fourier MLP     | Complex Neural Net
+1821 | [273150, 273299]          | 300        | Fourier MLP     | Complex Neural Net
+1822 | [273300, 273449]          | 0          | Uniform         | 
+1823 | [273450, 273599]          | 0          | Uniform         | 
+1824 | [273600, 273749]          | 0          | Uniform         | 
+1825 | [273750, 273899]          | 0          | Uniform         | 
+1826 | [273900, 274049]          | 16200      | Fourier MLP     | Complex Neural Net
+1827 | [274050, 274199]          | 900        | Fourier MLP     | Complex Neural Net
+1828 | [274200, 274349]          | 200        | Uniform         | 
+1829 | [274350, 274499]          | 0          | Uniform         | 
+1830 | [274500, 274649]          | 0          | Uniform         | 
+1831 | [274650, 274799]          | 100        | Fourier MLP     | Complex Neural Net
+1832 | [274800, 274949]          | 200        | Fourier MLP     | Complex Neural Net
+1833 | [274950, 275099]          | 14200      | Fourier MLP     | Complex Neural Net
+1834 | [275100, 275249]          | 200        | Uniform         | 
+1835 | [275250, 275399]          | 0          | Uniform         | 
+1836 | [275400, 275549]          | 100        | Fourier MLP     | Complex Neural Net
+1837 | [275550, 275699]          | 100        | Fourier MLP     | Complex Neural Net
+1838 | [275700, 275849]          | 0          | Uniform         | 
+1839 | [275850, 275999]          | 0          | Uniform         | 
+1840 | [276000, 276149]          | 16200      | Fourier MLP     | Complex Neural Net
+1841 | [276150, 276299]          | 0          | Uniform         | 
+1842 | [276300, 276449]          | 100        | Fourier MLP     | Complex Neural Net
+1843 | [276450, 276599]          | 0          | Uniform         | 
+1844 | [276600, 276749]          | 0          | Uniform         | 
+1845 | [276750, 276899]          | 0          | Uniform         | 
+1846 | [276900, 277049]          | 14000      | Fourier MLP     | Complex Neural Net
+1847 | [277050, 277199]          | 900        | Fourier MLP     | Complex Neural Net
+1848 | [277200, 277349]          | 400        | Fourier MLP     | Complex Neural Net
+1849 | [277350, 277499]          | 200        | Fourier MLP     | Complex Neural Net
+1850 | [277500, 277649]          | 100        | Fourier MLP     | Complex Neural Net
+1851 | [277650, 277799]          | 0          | Uniform         | 
+1852 | [277800, 277949]          | 100        | Linear          | coef=0.0623, int=0.9565
+1853 | [277950, 278099]          | 16600      | Fourier MLP     | Complex Neural Net
+1854 | [278100, 278249]          | 600        | Fourier MLP     | Complex Neural Net
+1855 | [278250, 278399]          | 0          | Uniform         | 
+1856 | [278400, 278549]          | 0          | Uniform         | 
+1857 | [278550, 278699]          | 0          | Uniform         | 
+1858 | [278700, 278849]          | 0          | Uniform         | 
+1859 | [278850, 278999]          | 0          | Uniform         | 
+1860 | [279000, 279149]          | 15400      | Fourier MLP     | Complex Neural Net
+1861 | [279150, 279299]          | 300        | Fourier MLP     | Complex Neural Net
+1862 | [279300, 279449]          | 100        | Fourier MLP     | Complex Neural Net
+1863 | [279450, 279599]          | 0          | Uniform         | 
+1864 | [279600, 279749]          | 0          | Uniform         | 
+1865 | [279750, 279899]          | 0          | Uniform         | 
+1866 | [279900, 280049]          | 16600      | Fourier MLP     | Complex Neural Net
+1867 | [280050, 280199]          | 600        | Fourier MLP     | Complex Neural Net
+1868 | [280200, 280349]          | 100        | Fourier MLP     | Complex Neural Net
+1869 | [280350, 280499]          | 100        | Uniform         | 
+1870 | [280500, 280649]          | 0          | Uniform         | 
+1871 | [280650, 280799]          | 100        | Uniform         | 
+1872 | [280800, 280949]          | 0          | Uniform         | 
+1873 | [280950, 281099]          | 13600      | Fourier MLP     | Complex Neural Net
+1874 | [281100, 281249]          | 500        | Fourier MLP     | Complex Neural Net
+1875 | [281250, 281399]          | 200        | Fourier MLP     | Complex Neural Net
+1876 | [281400, 281549]          | 0          | Uniform         | 
+1877 | [281550, 281699]          | 100        | Fourier MLP     | Complex Neural Net
+1878 | [281700, 281849]          | 0          | Uniform         | 
+1879 | [281850, 281999]          | 0          | Uniform         | 
+1880 | [282000, 282149]          | 16100      | Fourier MLP     | Complex Neural Net
+1881 | [282150, 282299]          | 300        | Fourier MLP     | Complex Neural Net
+1882 | [282300, 282449]          | 100        | Fourier MLP     | Complex Neural Net
+1883 | [282450, 282599]          | 0          | Uniform         | 
+1884 | [282600, 282749]          | 0          | Uniform         | 
+1885 | [282750, 282899]          | 0          | Uniform         | 
+1886 | [282900, 283049]          | 17400      | Fourier MLP     | Complex Neural Net
+1887 | [283050, 283199]          | 400        | Fourier MLP     | Complex Neural Net
+1888 | [283200, 283349]          | 200        | Fourier MLP     | Complex Neural Net
+1889 | [283350, 283499]          | 100        | Fourier MLP     | Complex Neural Net
+1890 | [283500, 283649]          | 0          | Uniform         | 
+1891 | [283650, 283799]          | 0          | Uniform         | 
+1892 | [283800, 283949]          | 0          | Uniform         | 
+1893 | [283950, 284099]          | 15200      | Fourier MLP     | Complex Neural Net
+1894 | [284100, 284249]          | 200        | Fourier MLP     | Complex Neural Net
+1895 | [284250, 284399]          | 500        | Fourier MLP     | Complex Neural Net
+1896 | [284400, 284549]          | 0          | Uniform         | 
+1897 | [284550, 284699]          | 100        | Fourier MLP     | Complex Neural Net
+1898 | [284700, 284849]          | 100        | Fourier MLP     | Complex Neural Net
+1899 | [284850, 284999]          | 0          | Uniform         | 
+1900 | [285000, 285149]          | 14900      | Fourier MLP     | Complex Neural Net
+1901 | [285150, 285299]          | 300        | Fourier MLP     | Complex Neural Net
+1902 | [285300, 285449]          | 100        | Fourier MLP     | Complex Neural Net
+1903 | [285450, 285599]          | 100        | Uniform         | 
+1904 | [285600, 285749]          | 100        | Fourier MLP     | Complex Neural Net
+1905 | [285750, 285899]          | 100        | Fourier MLP     | Complex Neural Net
+1906 | [285900, 286049]          | 15700      | Fourier MLP     | Complex Neural Net
+1907 | [286050, 286199]          | 800        | Fourier MLP     | Complex Neural Net
+1908 | [286200, 286349]          | 200        | Fourier MLP     | Complex Neural Net
+1909 | [286350, 286499]          | 0          | Uniform         | 
+1910 | [286500, 286649]          | 200        | Fourier MLP     | Complex Neural Net
+1911 | [286650, 286799]          | 200        | Fourier MLP     | Complex Neural Net
+1912 | [286800, 286949]          | 0          | Uniform         | 
+1913 | [286950, 287099]          | 13800      | Fourier MLP     | Complex Neural Net
+1914 | [287100, 287249]          | 600        | Fourier MLP     | Complex Neural Net
+1915 | [287250, 287399]          | 0          | Uniform         | 
+1916 | [287400, 287549]          | 100        | Fourier MLP     | Complex Neural Net
+1917 | [287550, 287699]          | 0          | Uniform         | 
+1918 | [287700, 287849]          | 100        | Fourier MLP     | Complex Neural Net
+1919 | [287850, 287999]          | 0          | Uniform         | 
+1920 | [288000, 288149]          | 14000      | Fourier MLP     | Complex Neural Net
+1921 | [288150, 288299]          | 100        | Fourier MLP     | Complex Neural Net
+1922 | [288300, 288449]          | 0          | Uniform         | 
+1923 | [288450, 288599]          | 0          | Uniform         | 
+1924 | [288600, 288749]          | 100        | Fourier MLP     | Complex Neural Net
+1925 | [288750, 288899]          | 0          | Uniform         | 
+1926 | [288900, 289049]          | 15000      | Fourier MLP     | Complex Neural Net
+1927 | [289050, 289199]          | 1000       | Fourier MLP     | Complex Neural Net
+1928 | [289200, 289349]          | 100        | Fourier MLP     | Complex Neural Net
+1929 | [289350, 289499]          | 300        | Fourier MLP     | Complex Neural Net
+1930 | [289500, 289649]          | 100        | Fourier MLP     | Complex Neural Net
+1931 | [289650, 289799]          | 0          | Uniform         | 
+1932 | [289800, 289949]          | 0          | Uniform         | 
+1933 | [289950, 290099]          | 17800      | Fourier MLP     | Complex Neural Net
+1934 | [290100, 290249]          | 400        | Fourier MLP     | Complex Neural Net
+1935 | [290250, 290399]          | 0          | Uniform         | 
+1936 | [290400, 290549]          | 100        | Linear          | coef=0.0000, int=1.0000
+1937 | [290550, 290699]          | 0          | Uniform         | 
+1938 | [290700, 290849]          | 0          | Uniform         | 
+1939 | [290850, 290999]          | 0          | Uniform         | 
+1940 | [291000, 291149]          | 15700      | Fourier MLP     | Complex Neural Net
+1941 | [291150, 291299]          | 500        | Fourier MLP     | Complex Neural Net
+1942 | [291300, 291449]          | 100        | Fourier MLP     | Complex Neural Net
+1943 | [291450, 291599]          | 0          | Uniform         | 
+1944 | [291600, 291749]          | 0          | Uniform         | 
+1945 | [291750, 291899]          | 0          | Uniform         | 
+1946 | [291900, 292049]          | 11700      | Fourier MLP     | Complex Neural Net
+1947 | [292050, 292199]          | 400        | Uniform         | 
+1948 | [292200, 292349]          | 200        | Fourier MLP     | Complex Neural Net
+1949 | [292350, 292499]          | 0          | Uniform         | 
+1950 | [292500, 292649]          | 100        | Uniform         | 
+1951 | [292650, 292799]          | 0          | Uniform         | 
+1952 | [292800, 292949]          | 100        | Fourier MLP     | Complex Neural Net
+1953 | [292950, 293099]          | 14000      | Fourier MLP     | Complex Neural Net
+1954 | [293100, 293249]          | 400        | Fourier MLP     | Complex Neural Net
+1955 | [293250, 293399]          | 200        | Uniform         | 
+1956 | [293400, 293549]          | 0          | Uniform         | 
+1957 | [293550, 293699]          | 100        | Uniform         | 
+1958 | [293700, 293849]          | 0          | Uniform         | 
+1959 | [293850, 293999]          | 100        | Fourier MLP     | Complex Neural Net
+1960 | [294000, 294149]          | 14800      | Fourier MLP     | Complex Neural Net
+1961 | [294150, 294299]          | 300        | Fourier MLP     | Complex Neural Net
+1962 | [294300, 294449]          | 200        | Fourier MLP     | Complex Neural Net
+1963 | [294450, 294599]          | 0          | Uniform         | 
+1964 | [294600, 294749]          | 0          | Uniform         | 
+1965 | [294750, 294899]          | 100        | Fourier MLP     | Complex Neural Net
+1966 | [294900, 295049]          | 15700      | Fourier MLP     | Complex Neural Net
+1967 | [295050, 295199]          | 600        | Fourier MLP     | Complex Neural Net
+1968 | [295200, 295349]          | 200        | Fourier MLP     | Complex Neural Net
+1969 | [295350, 295499]          | 0          | Uniform         | 
+1970 | [295500, 295649]          | 200        | Fourier MLP     | Complex Neural Net
+1971 | [295650, 295799]          | 0          | Uniform         | 
+1972 | [295800, 295949]          | 0          | Uniform         | 
+1973 | [295950, 296099]          | 15100      | Fourier MLP     | Complex Neural Net
+1974 | [296100, 296249]          | 200        | Fourier MLP     | Complex Neural Net
+1975 | [296250, 296399]          | 200        | Fourier MLP     | Complex Neural Net
+1976 | [296400, 296549]          | 0          | Uniform         | 
+1977 | [296550, 296699]          | 0          | Uniform         | 
+1978 | [296700, 296849]          | 0          | Uniform         | 
+1979 | [296850, 296999]          | 0          | Uniform         | 
+1980 | [297000, 297149]          | 15500      | Fourier MLP     | Complex Neural Net
+1981 | [297150, 297299]          | 400        | Fourier MLP     | Complex Neural Net
+1982 | [297300, 297449]          | 200        | Fourier MLP     | Complex Neural Net
+1983 | [297450, 297599]          | 100        | Fourier MLP     | Complex Neural Net
+1984 | [297600, 297749]          | 0          | Uniform         | 
+1985 | [297750, 297899]          | 0          | Uniform         | 
+1986 | [297900, 298049]          | 13800      | Fourier MLP     | Complex Neural Net
+1987 | [298050, 298199]          | 700        | Fourier MLP     | Complex Neural Net
+1988 | [298200, 298349]          | 0          | Uniform         | 
+1989 | [298350, 298499]          | 0          | Uniform         | 
+1990 | [298500, 298649]          | 100        | Fourier MLP     | Complex Neural Net
+1991 | [298650, 298799]          | 0          | Uniform         | 
+1992 | [298800, 298949]          | 100        | Fourier MLP     | Complex Neural Net
+1993 | [298950, 299099]          | 12100      | Fourier MLP     | Complex Neural Net
+1994 | [299100, 299249]          | 400        | Fourier MLP     | Complex Neural Net
+1995 | [299250, 299399]          | 100        | Uniform         | 
+1996 | [299400, 299549]          | 100        | Fourier MLP     | Complex Neural Net
+1997 | [299550, 299699]          | 100        | Fourier MLP     | Complex Neural Net
+1998 | [299700, 299849]          | 0          | Uniform         | 
+1999 | [299850, 299998]          | 0          | Uniform         | 
+================================================================================

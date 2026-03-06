@@ -1,10 +1,9 @@
 import numpy as np
 import time
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Tuple, Any
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.neural_network import MLPRegressor
-from sklearn.tree import DecisionTreeRegressor
 from sklearn.isotonic import IsotonicRegression
 
 from .common import Bucket, RangeQuery, CDFTrainRow

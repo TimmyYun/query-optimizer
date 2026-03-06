@@ -1,0 +1,13 @@
+{
+    "model": "Hybrid",
+    "wl_name": "workload",
+    "metrics": {
+        "train_time": 5.109030082998288,
+        "infer_time": 1.3094946250002977,
+        "median_q_error": 1.3548387096774193,
+        "p25_q_error": 1.10111525704809,
+        "p75_q_error": 2.249999999999999,
+        "p95_q_error": 30.000000000000004,
+        "avg_q_error": 7.604034043008989
+    }
+}

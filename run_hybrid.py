@@ -12,25 +12,47 @@ from benchmark_utils import (
 
 
 def run_logic(args, out_dir, metadata):
-    mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
+    mn, mx, N, freq, _, n_bins_data, _, _ = metadata
     n_bins = args.buckets if args.buckets is not None else n_bins_data
     rng = np.random.default_rng(42)
+    # --- STEP 1: SIMULATE REALISTIC SAMPLING ---
+    # In a real DB, this is: SELECT * FROM table TABLESAMPLE BERNOULLI (1)
+    sample_rate = 0.50  # 1% Sample
+    sample_size = int(N * sample_rate)
 
-    # Build Initial Buckets
-    ew_hist = EquiWidthHistogram.build(mn, mx, n_bins, freq)
+    # Create a sampled frequency array (What a DB actually sees)
+    indices = np.arange(len(freq))
+    # Draw indices based on actual distribution to simulate a random row sample
+    sampled_indices = rng.choice(indices, size=sample_size, p=(freq / N))
 
-    # Train Hybrid
-    print(f"Training Hybrid Model (Bins: {n_bins})...")
+    # Build the 'observed' frequency array from the sample
+    obs_freq = np.zeros_like(freq)
+    unique, counts = np.unique(sampled_indices, return_counts=True)
+    obs_freq[unique] = counts
+
+    # Scale the sample back up to N (Crucial for Cardinality Estimation)
+    scaling_factor = 1.0 / sample_rate
+    estimated_freq = obs_freq * scaling_factor
+    # --------------------------------------------
+
+    # Build Initial Buckets using the ESTIMATED frequency
+    # (Realistic: Histograms are almost always built from samples)
+    ew_hist = EquiWidthHistogram.build(mn, mx, n_bins, estimated_freq)
+
+    # Train Hybrid using the ESTIMATED frequency
+    print(f"Training Hybrid Model on 1% Sample (Bins: {n_bins})...")
     hybrid_est = HybridEstimator(
         ew_hist.buckets,
         identity_threshold=args.ident,
         mlp_penalty=args.penalty,
         fourier_penalty=args.penalty,
     )
-    t_train = hybrid_est.train(freq, mn, args.points, rng)
+
+    # The models now learn from the 'estimated_freq'
+    t_train = hybrid_est.train(estimated_freq, mn, args.points, rng)
 
     # Report Model Selections
-    model_report_path = out_dir / f"model_selection_Hybrid.txt"
+    model_report_path = out_dir / "model_selection_Hybrid.txt"
     hybrid_est.report_models(file_path=model_report_path)
 
     # Load Workload
@@ -66,7 +88,7 @@ def run_logic(args, out_dir, metadata):
 def main():
     parser = get_common_parser("Run Hybrid Model Benchmark")
     parser.add_argument(
-        "--points", type=int, default=20, help="Points per bucket for training"
+        "--points", type=int, default=40, help="Points per bucket for training"
     )
     parser.add_argument("--ident", type=float, default=1e-4, help="Identity threshold")
     parser.add_argument(

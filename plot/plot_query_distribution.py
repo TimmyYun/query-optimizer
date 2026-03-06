@@ -2,7 +2,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
-import os
 
 WORKLOAD_TYPE = "wide"
 DATA_DIR = Path("data/generated/60000000_simple")

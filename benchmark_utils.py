@@ -1,7 +1,6 @@
 import argparse
 import json
 import pickle
-import time
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -41,7 +40,6 @@ def run_benchmark_suite(args, approach_fn):
     """
     Handles the loop over distributions and result aggregation.
     """
-    import copy
 
     # Ensure a single experiment name for all distributions in this suite
     if args.experiment_name is None:

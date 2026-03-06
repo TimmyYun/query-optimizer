@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import time
-import numpy as np
 from pathlib import Path
 from models import EquiWidthHistogram, summarize
 from benchmark_utils import (
@@ -17,7 +16,9 @@ def run_logic(args, out_dir, metadata):
 
     # Build Histogram
     t0 = time.perf_counter()
-    ew_hist = EquiWidthHistogram.build(mn, mx, n_bins, freq)
+    ew_hist = EquiWidthHistogram.build_from_sample(
+        mn=mn, mx=mx, bins=n_bins, sample=sample, total_rows=N
+    )
     build_time = time.perf_counter() - t0
 
     # Load Workload

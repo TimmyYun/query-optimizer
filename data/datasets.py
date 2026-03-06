@@ -197,29 +197,17 @@ def scan_min_max_count(
 def build_frequency_and_sample(
     csv_path: Path, mn: int, mx: int, n_rows: int, sample_size: int, seed: int
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Scans the dataset to build an exact frequency histogram and collect a reservoir sample.
-
-    Args:
-        csv_path (Path): Path to the CSV dataset.
-        mn (int): Minimum value in the dataset (for offset calculation).
-        mx (int): Maximum value in the dataset.
-        n_rows (int): Total expected number of rows (used for sampling probability).
-        sample_size (int): Target size for the reservoir sample.
-        seed (int): Random seed for sampling.
-
-    Returns:
-        Tuple[np.ndarray, np.ndarray]:
-            - freq: Exact frequency counts for each value in the range [mn, mx].
-            - sample: A random sample of values from the dataset.
-    """
     width = mx - mn + 1
     if width <= 0:
         return np.array([]), np.array([])
+
     freq = np.zeros(width, dtype=np.int64)
     rng = np.random.default_rng(seed)
     sampled = []
-    p = min(1.0, float(sample_size * 2) / float(max(n_rows, 1)))
+
+    # Calculate probability: we pull slightly more than needed to ensure we hit the target
+    # If the file is smaller than the sample_size, p will be > 1.0 (clamped to 1.0)
+    p = min(1.0, float(sample_size * 1.5) / float(max(n_rows, 1)))
 
     for ch in pd.read_csv(
         csv_path,
@@ -239,7 +227,9 @@ def build_frequency_and_sample(
             freq += np.bincount(valid_idx, minlength=width)
 
         # Reservoir sampling step
-        if p > 0 and len(sampled) < sample_size:
+        if p >= 1.0:
+            sampled.append(vals)  # Just take everything if small
+        else:
             mask = rng.random(vals.size) < p
             s = vals[mask]
             if s.size > 0:
@@ -247,10 +237,12 @@ def build_frequency_and_sample(
 
     if sampled:
         sample = np.concatenate(sampled)
+        # Final exact trim to 100,000
         if sample.size > sample_size:
             sample = rng.choice(sample, size=sample_size, replace=False)
     else:
         sample = np.array([], dtype=np.int64)
+
     return freq, sample
 
 
@@ -665,31 +657,14 @@ class DatasetManager:
         force_regeneration: bool = False,
         use_micro_dist: bool = True,
     ):
-        """
-        Orchestrates the creation of a dataset.
-
-        Steps:
-        1. Checks if dataset exists. If so, returns early (unless force_regeneration=True).
-        2. Generates values based on distribution.
-        3. Saves data to CSV.
-        4. Calculates statistics (Min, Max, Skew, Kurtosis, NDV).
-        5. Saves statistics to JSON.
-        6. Saves a pickle metadata file for fast loading.
-        7. Generates a distribution plot.
-
-        Args:
-            rows (int): Number of rows to generate.
-            dist (str): Distribution type.
-            force_regeneration (bool): If True, overwrites existing data.
-
-        Returns:
-            Path: The directory containing the generated dataset and metadata.
-        """
         ds_dir = self.get_dataset_dir(rows, dist)
         ds_dir.mkdir(parents=True, exist_ok=True)
 
         data_path = ds_dir / "data.csv"
         stats_path = ds_dir / "stats.json"
+
+        # RESEARCHER CONSTANT: 100,000 rows
+        TARGET_SAMPLE_SIZE = 100_000
 
         if not data_path.exists() or force_regeneration:
             print(f"Generating dataset: {rows} rows, {dist}...")
@@ -710,13 +685,18 @@ class DatasetManager:
             ndv = calculate_ndv(data_path)
             skew, kurt = calculate_skew_kurt(data_path)
 
-            # Automatically calculate optimal bin count using Freedman-Diaconis rule
-            freq, sample = build_frequency_and_sample(data_path, mn, mx, N, 100_000, 42)
+            # Pass the 100k target to the build function
+            freq, sample = build_frequency_and_sample(
+                data_path, mn, mx, N, TARGET_SAMPLE_SIZE, 42
+            )
+
+            # Freedman-Diaconis calculation now relies on the 100k sample
             k = freedman_diaconis_bins(sample, mn, mx, N)
             h = (mx - mn) / k if k > 0 else 0.0
 
             stats = {
                 "Rows": int(N),
+                "Sample Size": int(len(sample)),  # Track actual size for metadata
                 "Min": int(mn),
                 "Max": int(mx),
                 "NDV": int(ndv),
@@ -727,7 +707,7 @@ class DatasetManager:
             }
             save_stats(stats, stats_path)
 
-            # Save a binary meta file for fast loading in main.py (legacy compatibility)
+            # Save to pickle for Hybrid/Equi-Width benchmark scripts
             meta_path = ds_dir / "meta.pkl"
             with open(meta_path, "wb") as f:
                 pickle.dump((mn, mx, N, freq, sample, k, skew, kurt), f)
