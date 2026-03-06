@@ -28,6 +28,55 @@ Key Responsibilities:
 DOMAIN_MAX = 1_000_000
 
 
+def plot_sample_distribution(sample: np.ndarray, dist_name: str, output_path: Path, n_bins: int):
+    """
+    Plots the distribution of the 100k reservoir sample.
+    Used to verify that the sample is a 'mini-me' of the 60M dataset.
+    """
+    print(f"Plotting sample distribution for {dist_name} to {output_path}...")
+
+    stats_text = (
+        f"Sample Size (S): {len(sample)}\n"
+        f"Min: {np.min(sample)}\n"
+        f"Max: {np.max(sample)}\n"
+        f"Mean: {np.mean(sample):.2f}"
+    )
+
+    plt.figure(figsize=(10, 6))
+    use_log = dist_name.lower() == "zipf"
+
+    # Use the same FD bins calculated during the preparation phase
+    plt.hist(
+        sample,
+        bins=n_bins,
+        color="salmon",
+        edgecolor="black",
+        alpha=0.7,
+        log=use_log,
+        label="Reservoir Sample (100k)"
+    )
+
+    plt.title(f"Sample Distribution: {dist_name} (FD Bins: {n_bins})")
+    plt.xlabel("Value")
+    plt.ylabel("Frequency" + (" (Log Scale)" if use_log else ""))
+    plt.grid(axis="y", alpha=0.3)
+
+    if dist_name.lower() not in ["imdb", "census"]:
+        plt.xlim(0, DOMAIN_MAX)
+
+    plt.gcf().text(
+        0.78,
+        0.6,
+        stats_text,
+        fontsize=9,
+        bbox=dict(facecolor="white", alpha=0.8, edgecolor="gray"),
+    )
+
+    plt.tight_layout()
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+
 def clamp_int(x, lo, hi):
     """Clamps an integer x between lo and hi (inclusive)."""
     return int(min(max(int(round(x)), lo), hi))
@@ -714,6 +763,7 @@ class DatasetManager:
 
             # Plot distribution
             plot_data_distribution(vals, dist, ds_dir / "hist.png", n_bins=k)
+            plot_sample_distribution(sample, dist, ds_dir / "hist_sample.png", n_bins=k)
             plot_micro_distribution(vals, dist, ds_dir / "hist_micro.png")
 
         print(f"Dataset ready at {ds_dir}")
