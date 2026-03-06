@@ -1,0 +1,8 @@
+{
+    "model": "Shift_zipf_to_sparse_cluster",
+    "wl_name": "workload",
+    "metrics": {
+        "median_q_error": 3.586420012218447,
+        "p95_q_error": 16.578341194805613
+    }
+}

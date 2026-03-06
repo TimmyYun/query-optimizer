@@ -1,0 +1,8 @@
+{
+    "model": "Shift_zipf_to_anti_zipf",
+    "wl_name": "workload",
+    "metrics": {
+        "median_q_error": 1.0764722016391568,
+        "p95_q_error": 2.0899807397517005
+    }
+}

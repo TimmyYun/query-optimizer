@@ -1,0 +1,8 @@
+{
+    "model": "Shift_zipf_to_uniform",
+    "wl_name": "workload",
+    "metrics": {
+        "median_q_error": 1.2852429494005722,
+        "p95_q_error": 20.99176267965789
+    }
+}
