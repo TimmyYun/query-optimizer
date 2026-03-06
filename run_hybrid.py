@@ -18,11 +18,11 @@ def run_logic(args, out_dir, metadata):
 
     # --- STEP 1: USE PRE-GENERATED RESERVOIR SAMPLE ---
     # Using the exact 100,000-row sample for 100% methodological honesty
-    # obs_freq = np.bincount(sample - mn, minlength=len(freq))
-    #
-    # # Scale the sample back up to N (Crucial for Cardinality Estimation)
-    # scaling_factor = N / len(sample)
-    # estimated_freq = obs_freq * scaling_factor
+    obs_freq = np.bincount(sample - mn, minlength=len(freq))
+    
+    # Scale the sample back up to N (Crucial for Cardinality Estimation)
+    scaling_factor = N / len(sample)
+    estimated_freq = obs_freq * scaling_factor
     # --------------------------------------------------
 
     # Build Initial Buckets using the ESTIMATED frequency
@@ -41,7 +41,7 @@ def run_logic(args, out_dir, metadata):
     )
 
     # The models now learn from the 'estimated_freq'
-    t_train = hybrid_est.train(sample, mn, args.points, rng)
+    t_train = hybrid_est.train(estimated_freq, mn, args.points, rng)
 
     # Report Model Selections
     model_report_path = out_dir / "model_selection_Hybrid.txt"
@@ -80,7 +80,7 @@ def run_logic(args, out_dir, metadata):
 def main():
     parser = get_common_parser("Run Hybrid Model Benchmark")
     parser.add_argument(
-        "--points", type=int, default=40, help="Points per bucket for training"
+        "--points", type=int, default=200, help="Points per bucket for training"
     )
     parser.add_argument("--ident", type=float, default=1e-4, help="Identity threshold")
     parser.add_argument(
