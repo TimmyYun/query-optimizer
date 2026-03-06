@@ -82,7 +82,7 @@ def run_benchmark_suite(args, approach_fn):
         )
 
         # Setup output directory
-        out_dir = setup_out_dir(args, ds_out_name, workload_path.stem)
+        out_dir = setup_out_dir(args, ds_out_name)
 
         # Load Data
         try:
@@ -98,7 +98,7 @@ def run_benchmark_suite(args, approach_fn):
     aggregate_summaries(args.out_dir)
 
 
-def setup_out_dir(args, dataset_name, workload_name):
+def setup_out_dir(args, dataset_name):
     base_dir = Path(args.out_dir)
     if args.experiment_name is None:
         base_dir.mkdir(parents=True, exist_ok=True)
@@ -108,7 +108,7 @@ def setup_out_dir(args, dataset_name, workload_name):
         next_id = max(existing_ids) + 1 if existing_ids else 1
         args.experiment_name = str(next_id)
 
-    out_dir = base_dir / args.experiment_name / dataset_name / workload_name
+    out_dir = base_dir / args.experiment_name / dataset_name
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
 
@@ -226,9 +226,9 @@ def aggregate_summaries(results_dir="results"):
                         # Rel path from exp_dir
                         rel_path = summary_json_path.relative_to(experiment_dir)
                         # Dataset name could be multiple parts, e.g. "60000000_hard/uniform".
-                        # It's everything before the last two parts (workload_name / summary.json)
-                        if len(rel_path.parts) >= 3:
-                            dataset_name = "/".join(rel_path.parts[:-2])
+                        # It's everything before the last part (summary.json)
+                        if len(rel_path.parts) >= 2:
+                            dataset_name = "/".join(rel_path.parts[:-1])
                         else:
                             dataset_name = rel_path.parts[0]
 
