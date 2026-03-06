@@ -225,3 +225,4 @@ report.html
 *.xlsx
 *.meta.pkl
 *.DS_Store
+/results/
