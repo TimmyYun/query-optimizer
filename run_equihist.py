@@ -18,7 +18,9 @@ def run_logic(args, out_dir, metadata):
 
     # Build Initial Histogram (Equi-Width)
     t0 = time.perf_counter()
-    ew_hist = EquiWidthHistogram.build(mn, mx, n_bins, freq)
+    ew_hist = EquiWidthHistogram.build_from_sample(
+        mn=mn, mx=mx, bins=n_bins, sample=sample, total_rows=N
+    )
     initial_build_time = time.perf_counter() - t0
 
     eh_learner = EquiHistLearner(ew_hist.buckets, learning_rate=args.lr)
