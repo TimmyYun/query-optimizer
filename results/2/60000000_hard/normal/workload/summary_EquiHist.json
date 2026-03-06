@@ -1,0 +1,15 @@
+{
+    "model": "EquiHist",
+    "wl_name": "workload",
+    "metrics": {
+        "initial_build_time": 0.0037686249997932464,
+        "update_time_total": 87.55782724453638,
+        "total_train_time": 87.56159586953618,
+        "infer_time": 87.31372140219173,
+        "median_q_error": 2.897161783054243,
+        "p25_q_error": 1.8025302846499327,
+        "p75_q_error": 4.3302161720456045,
+        "p95_q_error": 9.529530656062915,
+        "avg_q_error": 4.063810850091675
+    }
+}

@@ -2,8 +2,8 @@
 ================================================================================
 Idx  | Range                     | Count      | Model Type      | Stats
 --------------------------------------------------------------------------------
-0    | [63767, 65933]            | 1189100    | Uniform         | 
-1    | [65934, 68100]            | 1202900    | Fourier MLP     | Complex Neural Net
+0    | [63767, 65933]            | 1250400    | Uniform         | 
+1    | [65934, 68100]            | 1231800    | Fourier MLP     | Complex Neural Net
 2    | [68101, 70267]            | 0          | Uniform         | 
 3    | [70268, 72434]            | 0          | Uniform         | 
 4    | [72435, 74601]            | 0          | Uniform         | 
@@ -12,11 +12,11 @@ Idx  | Range                     | Count      | Model Type      | Stats
 7    | [78936, 81102]            | 0          | Uniform         | 
 8    | [81103, 83269]            | 0          | Uniform         | 
 9    | [83270, 85436]            | 0          | Uniform         | 
-10   | [85437, 87603]            | 1184500    | Fourier MLP     | Complex Neural Net
-11   | [87604, 89770]            | 1207300    | Fourier MLP     | Complex Neural Net
+10   | [85437, 87603]            | 1239000    | Uniform         | 
+11   | [87604, 89770]            | 1201800    | Fourier MLP     | Complex Neural Net
 12   | [89771, 91937]            | 0          | Uniform         | 
-13   | [91938, 94104]            | 1205200    | Uniform         | 
-14   | [94105, 96271]            | 1226900    | Uniform         | 
+13   | [91938, 94104]            | 1164000    | Uniform         | 
+14   | [94105, 96271]            | 1216800    | Uniform         | 
 15   | [96272, 98438]            | 0          | Uniform         | 
 16   | [98439, 100605]           | 0          | Uniform         | 
 17   | [100606, 102772]          | 0          | Uniform         | 
@@ -31,7 +31,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 26   | [120109, 122275]          | 0          | Uniform         | 
 27   | [122276, 124442]          | 0          | Uniform         | 
 28   | [124443, 126609]          | 0          | Uniform         | 
-29   | [126610, 128776]          | 1190000    | Fourier MLP     | Complex Neural Net
+29   | [126610, 128776]          | 1184400    | Fourier MLP     | Complex Neural Net
 30   | [128777, 130943]          | 0          | Uniform         | 
 31   | [130944, 133110]          | 0          | Uniform         | 
 32   | [133111, 135277]          | 0          | Uniform         | 
@@ -48,7 +48,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 43   | [156948, 159114]          | 0          | Uniform         | 
 44   | [159115, 161281]          | 0          | Uniform         | 
 45   | [161282, 163448]          | 0          | Uniform         | 
-46   | [163449, 165615]          | 1201800    | Fourier MLP     | Complex Neural Net
+46   | [163449, 165615]          | 1265400    | Fourier MLP     | Complex Neural Net
 47   | [165616, 167782]          | 0          | Uniform         | 
 48   | [167783, 169949]          | 0          | Uniform         | 
 49   | [169950, 172116]          | 0          | Uniform         | 
@@ -56,7 +56,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 51   | [174284, 176450]          | 0          | Uniform         | 
 52   | [176451, 178617]          | 0          | Uniform         | 
 53   | [178618, 180784]          | 0          | Uniform         | 
-54   | [180785, 182951]          | 1216600    | Fourier MLP     | Complex Neural Net
+54   | [180785, 182951]          | 1206600    | Fourier MLP     | Complex Neural Net
 55   | [182952, 185118]          | 0          | Uniform         | 
 56   | [185119, 187285]          | 0          | Uniform         | 
 57   | [187286, 189452]          | 0          | Uniform         | 
@@ -65,7 +65,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 60   | [193787, 195953]          | 0          | Uniform         | 
 61   | [195954, 198120]          | 0          | Uniform         | 
 62   | [198121, 200287]          | 0          | Uniform         | 
-63   | [200288, 202454]          | 1190100    | Fourier MLP     | Complex Neural Net
+63   | [200288, 202454]          | 1190400    | Fourier MLP     | Complex Neural Net
 64   | [202455, 204621]          | 0          | Uniform         | 
 65   | [204622, 206788]          | 0          | Uniform         | 
 66   | [206789, 208955]          | 0          | Uniform         | 
@@ -77,7 +77,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 72   | [219791, 221957]          | 0          | Uniform         | 
 73   | [221958, 224124]          | 0          | Uniform         | 
 74   | [224125, 226291]          | 0          | Uniform         | 
-75   | [226292, 228458]          | 1195700    | Fourier MLP     | Complex Neural Net
+75   | [226292, 228458]          | 1209600    | Fourier MLP     | Complex Neural Net
 76   | [228459, 230625]          | 0          | Uniform         | 
 77   | [230626, 232792]          | 0          | Uniform         | 
 78   | [232793, 234959]          | 0          | Uniform         | 
@@ -100,7 +100,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 95   | [269632, 271798]          | 0          | Uniform         | 
 96   | [271799, 273965]          | 0          | Uniform         | 
 97   | [273966, 276132]          | 0          | Uniform         | 
-98   | [276133, 278299]          | 1195100    | Fourier MLP     | Complex Neural Net
+98   | [276133, 278299]          | 1197600    | Fourier MLP     | Complex Neural Net
 99   | [278300, 280466]          | 0          | Uniform         | 
 100  | [280467, 282633]          | 0          | Uniform         | 
 101  | [282634, 284800]          | 0          | Uniform         | 
@@ -136,14 +136,14 @@ Idx  | Range                     | Count      | Model Type      | Stats
 131  | [347644, 349810]          | 0          | Uniform         | 
 132  | [349811, 351977]          | 0          | Uniform         | 
 133  | [351978, 354144]          | 0          | Uniform         | 
-134  | [354145, 356311]          | 1203600    | Uniform         | 
+134  | [354145, 356311]          | 1182000    | Fourier MLP     | Complex Neural Net
 135  | [356312, 358478]          | 0          | Uniform         | 
 136  | [358479, 360645]          | 0          | Uniform         | 
 137  | [360646, 362812]          | 0          | Uniform         | 
 138  | [362813, 364979]          | 0          | Uniform         | 
 139  | [364980, 367146]          | 0          | Uniform         | 
 140  | [367147, 369313]          | 0          | Uniform         | 
-141  | [369314, 371480]          | 1198800    | Fourier MLP     | Complex Neural Net
+141  | [369314, 371480]          | 1195200    | Fourier MLP     | Complex Neural Net
 142  | [371481, 373647]          | 0          | Uniform         | 
 143  | [373648, 375814]          | 0          | Uniform         | 
 144  | [375815, 377981]          | 0          | Uniform         | 
@@ -158,7 +158,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 153  | [395318, 397484]          | 0          | Uniform         | 
 154  | [397485, 399651]          | 0          | Uniform         | 
 155  | [399652, 401818]          | 0          | Uniform         | 
-156  | [401819, 403985]          | 1200000    | Fourier MLP     | Complex Neural Net
+156  | [401819, 403985]          | 1182000    | Fourier MLP     | Complex Neural Net
 157  | [403986, 406152]          | 0          | Uniform         | 
 158  | [406153, 408319]          | 0          | Uniform         | 
 159  | [408320, 410486]          | 0          | Uniform         | 
@@ -172,15 +172,15 @@ Idx  | Range                     | Count      | Model Type      | Stats
 167  | [425656, 427822]          | 0          | Uniform         | 
 168  | [427823, 429989]          | 0          | Uniform         | 
 169  | [429990, 432156]          | 0          | Uniform         | 
-170  | [432157, 434323]          | 1206300    | Fourier MLP     | Complex Neural Net
+170  | [432157, 434323]          | 1185600    | Fourier MLP     | Complex Neural Net
 171  | [434324, 436490]          | 0          | Uniform         | 
 172  | [436491, 438657]          | 0          | Uniform         | 
-173  | [438658, 440824]          | 1206100    | Uniform         | 
+173  | [438658, 440824]          | 1217400    | Uniform         | 
 174  | [440825, 442991]          | 0          | Uniform         | 
-175  | [442992, 445158]          | 1190500    | Uniform         | 
-176  | [445159, 447325]          | 1208200    | Fourier MLP     | Complex Neural Net
+175  | [442992, 445158]          | 1199400    | Uniform         | 
+176  | [445159, 447325]          | 1189200    | Fourier MLP     | Complex Neural Net
 177  | [447326, 449492]          | 0          | Uniform         | 
-178  | [449493, 451659]          | 2400600    | Fourier MLP     | Complex Neural Net
+178  | [449493, 451659]          | 2382000    | Fourier MLP     | Complex Neural Net
 179  | [451660, 453826]          | 0          | Uniform         | 
 180  | [453827, 455993]          | 0          | Uniform         | 
 181  | [455994, 458160]          | 0          | Uniform         | 
@@ -203,19 +203,19 @@ Idx  | Range                     | Count      | Model Type      | Stats
 198  | [492833, 494999]          | 0          | Uniform         | 
 199  | [495000, 497166]          | 0          | Uniform         | 
 200  | [497167, 499333]          | 0          | Uniform         | 
-201  | [499334, 501500]          | 1213600    | Fourier MLP     | Complex Neural Net
+201  | [499334, 501500]          | 1201200    | Fourier MLP     | Complex Neural Net
 202  | [501501, 503667]          | 0          | Uniform         | 
 203  | [503668, 505834]          | 0          | Uniform         | 
 204  | [505835, 508001]          | 0          | Uniform         | 
 205  | [508002, 510168]          | 0          | Uniform         | 
 206  | [510169, 512335]          | 0          | Uniform         | 
-207  | [512336, 514502]          | 1195800    | Fourier MLP     | Complex Neural Net
+207  | [512336, 514502]          | 1146600    | Fourier MLP     | Complex Neural Net
 208  | [514503, 516669]          | 0          | Uniform         | 
 209  | [516670, 518836]          | 0          | Uniform         | 
 210  | [518837, 521003]          | 0          | Uniform         | 
 211  | [521004, 523170]          | 0          | Uniform         | 
 212  | [523171, 525337]          | 0          | Uniform         | 
-213  | [525338, 527504]          | 1183100    | Fourier MLP     | Complex Neural Net
+213  | [525338, 527504]          | 1151400    | Fourier MLP     | Complex Neural Net
 214  | [527505, 529671]          | 0          | Uniform         | 
 215  | [529672, 531838]          | 0          | Uniform         | 
 216  | [531839, 534005]          | 0          | Uniform         | 
@@ -224,11 +224,11 @@ Idx  | Range                     | Count      | Model Type      | Stats
 219  | [538340, 540506]          | 0          | Uniform         | 
 220  | [540507, 542673]          | 0          | Uniform         | 
 221  | [542674, 544840]          | 0          | Uniform         | 
-222  | [544841, 547007]          | 1217400    | Fourier MLP     | Complex Neural Net
+222  | [544841, 547007]          | 1162800    | Uniform         | 
 223  | [547008, 549174]          | 0          | Uniform         | 
 224  | [549175, 551341]          | 0          | Uniform         | 
 225  | [551342, 553508]          | 0          | Uniform         | 
-226  | [553509, 555675]          | 1214000    | Fourier MLP     | Complex Neural Net
+226  | [553509, 555675]          | 1237800    | Fourier MLP     | Complex Neural Net
 227  | [555676, 557842]          | 0          | Uniform         | 
 228  | [557843, 560009]          | 0          | Uniform         | 
 229  | [560010, 562176]          | 0          | Uniform         | 
@@ -264,17 +264,17 @@ Idx  | Range                     | Count      | Model Type      | Stats
 259  | [625020, 627186]          | 0          | Uniform         | 
 260  | [627187, 629353]          | 0          | Uniform         | 
 261  | [629354, 631520]          | 0          | Uniform         | 
-262  | [631521, 633687]          | 1198500    | Uniform         | 
+262  | [631521, 633687]          | 1188000    | Uniform         | 
 263  | [633688, 635854]          | 0          | Uniform         | 
 264  | [635855, 638021]          | 0          | Uniform         | 
 265  | [638022, 640188]          | 0          | Uniform         | 
 266  | [640189, 642355]          | 0          | Uniform         | 
-267  | [642356, 644522]          | 1200800    | Fourier MLP     | Complex Neural Net
+267  | [642356, 644522]          | 1239000    | Fourier MLP     | Complex Neural Net
 268  | [644523, 646689]          | 0          | Uniform         | 
 269  | [646690, 648856]          | 0          | Uniform         | 
 270  | [648857, 651023]          | 0          | Uniform         | 
 271  | [651024, 653190]          | 0          | Uniform         | 
-272  | [653191, 655357]          | 1193600    | Fourier MLP     | Complex Neural Net
+272  | [653191, 655357]          | 1190400    | Fourier MLP     | Complex Neural Net
 273  | [655358, 657524]          | 0          | Uniform         | 
 274  | [657525, 659691]          | 0          | Uniform         | 
 275  | [659692, 661858]          | 0          | Uniform         | 
@@ -285,7 +285,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 280  | [670527, 672693]          | 0          | Uniform         | 
 281  | [672694, 674860]          | 0          | Uniform         | 
 282  | [674861, 677027]          | 0          | Uniform         | 
-283  | [677028, 679194]          | 1200200    | Fourier MLP     | Complex Neural Net
+283  | [677028, 679194]          | 1163400    | Fourier MLP     | Complex Neural Net
 284  | [679195, 681361]          | 0          | Uniform         | 
 285  | [681362, 683528]          | 0          | Uniform         | 
 286  | [683529, 685695]          | 0          | Uniform         | 
@@ -294,8 +294,8 @@ Idx  | Range                     | Count      | Model Type      | Stats
 289  | [690030, 692196]          | 0          | Uniform         | 
 290  | [692197, 694363]          | 0          | Uniform         | 
 291  | [694364, 696530]          | 0          | Uniform         | 
-292  | [696531, 698697]          | 1196700    | Fourier MLP     | Complex Neural Net
-293  | [698698, 700864]          | 1219300    | Fourier MLP     | Complex Neural Net
+292  | [696531, 698697]          | 1177800    | Fourier MLP     | Complex Neural Net
+293  | [698698, 700864]          | 1229400    | Fourier MLP     | Complex Neural Net
 294  | [700865, 703031]          | 0          | Uniform         | 
 295  | [703032, 705198]          | 0          | Uniform         | 
 296  | [705199, 707365]          | 0          | Uniform         | 
@@ -303,7 +303,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 298  | [709533, 711699]          | 0          | Uniform         | 
 299  | [711700, 713866]          | 0          | Uniform         | 
 300  | [713867, 716033]          | 0          | Uniform         | 
-301  | [716034, 718200]          | 1197500    | Fourier MLP     | Complex Neural Net
+301  | [716034, 718200]          | 1157400    | Fourier MLP     | Complex Neural Net
 302  | [718201, 720367]          | 0          | Uniform         | 
 303  | [720368, 722534]          | 0          | Uniform         | 
 304  | [722535, 724701]          | 0          | Uniform         | 
@@ -312,7 +312,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 307  | [729036, 731202]          | 0          | Uniform         | 
 308  | [731203, 733369]          | 0          | Uniform         | 
 309  | [733370, 735536]          | 0          | Uniform         | 
-310  | [735537, 737703]          | 1198300    | Uniform         | 
+310  | [735537, 737703]          | 1207200    | Uniform         | 
 311  | [737704, 739870]          | 0          | Uniform         | 
 312  | [739871, 742037]          | 0          | Uniform         | 
 313  | [742038, 744204]          | 0          | Uniform         | 
@@ -322,20 +322,20 @@ Idx  | Range                     | Count      | Model Type      | Stats
 317  | [750706, 752872]          | 0          | Uniform         | 
 318  | [752873, 755039]          | 0          | Uniform         | 
 319  | [755040, 757206]          | 0          | Uniform         | 
-320  | [757207, 759373]          | 1179900    | Fourier MLP     | Complex Neural Net
-321  | [759374, 761540]          | 1194500    | Fourier MLP     | Complex Neural Net
+320  | [757207, 759373]          | 1184400    | Fourier MLP     | Complex Neural Net
+321  | [759374, 761540]          | 1168800    | Fourier MLP     | Complex Neural Net
 322  | [761541, 763707]          | 0          | Uniform         | 
 323  | [763708, 765874]          | 0          | Uniform         | 
 324  | [765875, 768041]          | 0          | Uniform         | 
 325  | [768042, 770208]          | 0          | Uniform         | 
 326  | [770209, 772375]          | 0          | Uniform         | 
-327  | [772376, 774542]          | 1200500    | Fourier MLP     | Complex Neural Net
+327  | [772376, 774542]          | 1195800    | Fourier MLP     | Complex Neural Net
 328  | [774543, 776709]          | 0          | Uniform         | 
-329  | [776710, 778876]          | 1199200    | Fourier MLP     | Complex Neural Net
+329  | [776710, 778876]          | 1185000    | Fourier MLP     | Complex Neural Net
 330  | [778877, 781043]          | 0          | Uniform         | 
-331  | [781044, 783210]          | 1191100    | Fourier MLP     | Complex Neural Net
+331  | [781044, 783210]          | 1200000    | Fourier MLP     | Complex Neural Net
 332  | [783211, 785377]          | 0          | Uniform         | 
-333  | [785378, 787544]          | 1213200    | Fourier MLP     | Complex Neural Net
+333  | [785378, 787544]          | 1215600    | Fourier MLP     | Complex Neural Net
 334  | [787545, 789711]          | 0          | Uniform         | 
 335  | [789712, 791878]          | 0          | Uniform         | 
 336  | [791879, 794045]          | 0          | Uniform         | 
@@ -352,15 +352,15 @@ Idx  | Range                     | Count      | Model Type      | Stats
 347  | [815716, 817882]          | 0          | Uniform         | 
 348  | [817883, 820049]          | 0          | Uniform         | 
 349  | [820050, 822216]          | 0          | Uniform         | 
-350  | [822217, 824383]          | 1211800    | Fourier MLP     | Complex Neural Net
+350  | [822217, 824383]          | 1224600    | Fourier MLP     | Complex Neural Net
 351  | [824384, 826550]          | 0          | Uniform         | 
-352  | [826551, 828717]          | 1199700    | Fourier MLP     | Complex Neural Net
+352  | [826551, 828717]          | 1275600    | Fourier MLP     | Complex Neural Net
 353  | [828718, 830884]          | 0          | Uniform         | 
 354  | [830885, 833051]          | 0          | Uniform         | 
 355  | [833052, 835218]          | 0          | Uniform         | 
 356  | [835219, 837385]          | 0          | Uniform         | 
 357  | [837386, 839552]          | 0          | Uniform         | 
-358  | [839553, 841719]          | 1197300    | Uniform         | 
+358  | [839553, 841719]          | 1216800    | Uniform         | 
 359  | [841720, 843886]          | 0          | Uniform         | 
 360  | [843887, 846053]          | 0          | Uniform         | 
 361  | [846054, 848220]          | 0          | Uniform         | 
@@ -368,7 +368,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 363  | [850388, 852554]          | 0          | Uniform         | 
 364  | [852555, 854721]          | 0          | Uniform         | 
 365  | [854722, 856888]          | 0          | Uniform         | 
-366  | [856889, 859055]          | 2370300    | Fourier MLP     | Complex Neural Net
+366  | [856889, 859055]          | 2394000    | Fourier MLP     | Complex Neural Net
 367  | [859056, 861222]          | 0          | Uniform         | 
 368  | [861223, 863389]          | 0          | Uniform         | 
 369  | [863390, 865556]          | 0          | Uniform         | 
@@ -382,9 +382,9 @@ Idx  | Range                     | Count      | Model Type      | Stats
 377  | [880726, 882892]          | 0          | Uniform         | 
 378  | [882893, 885059]          | 0          | Uniform         | 
 379  | [885060, 887226]          | 0          | Uniform         | 
-380  | [887227, 889393]          | 1211500    | Fourier MLP     | Complex Neural Net
+380  | [887227, 889393]          | 1185600    | Fourier MLP     | Complex Neural Net
 381  | [889394, 891560]          | 0          | Uniform         | 
-382  | [891561, 893727]          | 1192800    | Fourier MLP     | Complex Neural Net
+382  | [891561, 893727]          | 1167000    | Fourier MLP     | Complex Neural Net
 383  | [893728, 895894]          | 0          | Uniform         | 
 384  | [895895, 898061]          | 0          | Uniform         | 
 385  | [898062, 900228]          | 0          | Uniform         | 
@@ -400,7 +400,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 395  | [919732, 921898]          | 0          | Uniform         | 
 396  | [921899, 924065]          | 0          | Uniform         | 
 397  | [924066, 926232]          | 0          | Uniform         | 
-398  | [926233, 928399]          | 1197400    | Fourier MLP     | Complex Neural Net
+398  | [926233, 928399]          | 1203000    | Fourier MLP     | Complex Neural Net
 399  | [928400, 930566]          | 0          | Uniform         | 
 400  | [930567, 932733]          | 0          | Uniform         | 
 401  | [932734, 934900]          | 0          | Uniform         | 
@@ -420,7 +420,7 @@ Idx  | Range                     | Count      | Model Type      | Stats
 415  | [963072, 965238]          | 0          | Uniform         | 
 416  | [965239, 967405]          | 0          | Uniform         | 
 417  | [967406, 969572]          | 0          | Uniform         | 
-418  | [969573, 971739]          | 1187800    | Fourier MLP     | Complex Neural Net
+418  | [969573, 971739]          | 1196400    | Fourier MLP     | Complex Neural Net
 419  | [971740, 973906]          | 0          | Uniform         | 
-420  | [973907, 975671]          | 1204900    | Fourier MLP     | Complex Neural Net
+420  | [973907, 975671]          | 1244400    | Fourier MLP     | Complex Neural Net
 ================================================================================

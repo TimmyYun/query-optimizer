@@ -18,11 +18,11 @@ def run_logic(args, out_dir, metadata):
 
     # --- STEP 1: USE PRE-GENERATED RESERVOIR SAMPLE ---
     # Using the exact 100,000-row sample for 100% methodological honesty
-    obs_freq = np.bincount(sample - mn, minlength=len(freq))
-
-    # Scale the sample back up to N (Crucial for Cardinality Estimation)
-    scaling_factor = N / len(sample)
-    estimated_freq = obs_freq * scaling_factor
+    # obs_freq = np.bincount(sample - mn, minlength=len(freq))
+    #
+    # # Scale the sample back up to N (Crucial for Cardinality Estimation)
+    # scaling_factor = N / len(sample)
+    # estimated_freq = obs_freq * scaling_factor
     # --------------------------------------------------
 
     # Build Initial Buckets using the ESTIMATED frequency
@@ -32,7 +32,7 @@ def run_logic(args, out_dir, metadata):
     )
 
     # Train Hybrid using the ESTIMATED frequency
-    print(f"Training Hybrid Model on 1% Sample (Bins: {n_bins})...")
+    print(f"Training Hybrid Model on 100000 Sample (Bins: {n_bins})...")
     hybrid_est = HybridEstimator(
         ew_hist.buckets,
         identity_threshold=args.ident,
@@ -41,7 +41,7 @@ def run_logic(args, out_dir, metadata):
     )
 
     # The models now learn from the 'estimated_freq'
-    t_train = hybrid_est.train(estimated_freq, mn, args.points, rng)
+    t_train = hybrid_est.train(sample, mn, args.points, rng)
 
     # Report Model Selections
     model_report_path = out_dir / "model_selection_Hybrid.txt"

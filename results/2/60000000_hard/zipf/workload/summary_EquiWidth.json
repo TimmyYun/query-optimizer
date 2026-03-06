@@ -1,13 +1,13 @@
 {
-    "model": "Hybrid",
+    "model": "EquiWidth",
     "wl_name": "workload",
     "metrics": {
-        "train_time": 0.036584583000148996,
-        "infer_time": 0.041228542000681045,
+        "build_time": 0.004853374999584048,
+        "infer_time": 0.042157541998676606,
         "median_q_error": 1199.9999999999998,
         "p25_q_error": 433.3333333333333,
         "p75_q_error": 4899.999999999999,
         "p95_q_error": 249699.99999999997,
-        "avg_q_error": 65475.571800351616
+        "avg_q_error": 65475.37640444177
     }
 }

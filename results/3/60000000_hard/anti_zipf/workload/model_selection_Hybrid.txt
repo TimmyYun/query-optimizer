@@ -2,395 +2,395 @@
 ================================================================================
 Idx  | Range                     | Count      | Model Type      | Stats
 --------------------------------------------------------------------------------
-0    | [0, 255]                  | 151980     | Uniform         | 
-1    | [256, 511]                | 154420     | Uniform         | 
-2    | [512, 767]                | 151720     | Fourier MLP     | Complex Neural Net
-3    | [768, 1023]               | 154680     | Fourier MLP     | Complex Neural Net
-4    | [1024, 1279]              | 152140     | Uniform         | 
-5    | [1280, 1535]              | 153860     | Uniform         | 
-6    | [1536, 1791]              | 151540     | Fourier MLP     | Complex Neural Net
-7    | [1792, 2047]              | 154820     | Fourier MLP     | Complex Neural Net
-8    | [2048, 2303]              | 152140     | Uniform         | 
-9    | [2304, 2559]              | 154040     | Fourier MLP     | Complex Neural Net
-10   | [2560, 2815]              | 153680     | Fourier MLP     | Complex Neural Net
-11   | [2816, 3071]              | 155420     | Fourier MLP     | Complex Neural Net
-12   | [3072, 3327]              | 157860     | Fourier MLP     | Complex Neural Net
-13   | [3328, 3583]              | 149540     | Uniform         | 
-14   | [3584, 3839]              | 152960     | Uniform         | 
-15   | [3840, 4095]              | 151160     | Fourier MLP     | Complex Neural Net
-16   | [4096, 4351]              | 153380     | Uniform         | 
-17   | [4352, 4607]              | 153240     | Uniform         | 
-18   | [4608, 4863]              | 153480     | Fourier MLP     | Complex Neural Net
-19   | [4864, 5119]              | 154500     | Fourier MLP     | Complex Neural Net
-20   | [5120, 5375]              | 153400     | Fourier MLP     | Complex Neural Net
-21   | [5376, 5631]              | 152620     | Uniform         | 
-22   | [5632, 5887]              | 152660     | Uniform         | 
-23   | [5888, 6143]              | 154160     | Uniform         | 
-24   | [6144, 6399]              | 153000     | Fourier MLP     | Complex Neural Net
-25   | [6400, 6655]              | 152760     | Uniform         | 
-26   | [6656, 6911]              | 152300     | Uniform         | 
-27   | [6912, 7167]              | 155480     | Fourier MLP     | Complex Neural Net
-28   | [7168, 7423]              | 152200     | Uniform         | 
-29   | [7424, 7679]              | 151920     | Fourier MLP     | Complex Neural Net
-30   | [7680, 7935]              | 154780     | Uniform         | 
-31   | [7936, 8191]              | 156060     | Fourier MLP     | Complex Neural Net
-32   | [8192, 8447]              | 153740     | Uniform         | 
-33   | [8448, 8703]              | 154660     | Uniform         | 
-34   | [8704, 8959]              | 153260     | Fourier MLP     | Complex Neural Net
-35   | [8960, 9215]              | 155980     | Fourier MLP     | Complex Neural Net
-36   | [9216, 9471]              | 154940     | Uniform         | 
-37   | [9472, 9727]              | 150580     | Uniform         | 
-38   | [9728, 9983]              | 152220     | Fourier MLP     | Complex Neural Net
-39   | [9984, 10239]             | 153040     | Fourier MLP     | Complex Neural Net
-40   | [10240, 10495]            | 148440     | Uniform         | 
-41   | [10496, 10751]            | 158580     | Uniform         | 
-42   | [10752, 11007]            | 152820     | Fourier MLP     | Complex Neural Net
-43   | [11008, 11263]            | 156060     | Uniform         | 
-44   | [11264, 11519]            | 153240     | Fourier MLP     | Complex Neural Net
-45   | [11520, 11775]            | 157460     | Fourier MLP     | Complex Neural Net
-46   | [11776, 12031]            | 151720     | Uniform         | 
-47   | [12032, 12287]            | 154740     | Fourier MLP     | Complex Neural Net
-48   | [12288, 12543]            | 155940     | Fourier MLP     | Complex Neural Net
-49   | [12544, 12799]            | 155380     | Uniform         | 
-50   | [12800, 13055]            | 152600     | Fourier MLP     | Complex Neural Net
-51   | [13056, 13311]            | 157760     | Uniform         | 
-52   | [13312, 13567]            | 154140     | Fourier MLP     | Complex Neural Net
-53   | [13568, 13823]            | 151680     | Fourier MLP     | Complex Neural Net
-54   | [13824, 14079]            | 153580     | Uniform         | 
-55   | [14080, 14335]            | 153660     | Uniform         | 
-56   | [14336, 14591]            | 154260     | Fourier MLP     | Complex Neural Net
-57   | [14592, 14847]            | 151480     | Fourier MLP     | Complex Neural Net
-58   | [14848, 15103]            | 153760     | Fourier MLP     | Complex Neural Net
-59   | [15104, 15359]            | 154800     | Uniform         | 
-60   | [15360, 15615]            | 152860     | Uniform         | 
-61   | [15616, 15871]            | 154320     | Fourier MLP     | Complex Neural Net
-62   | [15872, 16127]            | 153200     | Fourier MLP     | Complex Neural Net
-63   | [16128, 16383]            | 153600     | Fourier MLP     | Complex Neural Net
-64   | [16384, 16639]            | 153980     | Fourier MLP     | Complex Neural Net
-65   | [16640, 16895]            | 152940     | Fourier MLP     | Complex Neural Net
-66   | [16896, 17151]            | 151500     | Uniform         | 
-67   | [17152, 17407]            | 151820     | Fourier MLP     | Complex Neural Net
-68   | [17408, 17663]            | 155760     | Fourier MLP     | Complex Neural Net
-69   | [17664, 17919]            | 152760     | Fourier MLP     | Complex Neural Net
-70   | [17920, 18175]            | 153760     | Uniform         | 
-71   | [18176, 18431]            | 154620     | Fourier MLP     | Complex Neural Net
-72   | [18432, 18687]            | 152240     | Uniform         | 
-73   | [18688, 18943]            | 153260     | Uniform         | 
-74   | [18944, 19199]            | 152440     | Uniform         | 
-75   | [19200, 19455]            | 155960     | Fourier MLP     | Complex Neural Net
-76   | [19456, 19711]            | 153300     | Uniform         | 
-77   | [19712, 19967]            | 153380     | Uniform         | 
-78   | [19968, 20223]            | 151860     | Fourier MLP     | Complex Neural Net
-79   | [20224, 20479]            | 153300     | Uniform         | 
-80   | [20480, 20735]            | 153640     | Uniform         | 
-81   | [20736, 20991]            | 155860     | Fourier MLP     | Complex Neural Net
-82   | [20992, 21247]            | 154100     | Uniform         | 
-83   | [21248, 21503]            | 155180     | Uniform         | 
-84   | [21504, 21759]            | 153060     | Fourier MLP     | Complex Neural Net
-85   | [21760, 22015]            | 152220     | Uniform         | 
-86   | [22016, 22271]            | 158820     | Fourier MLP     | Complex Neural Net
-87   | [22272, 22527]            | 154780     | Uniform         | 
-88   | [22528, 22783]            | 152500     | Uniform         | 
-89   | [22784, 23039]            | 151920     | Uniform         | 
-90   | [23040, 23295]            | 155100     | Uniform         | 
-91   | [23296, 23551]            | 151360     | Fourier MLP     | Complex Neural Net
-92   | [23552, 23807]            | 153780     | Uniform         | 
-93   | [23808, 24063]            | 151760     | Fourier MLP     | Complex Neural Net
-94   | [24064, 24319]            | 157660     | Uniform         | 
-95   | [24320, 24575]            | 152020     | Uniform         | 
-96   | [24576, 24831]            | 153100     | Uniform         | 
-97   | [24832, 25087]            | 154340     | Uniform         | 
-98   | [25088, 25343]            | 150600     | Fourier MLP     | Complex Neural Net
-99   | [25344, 25599]            | 156740     | Uniform         | 
-100  | [25600, 25855]            | 152940     | Fourier MLP     | Complex Neural Net
-101  | [25856, 26111]            | 154640     | Uniform         | 
-102  | [26112, 26367]            | 151940     | Fourier MLP     | Complex Neural Net
-103  | [26368, 26623]            | 153260     | Fourier MLP     | Complex Neural Net
-104  | [26624, 26879]            | 150540     | Fourier MLP     | Complex Neural Net
-105  | [26880, 27135]            | 155420     | Uniform         | 
-106  | [27136, 27391]            | 153520     | Uniform         | 
-107  | [27392, 27647]            | 152400     | Fourier MLP     | Complex Neural Net
-108  | [27648, 27903]            | 153740     | Fourier MLP     | Complex Neural Net
-109  | [27904, 28159]            | 153460     | Uniform         | 
-110  | [28160, 28415]            | 156680     | Uniform         | 
-111  | [28416, 28671]            | 155540     | Uniform         | 
-112  | [28672, 28927]            | 155660     | Uniform         | 
-113  | [28928, 29183]            | 154780     | Uniform         | 
-114  | [29184, 29439]            | 155520     | Uniform         | 
-115  | [29440, 29695]            | 152780     | Uniform         | 
-116  | [29696, 29951]            | 154000     | Uniform         | 
-117  | [29952, 30207]            | 152760     | Uniform         | 
-118  | [30208, 30463]            | 156440     | Uniform         | 
-119  | [30464, 30719]            | 153940     | Uniform         | 
-120  | [30720, 30975]            | 154260     | Uniform         | 
-121  | [30976, 31231]            | 153120     | Fourier MLP     | Complex Neural Net
-122  | [31232, 31487]            | 155880     | Fourier MLP     | Complex Neural Net
-123  | [31488, 31743]            | 151960     | Fourier MLP     | Complex Neural Net
-124  | [31744, 31999]            | 154040     | Uniform         | 
-125  | [32000, 32255]            | 153080     | Uniform         | 
-126  | [32256, 32511]            | 153620     | Fourier MLP     | Complex Neural Net
-127  | [32512, 32767]            | 154140     | Uniform         | 
-128  | [32768, 33023]            | 152020     | Fourier MLP     | Complex Neural Net
-129  | [33024, 33279]            | 152420     | Fourier MLP     | Complex Neural Net
-130  | [33280, 33535]            | 152120     | Uniform         | 
-131  | [33536, 33791]            | 153140     | Uniform         | 
-132  | [33792, 34047]            | 154860     | Uniform         | 
-133  | [34048, 34303]            | 151740     | Uniform         | 
-134  | [34304, 34559]            | 153360     | Fourier MLP     | Complex Neural Net
-135  | [34560, 34815]            | 151760     | Fourier MLP     | Complex Neural Net
-136  | [34816, 35071]            | 155740     | Fourier MLP     | Complex Neural Net
-137  | [35072, 35327]            | 153540     | Uniform         | 
-138  | [35328, 35583]            | 156640     | Fourier MLP     | Complex Neural Net
-139  | [35584, 35839]            | 151620     | Fourier MLP     | Complex Neural Net
-140  | [35840, 36095]            | 150440     | Fourier MLP     | Complex Neural Net
-141  | [36096, 36351]            | 156120     | Fourier MLP     | Complex Neural Net
-142  | [36352, 36607]            | 152420     | Uniform         | 
-143  | [36608, 36863]            | 157860     | Fourier MLP     | Complex Neural Net
-144  | [36864, 37119]            | 152580     | Fourier MLP     | Complex Neural Net
-145  | [37120, 37375]            | 154200     | Fourier MLP     | Complex Neural Net
-146  | [37376, 37631]            | 152700     | Fourier MLP     | Complex Neural Net
-147  | [37632, 37887]            | 155500     | Fourier MLP     | Complex Neural Net
-148  | [37888, 38143]            | 152820     | Fourier MLP     | Complex Neural Net
-149  | [38144, 38399]            | 152080     | Uniform         | 
-150  | [38400, 38655]            | 153600     | Fourier MLP     | Complex Neural Net
-151  | [38656, 38911]            | 153320     | Uniform         | 
-152  | [38912, 39167]            | 152360     | Fourier MLP     | Complex Neural Net
-153  | [39168, 39423]            | 154640     | Uniform         | 
-154  | [39424, 39679]            | 154880     | Uniform         | 
-155  | [39680, 39935]            | 154400     | Fourier MLP     | Complex Neural Net
-156  | [39936, 40191]            | 151880     | Uniform         | 
-157  | [40192, 40447]            | 155140     | Uniform         | 
-158  | [40448, 40703]            | 154260     | Uniform         | 
-159  | [40704, 40959]            | 151960     | Fourier MLP     | Complex Neural Net
-160  | [40960, 41215]            | 152780     | Uniform         | 
-161  | [41216, 41471]            | 154920     | Fourier MLP     | Complex Neural Net
-162  | [41472, 41727]            | 154960     | Fourier MLP     | Complex Neural Net
-163  | [41728, 41983]            | 149600     | Uniform         | 
-164  | [41984, 42239]            | 155560     | Uniform         | 
-165  | [42240, 42495]            | 155400     | Fourier MLP     | Complex Neural Net
-166  | [42496, 42751]            | 155740     | Fourier MLP     | Complex Neural Net
-167  | [42752, 43007]            | 153100     | Fourier MLP     | Complex Neural Net
-168  | [43008, 43263]            | 154680     | Uniform         | 
-169  | [43264, 43519]            | 154400     | Fourier MLP     | Complex Neural Net
-170  | [43520, 43775]            | 153320     | Fourier MLP     | Complex Neural Net
-171  | [43776, 44031]            | 158080     | Uniform         | 
-172  | [44032, 44287]            | 154540     | Fourier MLP     | Complex Neural Net
-173  | [44288, 44543]            | 154360     | Uniform         | 
-174  | [44544, 44799]            | 151020     | Uniform         | 
-175  | [44800, 45055]            | 150980     | Fourier MLP     | Complex Neural Net
-176  | [45056, 45311]            | 156800     | Uniform         | 
-177  | [45312, 45567]            | 153360     | Uniform         | 
-178  | [45568, 45823]            | 155800     | Fourier MLP     | Complex Neural Net
-179  | [45824, 46079]            | 154280     | Fourier MLP     | Complex Neural Net
-180  | [46080, 46335]            | 151540     | Fourier MLP     | Complex Neural Net
-181  | [46336, 46591]            | 153040     | Uniform         | 
-182  | [46592, 46847]            | 151540     | Uniform         | 
-183  | [46848, 47103]            | 152800     | Uniform         | 
-184  | [47104, 47359]            | 154720     | Uniform         | 
-185  | [47360, 47615]            | 156180     | Uniform         | 
-186  | [47616, 47871]            | 153080     | Fourier MLP     | Complex Neural Net
-187  | [47872, 48127]            | 152780     | Uniform         | 
-188  | [48128, 48383]            | 152400     | Uniform         | 
-189  | [48384, 48639]            | 156620     | Fourier MLP     | Complex Neural Net
-190  | [48640, 48895]            | 154840     | Fourier MLP     | Complex Neural Net
-191  | [48896, 49151]            | 153640     | Fourier MLP     | Complex Neural Net
-192  | [49152, 49407]            | 152940     | Uniform         | 
-193  | [49408, 49663]            | 155740     | Uniform         | 
-194  | [49664, 49919]            | 153860     | Uniform         | 
-195  | [49920, 50175]            | 154660     | Uniform         | 
-196  | [50176, 50431]            | 154060     | Fourier MLP     | Complex Neural Net
-197  | [50432, 50687]            | 155400     | Uniform         | 
-198  | [50688, 50943]            | 154560     | Uniform         | 
-199  | [50944, 51199]            | 153260     | Uniform         | 
-200  | [51200, 51455]            | 151840     | Uniform         | 
-201  | [51456, 51711]            | 155420     | Fourier MLP     | Complex Neural Net
-202  | [51712, 51967]            | 154240     | Fourier MLP     | Complex Neural Net
-203  | [51968, 52223]            | 154020     | Uniform         | 
-204  | [52224, 52479]            | 150980     | Uniform         | 
-205  | [52480, 52735]            | 155520     | Fourier MLP     | Complex Neural Net
-206  | [52736, 52991]            | 152040     | Fourier MLP     | Complex Neural Net
-207  | [52992, 53247]            | 155480     | Uniform         | 
-208  | [53248, 53503]            | 155380     | Fourier MLP     | Complex Neural Net
-209  | [53504, 53759]            | 149380     | Fourier MLP     | Complex Neural Net
-210  | [53760, 54015]            | 153880     | Fourier MLP     | Complex Neural Net
-211  | [54016, 54271]            | 153820     | Uniform         | 
-212  | [54272, 54527]            | 157000     | Fourier MLP     | Complex Neural Net
-213  | [54528, 54783]            | 156440     | Uniform         | 
-214  | [54784, 55039]            | 152380     | Fourier MLP     | Complex Neural Net
-215  | [55040, 55295]            | 153680     | Fourier MLP     | Complex Neural Net
-216  | [55296, 55551]            | 153360     | Uniform         | 
-217  | [55552, 55807]            | 155880     | Uniform         | 
-218  | [55808, 56063]            | 151920     | Fourier MLP     | Complex Neural Net
-219  | [56064, 56319]            | 154460     | Fourier MLP     | Complex Neural Net
-220  | [56320, 56575]            | 156520     | Fourier MLP     | Complex Neural Net
-221  | [56576, 56831]            | 152220     | Uniform         | 
-222  | [56832, 57087]            | 154540     | Fourier MLP     | Complex Neural Net
-223  | [57088, 57343]            | 150820     | Fourier MLP     | Complex Neural Net
-224  | [57344, 57599]            | 150960     | Fourier MLP     | Complex Neural Net
-225  | [57600, 57855]            | 155200     | Uniform         | 
-226  | [57856, 58111]            | 154700     | Fourier MLP     | Complex Neural Net
-227  | [58112, 58367]            | 154460     | Fourier MLP     | Complex Neural Net
-228  | [58368, 58623]            | 152440     | Fourier MLP     | Complex Neural Net
-229  | [58624, 58879]            | 152100     | Uniform         | 
-230  | [58880, 59135]            | 152400     | Uniform         | 
-231  | [59136, 59391]            | 155820     | Uniform         | 
-232  | [59392, 59647]            | 151200     | Fourier MLP     | Complex Neural Net
-233  | [59648, 59903]            | 155600     | Fourier MLP     | Complex Neural Net
-234  | [59904, 60159]            | 154820     | Uniform         | 
-235  | [60160, 60415]            | 152620     | Fourier MLP     | Complex Neural Net
-236  | [60416, 60671]            | 152680     | Uniform         | 
-237  | [60672, 60927]            | 151760     | Uniform         | 
-238  | [60928, 61183]            | 151820     | Uniform         | 
-239  | [61184, 61439]            | 154480     | Uniform         | 
-240  | [61440, 61695]            | 154180     | Fourier MLP     | Complex Neural Net
-241  | [61696, 61951]            | 156180     | Uniform         | 
-242  | [61952, 62207]            | 150080     | Uniform         | 
-243  | [62208, 62463]            | 153740     | Fourier MLP     | Complex Neural Net
-244  | [62464, 62719]            | 151740     | Fourier MLP     | Complex Neural Net
-245  | [62720, 62975]            | 157540     | Uniform         | 
-246  | [62976, 63231]            | 153160     | Fourier MLP     | Complex Neural Net
-247  | [63232, 63487]            | 149960     | Fourier MLP     | Complex Neural Net
-248  | [63488, 63743]            | 153680     | Uniform         | 
-249  | [63744, 63999]            | 153780     | Uniform         | 
-250  | [64000, 64255]            | 152560     | Fourier MLP     | Complex Neural Net
-251  | [64256, 64511]            | 152960     | Uniform         | 
-252  | [64512, 64767]            | 154380     | Fourier MLP     | Complex Neural Net
-253  | [64768, 65023]            | 153160     | Fourier MLP     | Complex Neural Net
-254  | [65024, 65279]            | 152800     | Fourier MLP     | Complex Neural Net
-255  | [65280, 65535]            | 153420     | Uniform         | 
-256  | [65536, 65791]            | 154320     | Uniform         | 
-257  | [65792, 66047]            | 150660     | Uniform         | 
-258  | [66048, 66303]            | 154840     | Uniform         | 
-259  | [66304, 66559]            | 153860     | Uniform         | 
-260  | [66560, 66815]            | 152500     | Fourier MLP     | Complex Neural Net
-261  | [66816, 67071]            | 156860     | Uniform         | 
-262  | [67072, 67327]            | 152100     | Uniform         | 
-263  | [67328, 67583]            | 153500     | Fourier MLP     | Complex Neural Net
-264  | [67584, 67839]            | 151700     | Fourier MLP     | Complex Neural Net
-265  | [67840, 68095]            | 154000     | Fourier MLP     | Complex Neural Net
-266  | [68096, 68351]            | 149720     | Uniform         | 
-267  | [68352, 68607]            | 153500     | Uniform         | 
-268  | [68608, 68863]            | 152100     | Uniform         | 
-269  | [68864, 69119]            | 152720     | Uniform         | 
-270  | [69120, 69375]            | 151660     | Fourier MLP     | Complex Neural Net
-271  | [69376, 69631]            | 151620     | Fourier MLP     | Complex Neural Net
-272  | [69632, 69887]            | 153060     | Fourier MLP     | Complex Neural Net
-273  | [69888, 70143]            | 153860     | Uniform         | 
-274  | [70144, 70399]            | 153060     | Fourier MLP     | Complex Neural Net
-275  | [70400, 70655]            | 150620     | Fourier MLP     | Complex Neural Net
-276  | [70656, 70911]            | 150680     | Fourier MLP     | Complex Neural Net
-277  | [70912, 71167]            | 154640     | Fourier MLP     | Complex Neural Net
-278  | [71168, 71423]            | 154880     | Fourier MLP     | Complex Neural Net
-279  | [71424, 71679]            | 151180     | Fourier MLP     | Complex Neural Net
-280  | [71680, 71935]            | 153220     | Uniform         | 
-281  | [71936, 72191]            | 153580     | Uniform         | 
-282  | [72192, 72447]            | 152480     | Uniform         | 
-283  | [72448, 72703]            | 156060     | Fourier MLP     | Complex Neural Net
-284  | [72704, 72959]            | 152120     | Uniform         | 
-285  | [72960, 73215]            | 153620     | Uniform         | 
-286  | [73216, 73471]            | 153700     | Uniform         | 
-287  | [73472, 73727]            | 151100     | Fourier MLP     | Complex Neural Net
-288  | [73728, 73983]            | 150360     | Uniform         | 
-289  | [73984, 74239]            | 152540     | Uniform         | 
-290  | [74240, 74495]            | 151660     | Fourier MLP     | Complex Neural Net
-291  | [74496, 74751]            | 149380     | Fourier MLP     | Complex Neural Net
-292  | [74752, 75007]            | 156180     | Fourier MLP     | Complex Neural Net
-293  | [75008, 75263]            | 152540     | Uniform         | 
-294  | [75264, 75519]            | 151260     | Fourier MLP     | Complex Neural Net
-295  | [75520, 75775]            | 152420     | Fourier MLP     | Complex Neural Net
-296  | [75776, 76031]            | 158560     | Uniform         | 
-297  | [76032, 76287]            | 151820     | Uniform         | 
-298  | [76288, 76543]            | 149480     | Uniform         | 
-299  | [76544, 76799]            | 151860     | Uniform         | 
-300  | [76800, 77055]            | 153800     | Uniform         | 
-301  | [77056, 77311]            | 153040     | Fourier MLP     | Complex Neural Net
-302  | [77312, 77567]            | 154820     | Uniform         | 
-303  | [77568, 77823]            | 155660     | Fourier MLP     | Complex Neural Net
-304  | [77824, 78079]            | 155220     | Fourier MLP     | Complex Neural Net
-305  | [78080, 78335]            | 154620     | Fourier MLP     | Complex Neural Net
-306  | [78336, 78591]            | 151120     | Fourier MLP     | Complex Neural Net
-307  | [78592, 78847]            | 154480     | Fourier MLP     | Complex Neural Net
-308  | [78848, 79103]            | 155100     | Fourier MLP     | Complex Neural Net
-309  | [79104, 79359]            | 154020     | Fourier MLP     | Complex Neural Net
-310  | [79360, 79615]            | 155660     | Uniform         | 
-311  | [79616, 79871]            | 155700     | Fourier MLP     | Complex Neural Net
-312  | [79872, 80127]            | 154420     | Fourier MLP     | Complex Neural Net
-313  | [80128, 80383]            | 154760     | Fourier MLP     | Complex Neural Net
-314  | [80384, 80639]            | 154820     | Fourier MLP     | Complex Neural Net
-315  | [80640, 80895]            | 154860     | Uniform         | 
-316  | [80896, 81151]            | 151700     | Fourier MLP     | Complex Neural Net
-317  | [81152, 81407]            | 155360     | Fourier MLP     | Complex Neural Net
-318  | [81408, 81663]            | 153060     | Uniform         | 
-319  | [81664, 81919]            | 154820     | Uniform         | 
-320  | [81920, 82175]            | 154960     | Fourier MLP     | Complex Neural Net
-321  | [82176, 82431]            | 151900     | Fourier MLP     | Complex Neural Net
-322  | [82432, 82687]            | 149500     | Uniform         | 
-323  | [82688, 82943]            | 155060     | Uniform         | 
-324  | [82944, 83199]            | 151860     | Uniform         | 
-325  | [83200, 83455]            | 154160     | Fourier MLP     | Complex Neural Net
-326  | [83456, 83711]            | 157660     | Fourier MLP     | Complex Neural Net
-327  | [83712, 83967]            | 154620     | Uniform         | 
-328  | [83968, 84223]            | 152800     | Fourier MLP     | Complex Neural Net
-329  | [84224, 84479]            | 152820     | Fourier MLP     | Complex Neural Net
-330  | [84480, 84735]            | 156600     | Fourier MLP     | Complex Neural Net
-331  | [84736, 84991]            | 154340     | Uniform         | 
-332  | [84992, 85247]            | 148000     | Fourier MLP     | Complex Neural Net
-333  | [85248, 85503]            | 150860     | Uniform         | 
-334  | [85504, 85759]            | 154080     | Uniform         | 
-335  | [85760, 86015]            | 156100     | Fourier MLP     | Complex Neural Net
-336  | [86016, 86271]            | 153260     | Fourier MLP     | Complex Neural Net
-337  | [86272, 86527]            | 155700     | Uniform         | 
-338  | [86528, 86783]            | 152840     | Fourier MLP     | Complex Neural Net
-339  | [86784, 87039]            | 155620     | Fourier MLP     | Complex Neural Net
-340  | [87040, 87295]            | 151620     | Fourier MLP     | Complex Neural Net
-341  | [87296, 87551]            | 149940     | Uniform         | 
-342  | [87552, 87807]            | 156780     | Fourier MLP     | Complex Neural Net
-343  | [87808, 88063]            | 152360     | Uniform         | 
-344  | [88064, 88319]            | 153300     | Fourier MLP     | Complex Neural Net
-345  | [88320, 88575]            | 156460     | Uniform         | 
-346  | [88576, 88831]            | 155320     | Fourier MLP     | Complex Neural Net
-347  | [88832, 89087]            | 154480     | Fourier MLP     | Complex Neural Net
-348  | [89088, 89343]            | 153460     | Uniform         | 
-349  | [89344, 89599]            | 152720     | Uniform         | 
-350  | [89600, 89855]            | 153760     | Fourier MLP     | Complex Neural Net
-351  | [89856, 90111]            | 152920     | Fourier MLP     | Complex Neural Net
-352  | [90112, 90367]            | 155880     | Fourier MLP     | Complex Neural Net
-353  | [90368, 90623]            | 154440     | Uniform         | 
-354  | [90624, 90879]            | 154040     | Fourier MLP     | Complex Neural Net
-355  | [90880, 91135]            | 152280     | Uniform         | 
-356  | [91136, 91391]            | 156960     | Fourier MLP     | Complex Neural Net
-357  | [91392, 91647]            | 152620     | Uniform         | 
-358  | [91648, 91903]            | 152760     | Uniform         | 
-359  | [91904, 92159]            | 154420     | Uniform         | 
-360  | [92160, 92415]            | 154260     | Uniform         | 
-361  | [92416, 92671]            | 154380     | Fourier MLP     | Complex Neural Net
-362  | [92672, 92927]            | 152120     | Uniform         | 
-363  | [92928, 93183]            | 152820     | Fourier MLP     | Complex Neural Net
-364  | [93184, 93439]            | 152900     | Fourier MLP     | Complex Neural Net
-365  | [93440, 93695]            | 152000     | Uniform         | 
-366  | [93696, 93951]            | 153140     | Uniform         | 
-367  | [93952, 94207]            | 152880     | Fourier MLP     | Complex Neural Net
-368  | [94208, 94463]            | 152120     | Fourier MLP     | Complex Neural Net
-369  | [94464, 94719]            | 154900     | Uniform         | 
-370  | [94720, 94975]            | 155260     | Uniform         | 
-371  | [94976, 95231]            | 153520     | Fourier MLP     | Complex Neural Net
-372  | [95232, 95487]            | 155060     | Uniform         | 
-373  | [95488, 95743]            | 150240     | Fourier MLP     | Complex Neural Net
-374  | [95744, 95999]            | 151160     | Fourier MLP     | Complex Neural Net
-375  | [96000, 96255]            | 154000     | Uniform         | 
-376  | [96256, 96511]            | 152920     | Uniform         | 
-377  | [96512, 96767]            | 154400     | Fourier MLP     | Complex Neural Net
-378  | [96768, 97023]            | 152380     | Uniform         | 
-379  | [97024, 97279]            | 153520     | Uniform         | 
-380  | [97280, 97535]            | 152480     | Fourier MLP     | Complex Neural Net
-381  | [97536, 97791]            | 149580     | Fourier MLP     | Complex Neural Net
-382  | [97792, 98047]            | 151700     | Uniform         | 
-383  | [98048, 98303]            | 157380     | Fourier MLP     | Complex Neural Net
-384  | [98304, 98559]            | 155220     | Uniform         | 
-385  | [98560, 98815]            | 153320     | Fourier MLP     | Complex Neural Net
-386  | [98816, 99071]            | 154160     | Uniform         | 
-387  | [99072, 99327]            | 155140     | Fourier MLP     | Complex Neural Net
-388  | [99328, 99583]            | 156420     | Uniform         | 
-389  | [99584, 99839]            | 150960     | Fourier MLP     | Complex Neural Net
-390  | [99840, 99999]            | 96840      | Uniform         | 
+0    | [0, 255]                  | 141600     | Uniform         | 
+1    | [256, 511]                | 141600     | Uniform         | 
+2    | [512, 767]                | 178200     | Uniform         | 
+3    | [768, 1023]               | 150600     | Uniform         | 
+4    | [1024, 1279]              | 147000     | Uniform         | 
+5    | [1280, 1535]              | 152400     | Uniform         | 
+6    | [1536, 1791]              | 144000     | Uniform         | 
+7    | [1792, 2047]              | 156000     | Uniform         | 
+8    | [2048, 2303]              | 153000     | Uniform         | 
+9    | [2304, 2559]              | 147000     | Uniform         | 
+10   | [2560, 2815]              | 154200     | Uniform         | 
+11   | [2816, 3071]              | 162600     | Uniform         | 
+12   | [3072, 3327]              | 163200     | Uniform         | 
+13   | [3328, 3583]              | 172200     | Uniform         | 
+14   | [3584, 3839]              | 152400     | Uniform         | 
+15   | [3840, 4095]              | 147600     | Uniform         | 
+16   | [4096, 4351]              | 172200     | Uniform         | 
+17   | [4352, 4607]              | 161400     | Uniform         | 
+18   | [4608, 4863]              | 168600     | Uniform         | 
+19   | [4864, 5119]              | 160800     | Uniform         | 
+20   | [5120, 5375]              | 139800     | Uniform         | 
+21   | [5376, 5631]              | 145800     | Uniform         | 
+22   | [5632, 5887]              | 144000     | Uniform         | 
+23   | [5888, 6143]              | 156600     | Uniform         | 
+24   | [6144, 6399]              | 171000     | Uniform         | 
+25   | [6400, 6655]              | 145200     | Uniform         | 
+26   | [6656, 6911]              | 156600     | Uniform         | 
+27   | [6912, 7167]              | 147600     | Uniform         | 
+28   | [7168, 7423]              | 150600     | Uniform         | 
+29   | [7424, 7679]              | 148800     | Uniform         | 
+30   | [7680, 7935]              | 159000     | Uniform         | 
+31   | [7936, 8191]              | 146400     | Uniform         | 
+32   | [8192, 8447]              | 156600     | Uniform         | 
+33   | [8448, 8703]              | 145200     | Uniform         | 
+34   | [8704, 8959]              | 160200     | Uniform         | 
+35   | [8960, 9215]              | 151800     | Uniform         | 
+36   | [9216, 9471]              | 153000     | Uniform         | 
+37   | [9472, 9727]              | 145800     | Uniform         | 
+38   | [9728, 9983]              | 144600     | Uniform         | 
+39   | [9984, 10239]             | 148200     | Uniform         | 
+40   | [10240, 10495]            | 166200     | Uniform         | 
+41   | [10496, 10751]            | 142200     | Uniform         | 
+42   | [10752, 11007]            | 142800     | Uniform         | 
+43   | [11008, 11263]            | 144000     | Uniform         | 
+44   | [11264, 11519]            | 160200     | Uniform         | 
+45   | [11520, 11775]            | 165600     | Uniform         | 
+46   | [11776, 12031]            | 159000     | Uniform         | 
+47   | [12032, 12287]            | 151200     | Uniform         | 
+48   | [12288, 12543]            | 155400     | Uniform         | 
+49   | [12544, 12799]            | 171600     | Uniform         | 
+50   | [12800, 13055]            | 142800     | Uniform         | 
+51   | [13056, 13311]            | 146400     | Uniform         | 
+52   | [13312, 13567]            | 162000     | Uniform         | 
+53   | [13568, 13823]            | 166200     | Uniform         | 
+54   | [13824, 14079]            | 145800     | Uniform         | 
+55   | [14080, 14335]            | 152400     | Uniform         | 
+56   | [14336, 14591]            | 160800     | Uniform         | 
+57   | [14592, 14847]            | 162600     | Uniform         | 
+58   | [14848, 15103]            | 158400     | Uniform         | 
+59   | [15104, 15359]            | 163800     | Uniform         | 
+60   | [15360, 15615]            | 156600     | Uniform         | 
+61   | [15616, 15871]            | 150000     | Uniform         | 
+62   | [15872, 16127]            | 142800     | Uniform         | 
+63   | [16128, 16383]            | 143400     | Uniform         | 
+64   | [16384, 16639]            | 147000     | Uniform         | 
+65   | [16640, 16895]            | 161400     | Uniform         | 
+66   | [16896, 17151]            | 140400     | Uniform         | 
+67   | [17152, 17407]            | 157200     | Uniform         | 
+68   | [17408, 17663]            | 153000     | Uniform         | 
+69   | [17664, 17919]            | 142800     | Uniform         | 
+70   | [17920, 18175]            | 164400     | Uniform         | 
+71   | [18176, 18431]            | 155400     | Uniform         | 
+72   | [18432, 18687]            | 147000     | Uniform         | 
+73   | [18688, 18943]            | 153600     | Uniform         | 
+74   | [18944, 19199]            | 133800     | Uniform         | 
+75   | [19200, 19455]            | 162600     | Uniform         | 
+76   | [19456, 19711]            | 145200     | Uniform         | 
+77   | [19712, 19967]            | 153600     | Uniform         | 
+78   | [19968, 20223]            | 157200     | Uniform         | 
+79   | [20224, 20479]            | 157200     | Uniform         | 
+80   | [20480, 20735]            | 161400     | Uniform         | 
+81   | [20736, 20991]            | 148200     | Uniform         | 
+82   | [20992, 21247]            | 155400     | Uniform         | 
+83   | [21248, 21503]            | 160800     | Uniform         | 
+84   | [21504, 21759]            | 125400     | Uniform         | 
+85   | [21760, 22015]            | 166800     | Uniform         | 
+86   | [22016, 22271]            | 147000     | Uniform         | 
+87   | [22272, 22527]            | 159000     | Uniform         | 
+88   | [22528, 22783]            | 154200     | Uniform         | 
+89   | [22784, 23039]            | 152400     | Uniform         | 
+90   | [23040, 23295]            | 154800     | Uniform         | 
+91   | [23296, 23551]            | 134400     | Uniform         | 
+92   | [23552, 23807]            | 139800     | Uniform         | 
+93   | [23808, 24063]            | 149400     | Uniform         | 
+94   | [24064, 24319]            | 150000     | Uniform         | 
+95   | [24320, 24575]            | 157200     | Uniform         | 
+96   | [24576, 24831]            | 148800     | Uniform         | 
+97   | [24832, 25087]            | 144000     | Uniform         | 
+98   | [25088, 25343]            | 139200     | Uniform         | 
+99   | [25344, 25599]            | 158400     | Uniform         | 
+100  | [25600, 25855]            | 152400     | Uniform         | 
+101  | [25856, 26111]            | 162600     | Uniform         | 
+102  | [26112, 26367]            | 159000     | Uniform         | 
+103  | [26368, 26623]            | 165600     | Uniform         | 
+104  | [26624, 26879]            | 160200     | Uniform         | 
+105  | [26880, 27135]            | 157800     | Uniform         | 
+106  | [27136, 27391]            | 142200     | Uniform         | 
+107  | [27392, 27647]            | 158400     | Uniform         | 
+108  | [27648, 27903]            | 146400     | Uniform         | 
+109  | [27904, 28159]            | 158400     | Uniform         | 
+110  | [28160, 28415]            | 156600     | Uniform         | 
+111  | [28416, 28671]            | 162000     | Uniform         | 
+112  | [28672, 28927]            | 155400     | Uniform         | 
+113  | [28928, 29183]            | 165000     | Uniform         | 
+114  | [29184, 29439]            | 141000     | Uniform         | 
+115  | [29440, 29695]            | 155400     | Uniform         | 
+116  | [29696, 29951]            | 152400     | Uniform         | 
+117  | [29952, 30207]            | 150600     | Uniform         | 
+118  | [30208, 30463]            | 157200     | Uniform         | 
+119  | [30464, 30719]            | 136200     | Uniform         | 
+120  | [30720, 30975]            | 155400     | Uniform         | 
+121  | [30976, 31231]            | 161400     | Uniform         | 
+122  | [31232, 31487]            | 168600     | Uniform         | 
+123  | [31488, 31743]            | 158400     | Uniform         | 
+124  | [31744, 31999]            | 145800     | Uniform         | 
+125  | [32000, 32255]            | 160200     | Uniform         | 
+126  | [32256, 32511]            | 157200     | Uniform         | 
+127  | [32512, 32767]            | 154200     | Uniform         | 
+128  | [32768, 33023]            | 153000     | Uniform         | 
+129  | [33024, 33279]            | 136800     | Uniform         | 
+130  | [33280, 33535]            | 164400     | Uniform         | 
+131  | [33536, 33791]            | 143400     | Uniform         | 
+132  | [33792, 34047]            | 178800     | Uniform         | 
+133  | [34048, 34303]            | 144000     | Uniform         | 
+134  | [34304, 34559]            | 150600     | Uniform         | 
+135  | [34560, 34815]            | 152400     | Uniform         | 
+136  | [34816, 35071]            | 145800     | Uniform         | 
+137  | [35072, 35327]            | 144600     | Uniform         | 
+138  | [35328, 35583]            | 160800     | Uniform         | 
+139  | [35584, 35839]            | 133800     | Uniform         | 
+140  | [35840, 36095]            | 143400     | Uniform         | 
+141  | [36096, 36351]            | 149400     | Uniform         | 
+142  | [36352, 36607]            | 147000     | Uniform         | 
+143  | [36608, 36863]            | 132000     | Uniform         | 
+144  | [36864, 37119]            | 155400     | Uniform         | 
+145  | [37120, 37375]            | 162600     | Uniform         | 
+146  | [37376, 37631]            | 138600     | Uniform         | 
+147  | [37632, 37887]            | 154200     | Uniform         | 
+148  | [37888, 38143]            | 157200     | Uniform         | 
+149  | [38144, 38399]            | 135000     | Uniform         | 
+150  | [38400, 38655]            | 159600     | Uniform         | 
+151  | [38656, 38911]            | 151800     | Uniform         | 
+152  | [38912, 39167]            | 160200     | Uniform         | 
+153  | [39168, 39423]            | 144600     | Uniform         | 
+154  | [39424, 39679]            | 147600     | Uniform         | 
+155  | [39680, 39935]            | 159000     | Uniform         | 
+156  | [39936, 40191]            | 168600     | Uniform         | 
+157  | [40192, 40447]            | 162600     | Uniform         | 
+158  | [40448, 40703]            | 165600     | Uniform         | 
+159  | [40704, 40959]            | 145800     | Uniform         | 
+160  | [40960, 41215]            | 158400     | Uniform         | 
+161  | [41216, 41471]            | 159000     | Uniform         | 
+162  | [41472, 41727]            | 157200     | Uniform         | 
+163  | [41728, 41983]            | 154800     | Uniform         | 
+164  | [41984, 42239]            | 145200     | Uniform         | 
+165  | [42240, 42495]            | 169200     | Uniform         | 
+166  | [42496, 42751]            | 145200     | Uniform         | 
+167  | [42752, 43007]            | 160200     | Uniform         | 
+168  | [43008, 43263]            | 144600     | Uniform         | 
+169  | [43264, 43519]            | 140400     | Uniform         | 
+170  | [43520, 43775]            | 150600     | Uniform         | 
+171  | [43776, 44031]            | 150000     | Uniform         | 
+172  | [44032, 44287]            | 168600     | Uniform         | 
+173  | [44288, 44543]            | 166800     | Uniform         | 
+174  | [44544, 44799]            | 154200     | Uniform         | 
+175  | [44800, 45055]            | 174600     | Uniform         | 
+176  | [45056, 45311]            | 141000     | Uniform         | 
+177  | [45312, 45567]            | 163200     | Uniform         | 
+178  | [45568, 45823]            | 150000     | Uniform         | 
+179  | [45824, 46079]            | 157200     | Uniform         | 
+180  | [46080, 46335]            | 154800     | Uniform         | 
+181  | [46336, 46591]            | 151800     | Uniform         | 
+182  | [46592, 46847]            | 156000     | Uniform         | 
+183  | [46848, 47103]            | 157200     | Uniform         | 
+184  | [47104, 47359]            | 159000     | Uniform         | 
+185  | [47360, 47615]            | 166200     | Uniform         | 
+186  | [47616, 47871]            | 156600     | Uniform         | 
+187  | [47872, 48127]            | 152400     | Uniform         | 
+188  | [48128, 48383]            | 148200     | Uniform         | 
+189  | [48384, 48639]            | 162600     | Uniform         | 
+190  | [48640, 48895]            | 157800     | Uniform         | 
+191  | [48896, 49151]            | 152400     | Uniform         | 
+192  | [49152, 49407]            | 152400     | Uniform         | 
+193  | [49408, 49663]            | 154200     | Uniform         | 
+194  | [49664, 49919]            | 159000     | Uniform         | 
+195  | [49920, 50175]            | 154200     | Uniform         | 
+196  | [50176, 50431]            | 156600     | Uniform         | 
+197  | [50432, 50687]            | 157200     | Uniform         | 
+198  | [50688, 50943]            | 138000     | Uniform         | 
+199  | [50944, 51199]            | 140400     | Uniform         | 
+200  | [51200, 51455]            | 153000     | Uniform         | 
+201  | [51456, 51711]            | 156000     | Uniform         | 
+202  | [51712, 51967]            | 165600     | Uniform         | 
+203  | [51968, 52223]            | 145200     | Uniform         | 
+204  | [52224, 52479]            | 153600     | Uniform         | 
+205  | [52480, 52735]            | 142800     | Uniform         | 
+206  | [52736, 52991]            | 150000     | Uniform         | 
+207  | [52992, 53247]            | 147000     | Uniform         | 
+208  | [53248, 53503]            | 167400     | Uniform         | 
+209  | [53504, 53759]            | 152400     | Uniform         | 
+210  | [53760, 54015]            | 163200     | Uniform         | 
+211  | [54016, 54271]            | 157800     | Uniform         | 
+212  | [54272, 54527]            | 149400     | Uniform         | 
+213  | [54528, 54783]            | 157200     | Uniform         | 
+214  | [54784, 55039]            | 166800     | Uniform         | 
+215  | [55040, 55295]            | 163800     | Uniform         | 
+216  | [55296, 55551]            | 153600     | Uniform         | 
+217  | [55552, 55807]            | 152400     | Uniform         | 
+218  | [55808, 56063]            | 143400     | Uniform         | 
+219  | [56064, 56319]            | 136800     | Uniform         | 
+220  | [56320, 56575]            | 164400     | Uniform         | 
+221  | [56576, 56831]            | 164400     | Uniform         | 
+222  | [56832, 57087]            | 155400     | Uniform         | 
+223  | [57088, 57343]            | 153600     | Uniform         | 
+224  | [57344, 57599]            | 154800     | Uniform         | 
+225  | [57600, 57855]            | 158400     | Uniform         | 
+226  | [57856, 58111]            | 169800     | Uniform         | 
+227  | [58112, 58367]            | 160800     | Uniform         | 
+228  | [58368, 58623]            | 156600     | Uniform         | 
+229  | [58624, 58879]            | 150000     | Uniform         | 
+230  | [58880, 59135]            | 165600     | Uniform         | 
+231  | [59136, 59391]            | 141600     | Uniform         | 
+232  | [59392, 59647]            | 148200     | Uniform         | 
+233  | [59648, 59903]            | 147000     | Uniform         | 
+234  | [59904, 60159]            | 158400     | Uniform         | 
+235  | [60160, 60415]            | 148800     | Uniform         | 
+236  | [60416, 60671]            | 155400     | Uniform         | 
+237  | [60672, 60927]            | 163200     | Uniform         | 
+238  | [60928, 61183]            | 161400     | Uniform         | 
+239  | [61184, 61439]            | 155400     | Uniform         | 
+240  | [61440, 61695]            | 168600     | Uniform         | 
+241  | [61696, 61951]            | 150000     | Uniform         | 
+242  | [61952, 62207]            | 135600     | Uniform         | 
+243  | [62208, 62463]            | 165600     | Uniform         | 
+244  | [62464, 62719]            | 136800     | Uniform         | 
+245  | [62720, 62975]            | 145800     | Uniform         | 
+246  | [62976, 63231]            | 150000     | Uniform         | 
+247  | [63232, 63487]            | 143400     | Uniform         | 
+248  | [63488, 63743]            | 141000     | Uniform         | 
+249  | [63744, 63999]            | 148800     | Uniform         | 
+250  | [64000, 64255]            | 168000     | Uniform         | 
+251  | [64256, 64511]            | 155400     | Uniform         | 
+252  | [64512, 64767]            | 143400     | Uniform         | 
+253  | [64768, 65023]            | 168600     | Uniform         | 
+254  | [65024, 65279]            | 147000     | Uniform         | 
+255  | [65280, 65535]            | 151800     | Uniform         | 
+256  | [65536, 65791]            | 152400     | Uniform         | 
+257  | [65792, 66047]            | 152400     | Uniform         | 
+258  | [66048, 66303]            | 151200     | Uniform         | 
+259  | [66304, 66559]            | 148800     | Uniform         | 
+260  | [66560, 66815]            | 144600     | Uniform         | 
+261  | [66816, 67071]            | 162000     | Uniform         | 
+262  | [67072, 67327]            | 148800     | Uniform         | 
+263  | [67328, 67583]            | 171000     | Uniform         | 
+264  | [67584, 67839]            | 150000     | Uniform         | 
+265  | [67840, 68095]            | 150000     | Uniform         | 
+266  | [68096, 68351]            | 150000     | Uniform         | 
+267  | [68352, 68607]            | 151200     | Uniform         | 
+268  | [68608, 68863]            | 158400     | Uniform         | 
+269  | [68864, 69119]            | 162600     | Uniform         | 
+270  | [69120, 69375]            | 162000     | Uniform         | 
+271  | [69376, 69631]            | 148200     | Uniform         | 
+272  | [69632, 69887]            | 151800     | Uniform         | 
+273  | [69888, 70143]            | 166200     | Uniform         | 
+274  | [70144, 70399]            | 175200     | Uniform         | 
+275  | [70400, 70655]            | 144600     | Uniform         | 
+276  | [70656, 70911]            | 139800     | Uniform         | 
+277  | [70912, 71167]            | 138000     | Uniform         | 
+278  | [71168, 71423]            | 172200     | Uniform         | 
+279  | [71424, 71679]            | 153600     | Uniform         | 
+280  | [71680, 71935]            | 151200     | Uniform         | 
+281  | [71936, 72191]            | 143400     | Uniform         | 
+282  | [72192, 72447]            | 165000     | Uniform         | 
+283  | [72448, 72703]            | 143400     | Uniform         | 
+284  | [72704, 72959]            | 151200     | Uniform         | 
+285  | [72960, 73215]            | 151200     | Uniform         | 
+286  | [73216, 73471]            | 159600     | Uniform         | 
+287  | [73472, 73727]            | 160800     | Uniform         | 
+288  | [73728, 73983]            | 157800     | Uniform         | 
+289  | [73984, 74239]            | 149400     | Uniform         | 
+290  | [74240, 74495]            | 143400     | Uniform         | 
+291  | [74496, 74751]            | 154200     | Uniform         | 
+292  | [74752, 75007]            | 151800     | Uniform         | 
+293  | [75008, 75263]            | 156000     | Uniform         | 
+294  | [75264, 75519]            | 138000     | Uniform         | 
+295  | [75520, 75775]            | 145200     | Uniform         | 
+296  | [75776, 76031]            | 165000     | Uniform         | 
+297  | [76032, 76287]            | 158400     | Uniform         | 
+298  | [76288, 76543]            | 144600     | Uniform         | 
+299  | [76544, 76799]            | 168600     | Uniform         | 
+300  | [76800, 77055]            | 151800     | Uniform         | 
+301  | [77056, 77311]            | 157200     | Uniform         | 
+302  | [77312, 77567]            | 150600     | Uniform         | 
+303  | [77568, 77823]            | 165600     | Uniform         | 
+304  | [77824, 78079]            | 168000     | Uniform         | 
+305  | [78080, 78335]            | 150000     | Uniform         | 
+306  | [78336, 78591]            | 166800     | Uniform         | 
+307  | [78592, 78847]            | 162000     | Uniform         | 
+308  | [78848, 79103]            | 138600     | Uniform         | 
+309  | [79104, 79359]            | 159600     | Uniform         | 
+310  | [79360, 79615]            | 166200     | Uniform         | 
+311  | [79616, 79871]            | 157800     | Uniform         | 
+312  | [79872, 80127]            | 147000     | Uniform         | 
+313  | [80128, 80383]            | 148200     | Uniform         | 
+314  | [80384, 80639]            | 160800     | Uniform         | 
+315  | [80640, 80895]            | 149400     | Uniform         | 
+316  | [80896, 81151]            | 165000     | Uniform         | 
+317  | [81152, 81407]            | 154200     | Uniform         | 
+318  | [81408, 81663]            | 157800     | Uniform         | 
+319  | [81664, 81919]            | 165000     | Uniform         | 
+320  | [81920, 82175]            | 137400     | Uniform         | 
+321  | [82176, 82431]            | 165000     | Uniform         | 
+322  | [82432, 82687]            | 163200     | Uniform         | 
+323  | [82688, 82943]            | 144000     | Uniform         | 
+324  | [82944, 83199]            | 171600     | Uniform         | 
+325  | [83200, 83455]            | 164400     | Uniform         | 
+326  | [83456, 83711]            | 155400     | Uniform         | 
+327  | [83712, 83967]            | 169800     | Uniform         | 
+328  | [83968, 84223]            | 140400     | Uniform         | 
+329  | [84224, 84479]            | 156600     | Uniform         | 
+330  | [84480, 84735]            | 149400     | Uniform         | 
+331  | [84736, 84991]            | 148200     | Uniform         | 
+332  | [84992, 85247]            | 165600     | Uniform         | 
+333  | [85248, 85503]            | 139800     | Uniform         | 
+334  | [85504, 85759]            | 163200     | Uniform         | 
+335  | [85760, 86015]            | 148200     | Uniform         | 
+336  | [86016, 86271]            | 162000     | Uniform         | 
+337  | [86272, 86527]            | 143400     | Uniform         | 
+338  | [86528, 86783]            | 145800     | Uniform         | 
+339  | [86784, 87039]            | 156000     | Uniform         | 
+340  | [87040, 87295]            | 156600     | Uniform         | 
+341  | [87296, 87551]            | 156000     | Uniform         | 
+342  | [87552, 87807]            | 148800     | Uniform         | 
+343  | [87808, 88063]            | 161400     | Uniform         | 
+344  | [88064, 88319]            | 154800     | Uniform         | 
+345  | [88320, 88575]            | 147600     | Uniform         | 
+346  | [88576, 88831]            | 144600     | Uniform         | 
+347  | [88832, 89087]            | 139800     | Uniform         | 
+348  | [89088, 89343]            | 154800     | Uniform         | 
+349  | [89344, 89599]            | 149400     | Uniform         | 
+350  | [89600, 89855]            | 150600     | Uniform         | 
+351  | [89856, 90111]            | 157200     | Uniform         | 
+352  | [90112, 90367]            | 139800     | Uniform         | 
+353  | [90368, 90623]            | 163800     | Uniform         | 
+354  | [90624, 90879]            | 153000     | Uniform         | 
+355  | [90880, 91135]            | 150000     | Uniform         | 
+356  | [91136, 91391]            | 160200     | Uniform         | 
+357  | [91392, 91647]            | 161400     | Uniform         | 
+358  | [91648, 91903]            | 154800     | Uniform         | 
+359  | [91904, 92159]            | 150000     | Uniform         | 
+360  | [92160, 92415]            | 158400     | Uniform         | 
+361  | [92416, 92671]            | 147600     | Uniform         | 
+362  | [92672, 92927]            | 157200     | Uniform         | 
+363  | [92928, 93183]            | 157800     | Uniform         | 
+364  | [93184, 93439]            | 154200     | Uniform         | 
+365  | [93440, 93695]            | 146400     | Uniform         | 
+366  | [93696, 93951]            | 153600     | Uniform         | 
+367  | [93952, 94207]            | 145200     | Uniform         | 
+368  | [94208, 94463]            | 130800     | Uniform         | 
+369  | [94464, 94719]            | 148200     | Uniform         | 
+370  | [94720, 94975]            | 145200     | Uniform         | 
+371  | [94976, 95231]            | 150600     | Uniform         | 
+372  | [95232, 95487]            | 154800     | Uniform         | 
+373  | [95488, 95743]            | 138600     | Uniform         | 
+374  | [95744, 95999]            | 165600     | Uniform         | 
+375  | [96000, 96255]            | 148200     | Uniform         | 
+376  | [96256, 96511]            | 152400     | Uniform         | 
+377  | [96512, 96767]            | 140400     | Uniform         | 
+378  | [96768, 97023]            | 147600     | Uniform         | 
+379  | [97024, 97279]            | 154800     | Uniform         | 
+380  | [97280, 97535]            | 138000     | Uniform         | 
+381  | [97536, 97791]            | 160200     | Uniform         | 
+382  | [97792, 98047]            | 162000     | Uniform         | 
+383  | [98048, 98303]            | 151800     | Uniform         | 
+384  | [98304, 98559]            | 146400     | Uniform         | 
+385  | [98560, 98815]            | 136200     | Uniform         | 
+386  | [98816, 99071]            | 161400     | Uniform         | 
+387  | [99072, 99327]            | 154200     | Uniform         | 
+388  | [99328, 99583]            | 154200     | Uniform         | 
+389  | [99584, 99839]            | 157200     | Uniform         | 
+390  | [99840, 99999]            | 105600     | Uniform         | 
 ================================================================================
