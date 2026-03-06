@@ -370,7 +370,7 @@ class HybridEstimator:
         models = {}
         t0 = time.perf_counter()
 
-        EARLY_EXIT_THRESHOLD = 1.01
+        EARLY_EXIT_THRESHOLD = 1.2
         COMPLEX_MODEL_THRESHOLD = 1.05
 
         for i, (train_rows, val_rows) in rows_data.items():
