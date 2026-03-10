@@ -142,7 +142,7 @@ def gen_values(
     elif dist == "zipf":
         ndv_target = min(300_000, span)
         if use_micro_dist:
-            v = lo + shift + rng.zipf(a=1.4, size=n)
+            v = lo + shift + rng.zipf(a=1.5, size=n)
             v = np.clip(
                 v, lo, hi
             )  # This ensures it spreads across the whole 300k range
