@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import time
+import numpy as np
 from pathlib import Path
 from models import EquiWidthHistogram, summarize
 from benchmark_utils import (
@@ -22,16 +23,28 @@ def run_logic(args, out_dir, metadata):
     build_time = time.perf_counter() - t0
 
     # Load Workload
-    queries, y_true = load_and_filter_workload(args.workload, mn, mx, freq)
+    # y_true_sel is selectivity (fraction of N)
+    queries, y_true_sel = load_and_filter_workload(args.workload, mn, mx, freq)
+
+    # Convert selectivity to absolute counts
+    y_true_counts = y_true_sel * N
 
     # Evaluate
     t0 = time.perf_counter()
     y_pred_counts = ew_hist.predict_batch(queries)
-    y_pred = y_pred_counts / N
     infer_time = time.perf_counter() - t0
 
+    # --- FIX: SANITY FLOOR (Никогда не предсказываем и не имеем 0 строк) ---
+    y_pred_counts = np.maximum(y_pred_counts, 1.0)
+    y_true_counts = np.maximum(y_true_counts, 1.0)
+    # -----------------------------------------------------------------------
+
+    # Convert safely clamped counts back to selectivity for standard summarize()
+    y_pred = y_pred_counts / N
+    y_true_safe = y_true_counts / N
+
     # Summarize
-    m = summarize(y_true, y_pred, "Equi-Width")
+    m = summarize(y_true_safe, y_pred, "Equi-Width")
     metrics = {
         "build_time": build_time,
         "infer_time": infer_time,
@@ -47,7 +60,7 @@ def run_logic(args, out_dir, metadata):
     )
 
     save_benchmark_results(
-        out_dir, Path(args.workload).stem, "EquiWidth", queries, y_true, y_pred, metrics
+        out_dir, Path(args.workload).stem, "EquiWidth", queries, y_true_safe, y_pred, metrics
     )
 
 
