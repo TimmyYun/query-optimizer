@@ -1,9 +1,0 @@
-{
-    "model": "Finetuned_uniform",
-    "wl_name": "workload",
-    "metrics": {
-        "median_q_error": 1.0132174657770245,
-        "p95_q_error": 1.0540361804034415,
-        "train_time": 0.053569125004287343
-    }
-}

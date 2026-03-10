@@ -1,8 +1,0 @@
-{
-    "model": "Shift_normal_to_sparse_cluster",
-    "wl_name": "workload",
-    "metrics": {
-        "median_q_error": 8.886201468145261,
-        "p95_q_error": 135.6255793401531
-    }
-}

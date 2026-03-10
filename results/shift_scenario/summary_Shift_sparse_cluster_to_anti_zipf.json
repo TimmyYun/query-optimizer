@@ -1,8 +1,0 @@
-{
-    "model": "Shift_sparse_cluster_to_anti_zipf",
-    "wl_name": "workload",
-    "metrics": {
-        "median_q_error": 1.0064216251360456,
-        "p95_q_error": 19.861910648993494
-    }
-}

@@ -1,9 +1,0 @@
-{
-    "model": "Finetuned_normal",
-    "wl_name": "workload",
-    "metrics": {
-        "median_q_error": 1.6812437944803817,
-        "p95_q_error": 13.757613354445331,
-        "train_time": 0.2894787919940427
-    }
-}
