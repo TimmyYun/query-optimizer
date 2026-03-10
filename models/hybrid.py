@@ -10,11 +10,6 @@ from .common import Bucket, RangeQuery, CDFTrainRow
 
 
 class FourierFeatureMapper:
-    """
-    Maps scalar input x to high-frequency sinusoids (Positional Encoding).
-    Allows MLP to learn sharp transitions/spikes.
-    """
-
     def __init__(self, num_bands: int = 10, max_freq: float = 1024.0):
         self.num_bands = num_bands
         self.freqs = np.logspace(0, np.log10(max_freq), num=num_bands, base=10)
@@ -23,12 +18,10 @@ class FourierFeatureMapper:
         X = np.asarray(X, dtype=np.float64)
         X_log = np.log(X + 1e-7)
         features = [X, X_log]
-
         for freq in self.freqs:
             scaled = X * freq * np.pi
             features.append(np.sin(scaled))
             features.append(np.cos(scaled))
-
         return np.hstack(features)
 
 
@@ -43,10 +36,6 @@ class FourierModelWrapper:
 
 
 class HybridEstimator:
-    """
-    Implements a Hybrid Selectivity Estimator combining histograms and ML models.
-    """
-
     def __init__(
         self,
         buckets: List[Bucket],
@@ -57,13 +46,7 @@ class HybridEstimator:
     ):
         self.buckets = buckets
         self.models = models if models is not None else {}
-        self.last_train_time = 0.0
-
-        # --- NEW: Locality Patches ---
-        # Stores (center, sigma, weight) for local corrections
-        self.local_patches = {}
-
-        # Vectorized Data Storage
+        self.local_patches = {}  # Stores (center, steepness, weight)
         self.b_lo = None
         self.b_hi = None
         self.b_count = None
@@ -77,68 +60,94 @@ class HybridEstimator:
         self.complex_models = {}
 
     def feedback_update(
-        self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.1
+            self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.1, alpha=0.3
     ):
+        """
+        High-speed vectorized feedback using bucket-level aggregation.
+        """
+        # 1. Identify "Bad" Query Indices
+        q_errs = np.maximum(y_true_counts / (y_pred_counts + 1e-9),
+                            y_pred_counts / (y_true_counts + 1e-9))
+        bad_q_mask = q_errs > error_threshold
+
+        if not np.any(bad_q_mask):
+            return
+
+        # 2. Extract Data for Bad Queries
+        bad_indices = np.where(bad_q_mask)[0]
         b_lo_vals = np.array([b.lo for b in self.buckets])
         b_hi_vals = np.array([b.hi for b in self.buckets])
+
+        # Accumulators to avoid tuning the same bucket 100 times in a loop
+        # bucket_idx -> [ (x_lo, x_hi, error_mass), ... ]
+        updates_per_bucket = {}
+
+        for idx in bad_indices:
+            q = queries[idx]
+            y_true = y_true_counts[idx]
+            y_pred = y_pred_counts[idx]
+
+            # Fast overlap search
+            s_idx = np.searchsorted(b_hi_vals, q.low)
+            e_idx = np.searchsorted(b_lo_vals, q.high, side="right")
+
+            for i in range(s_idx, e_idx):
+                b = self.buckets[i]
+                width = b.hi - b.lo + 1
+
+                # Calculate local error mass for this specific bucket
+                x_lo = np.clip((q.low - b.lo) / width, 0.0, 1.0)
+                x_hi = np.clip((q.high - b.lo) / width, 0.0, 1.0)
+
+                q_w = q.high - q.low + 1
+                overlap_w = min(q.high, b.hi) - max(q.low, b.lo) + 1
+                share = overlap_w / q_w
+
+                if i not in updates_per_bucket:
+                    updates_per_bucket[i] = []
+                updates_per_bucket[i].append((x_lo, x_hi, y_true * share))
+
+        # 3. Apply Aggregated Updates
         is_dirty = False
+        for b_idx, updates in updates_per_bucket.items():
+            # We take the mean center and sum the mass error to prevent oscillations
+            avg_x_lo = np.mean([u[0] for u in updates])
+            avg_x_hi = np.mean([u[1] for u in updates])
+            total_y_true = np.mean([u[2] for u in updates])  # Use mean to stabilize 'nudge'
 
-        for idx, q in enumerate(queries):
-            if y_true_counts[idx] <= 0:
-                continue
-
-            q_err = max(
-                y_true_counts[idx] / (y_pred_counts[idx] + 1e-9),
-                y_pred_counts[idx] / (y_true_counts[idx] + 1e-9),
-            )
-
-            if q_err > error_threshold:
-                start_idx = np.searchsorted(b_hi_vals, q.low)
-                end_idx = np.searchsorted(b_lo_vals, q.high, side="right")
-
-                for i in range(start_idx, end_idx):
-                    b = self.buckets[i]
-                    # Get normalized range within the bucket [0, 1]
-                    width = b.hi - b.lo + 1
-                    x_lo = np.clip((q.low - b.lo) / width, 0.0, 1.0)
-                    x_hi = np.clip((q.high - b.lo) / width, 0.0, 1.0)
-
-                    # Calculate share of the query count belonging to this bucket
-                    q_width = q.high - q.low + 1
-                    overlap_width = min(q.high, b.hi) - max(q.low, b.lo) + 1
-                    share = overlap_width / q_width
-
-                    self._fine_tune_bucket(i, x_lo, x_hi, y_true_counts[idx] * share)
-                    is_dirty = True
+            self._fine_tune_bucket(b_idx, avg_x_lo, avg_x_hi, total_y_true, alpha=alpha)
+            is_dirty = True
 
         if is_dirty:
             self._bake_vectorized_data()
-
-    def _fine_tune_bucket(self, b_idx, x_lo, x_hi, y_true_count, alpha=0.4):
+    def _fine_tune_bucket(self, b_idx, x_lo, x_hi, y_true_count, alpha=0.5):
+        """Adds a Sigmoid 'Staircase' to the CDF to represent missing mass spikes."""
         b = self.buckets[b_idx]
         if b.count == 0:
             return
 
-        # 1. Calculate error in this specific range
+        # Calculate local error
+        model = self.models.get(b_idx)
         current_pred_mass = (
-            self._predict_local_cdf(self.models.get(b_idx), x_hi)
-            - self._predict_local_cdf(self.models.get(b_idx), x_lo)
+            self._predict_local_cdf(model, x_hi) - self._predict_local_cdf(model, x_lo)
         ) * b.count
 
+        # normalized error mass relative to total bucket count
         error_mass = (y_true_count - current_pred_mass) / b.count
 
-        # 2. Add a Gaussian Patch
+        # Sigmoid parameters
         center = (x_lo + x_hi) / 2.0
-        # Sigma is proportional to the query width (minimum 0.05 to avoid spikes)
-        sigma = max(0.05, (x_hi - x_lo) / 2.0)
+        # Steepness (k): higher = sharper step. 100 is good for 'point' mass spikes.
+        steepness = 100.0
         weight = error_mass * alpha
 
         if b_idx not in self.local_patches:
             self.local_patches[b_idx] = []
 
-        # Keep only the last 5 patches to prevent performance degradation
-        self.local_patches[b_idx].append((center, sigma, weight))
-        if len(self.local_patches[b_idx]) > 5:
+        self.local_patches[b_idx].append((center, steepness, weight))
+
+        # Limit complexity
+        if len(self.local_patches[b_idx]) > 8:
             self.local_patches[b_idx].pop(0)
 
     def train(
@@ -181,6 +190,7 @@ class HybridEstimator:
         return total
 
     def predict_batch(self, queries: List[RangeQuery]) -> np.ndarray:
+        """Unified high-speed inference engine with Patch-Awareness."""
         if self.b_lo is None or len(self.b_lo) != len(self.buckets):
             self._bake_vectorized_data()
 
@@ -191,32 +201,42 @@ class HybridEstimator:
 
         for i in range(len(self.buckets)):
             b_count = self.b_count[i]
-            if b_count == 0: continue
+            if b_count == 0:
+                continue
 
             b_lo, b_hi, b_width = self.b_lo[i], self.b_hi[i], self.b_width[i]
             mask = (q_hi >= b_lo) & (q_lo <= b_hi)
-            if not np.any(mask): continue
+            if not np.any(mask):
+                continue
 
-            # Normalized coordinates
-            x_hi = np.clip((np.minimum(q_hi[mask], b_hi) - b_lo) / b_width, 0.0, 1.0)
-            x_lo_prev = (np.maximum(q_lo[mask], b_lo) - 1 - b_lo) / b_width
+            # Vectorized clamped coordinates
+            lo_clamped = np.maximum(q_lo[mask], b_lo)
+            hi_clamped = np.minimum(q_hi[mask], b_hi)
 
-            # --- FIX: CALL THE PATCH-AWARE FUNCTION ---
+            x_hi = np.clip((hi_clamped - b_lo) / b_width, 0.0, 1.0)
+            x_lo_prev = (lo_clamped - 1 - b_lo) / b_width
+
+            # Call Patch-Aware Predictor
             model = self.models.get(i)
             cdf_hi = self._predict_local_cdf_vec(model, x_hi, b_idx=i)
 
             cdf_lo = np.zeros_like(cdf_hi)
             lo_active = x_lo_prev >= 0
             if np.any(lo_active):
-                cdf_lo[lo_active] = self._predict_local_cdf_vec(model, x_lo_prev[lo_active], b_idx=i)
+                cdf_lo[lo_active] = self._predict_local_cdf_vec(
+                    model, x_lo_prev[lo_active], b_idx=i
+                )
 
-            model_pred = np.maximum(0.0, cdf_hi - cdf_lo) * b_count
+            model_pred = np.maximum(0.0, (cdf_hi - cdf_lo) * b_count)
+            uniform_pred = ((hi_clamped - lo_clamped + 1) / b_width) * b_count
 
-            # 5% safety floor
-            uniform_pred = ((np.minimum(q_hi[mask], b_hi) - np.maximum(q_lo[mask], b_lo) + 1) / b_width) * b_count
-            total_counts[mask] += np.where(model_pred < 1e-3, uniform_pred * 0.05, model_pred)
+            # 5% safety floor for zero-density predictions in dense areas
+            total_counts[mask] += np.where(
+                model_pred < 1e-3, uniform_pred * 0.05, model_pred
+            )
 
         return total_counts
+
     def _bake_vectorized_data(self):
         n = len(self.buckets)
         self.b_lo = np.array([b.lo for b in self.buckets], dtype=np.float64)
@@ -338,44 +358,41 @@ class HybridEstimator:
     def _predict_local_cdf_vec(
         self, model, x_norm_arr: np.ndarray, b_idx: int = -1
     ) -> np.ndarray:
-        # --- Base Model Prediction ---
+        # 1. Base Model Prediction
         if model is None:
             base_pred = np.clip(x_norm_arr, 0.0, 1.0)
         elif isinstance(model, tuple):
             m_type = model[0]
             if m_type == "linear":
-                base_pred = np.clip(x_norm_arr * model[1] + model[2], 0.0, 1.0)
+                base_pred = x_norm_arr * model[1] + model[2]
             elif m_type == "poly3":
                 p, inter = model[1], model[2]
-                base_pred = np.clip(
+                base_pred = (
                     inter
                     + p[0] * x_norm_arr
                     + p[1] * (x_norm_arr**2)
-                    + p[2] * (x_norm_arr**3),
-                    0.0,
-                    1.0,
+                    + p[2] * (x_norm_arr**3)
                 )
             elif m_type == "power":
-                base_pred = np.clip(model[1] * np.sqrt(x_norm_arr) + model[2], 0.0, 1.0)
-            else:  # Default Linear
-                base_pred = np.clip(x_norm_arr * model[1] + model[2], 0.0, 1.0)
+                base_pred = model[1] * np.sqrt(x_norm_arr) + model[2]
+            elif m_type == "poly":
+                p, inter = model[1], model[2]
+                base_pred = inter + p[0] * x_norm_arr + p[1] * (x_norm_arr**2)
+            elif m_type == "log_linear":
+                base_pred = model[1] * np.log(x_norm_arr + 1e-7) + model[2]
+            else:
+                base_pred = x_norm_arr
         elif type(model).__name__ == "IsotonicRegression":
-            base_pred = np.clip(model.predict(x_norm_arr), 0.0, 1.0)
+            base_pred = model.predict(x_norm_arr)
         else:
-            base_pred = np.clip(
-                model.predict(x_norm_arr.reshape(-1, 1)).flatten(), 0.0, 1.0
-            )
+            base_pred = model.predict(x_norm_arr.reshape(-1, 1)).flatten()
 
-        # --- NEW: Apply Local Patches ---
+        # 2. Add Sigmoid Staircase Patches
         if b_idx != -1 and b_idx in self.local_patches:
-            for center, sigma, weight in self.local_patches[b_idx]:
-                # Gaussian Correction: weight * exp(-0.5 * ((x - center)/sigma)^2)
-                # Note: We integrate this to keep it as a CDF nudge,
-                # but for narrow patches, a simple Gaussian scaled by the sigmoid works well.
-                correction = weight * np.exp(
-                    -0.5 * ((x_norm_arr - center) / sigma) ** 2
-                )
-                base_pred += correction
+            for center, k, weight in self.local_patches[b_idx]:
+                # Sigmoid correction: weight / (1 + exp(-k * (x - center)))
+                # This adds a permanent 'jump' in count mass at the center
+                base_pred += weight / (1.0 + np.exp(-k * (x_norm_arr - center)))
 
         return np.clip(base_pred, 0.0, 1.0)
 

@@ -160,6 +160,9 @@ def main():
         )
         current_est_freq = get_sampled_freq(mixed_sample, i_mn, current_N, len(i_freq))
 
+        # --- NEW: VISUALIZATION ---
+        plot_shift_state(current_freq, current_est_freq, shift_pct, out_dir, args.init_dist, args.target_dist)
+
         # --- STAGE 0: SHOCK (Measurement after Drift) ---
         y_pred_shock = hybrid_est.predict_batch(queries)
         m_shock = summarize(
