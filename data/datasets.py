@@ -19,6 +19,7 @@ Key Responsibilities:
 2. Statistical Analysis: Computes metadata like Min, Max, Count, NDV, Skewness, Kurtosis.
 3. Visualization: Generates histograms and boxplots for data distributions and error metrics.
 4. Dataset Management: Manages directory structures and file persistence/caching.
+poetry run python data/datasets.py --rows 60000000 --all
 """
 
 # ==========================================
@@ -138,21 +139,23 @@ def gen_values(
     elif dist == "zipf":
         ndv_target = min(300_000, span)
         if use_micro_dist:
+            v = lo + shift + rng.zipf(a=1.5, size=n) 
+            v = np.clip(v, lo, hi) # This ensures it spreads across the whole 300k range
             # Macro: Global Zipfian cliff/tail
-            macro_ranks = np.arange(1, ndv_target + 1)
-            macro_probs = 1.0 / (macro_ranks**1.0)
-            macro_probs /= macro_probs.sum()
-            chosen_macro_indices = rng.choice(ndv_target, size=n, p=macro_probs)
-            macro_bins = chosen_macro_indices // bucket_size
+            # macro_ranks = np.arange(1, ndv_target + 1)
+            # macro_probs = 1.0 / (macro_ranks**1.0)
+            # macro_probs /= macro_probs.sum()
+            # chosen_macro_indices = rng.choice(ndv_target, size=n, p=macro_probs)
+            # macro_bins = chosen_macro_indices // bucket_size
 
-            # Micro: A mini Zipf cliff inside EVERY bucket
-            # We use a standard skew (1.5) so it looks like a clean Zipf curve inside the bucket
-            micro_ranks = np.arange(1, bucket_size + 1)
-            micro_probs = 1.0 / (micro_ranks**1.5)
-            micro_probs /= micro_probs.sum()
-            micro_noise = rng.choice(bucket_size, size=n, p=micro_probs)
+            # # Micro: A mini Zipf cliff inside EVERY bucket
+            # # We use a standard skew (1.5) so it looks like a clean Zipf curve inside the bucket
+            # micro_ranks = np.arange(1, bucket_size + 1)
+            # micro_probs = 1.0 / (micro_ranks**1.5)
+            # micro_probs /= micro_probs.sum()
+            # micro_noise = rng.choice(bucket_size, size=n, p=micro_probs)
 
-            v = lo + shift + (macro_bins * bucket_size) + micro_noise
+            # v = lo + shift + (macro_bins * bucket_size) + micro_noise
         else:
             # 1. Generate ranks according to Zipf power law
             ranks = np.arange(1, ndv_target + 1)
@@ -244,7 +247,7 @@ def scan_min_max_count(
 
 
 def build_frequency_and_sample(
-    csv_path: Path, mn: int, mx: int, n_rows: int, sample_size: int, seed: int
+        csv_path: Path, mn: int, mx: int, n_rows: int, sample_size: int, seed: int
 ) -> Tuple[np.ndarray, np.ndarray]:
     width = mx - mn + 1
     if width <= 0:
@@ -254,46 +257,41 @@ def build_frequency_and_sample(
     rng = np.random.default_rng(seed)
     sampled = []
 
-    # Calculate probability: we pull slightly more than needed to ensure we hit the target
-    # If the file is smaller than the sample_size, p will be > 1.0 (clamped to 1.0)
     p = min(1.0, float(sample_size * 1.5) / float(max(n_rows, 1)))
 
+    # Bring back the high-performance parameters
     for ch in pd.read_csv(
-        csv_path,
-        header=None,
-        names=["v"],
-        dtype="int64",
-        chunksize=1_000_000,
-        engine="c",
+            csv_path,
+            header=None,
+            names=["v"],
+            dtype="int64",
+            chunksize=1_000_000,
+            engine="c",
     ):
         vals = ch["v"].to_numpy()
-        idx = vals - mn
 
-        # Update exact frequencies
+        # --- CRITICAL: FIX FREQUENCY CALCULATION ---
+        idx = vals - mn
         m = (idx >= 0) & (idx < width)
         valid_idx = idx[m]
         if valid_idx.size:
+            # This fills the "True Frequency" map for the Hybrid Model
             freq += np.bincount(valid_idx, minlength=width)
 
-        # Reservoir sampling step
-        if p >= 1.0:
-            sampled.append(vals)  # Just take everything if small
-        else:
-            mask = rng.random(vals.size) < p
-            s = vals[mask]
-            if s.size > 0:
-                sampled.append(s)
+        # --- RESERVOIR SAMPLING ---
+        mask = rng.random(vals.size) < p
+        s = vals[mask]
+        if s.size > 0:
+            sampled.append(s)
 
     if sampled:
         sample = np.concatenate(sampled)
-        # Final exact trim to 100,000
         if sample.size > sample_size:
             sample = rng.choice(sample, size=sample_size, replace=False)
     else:
         sample = np.array([], dtype=np.int64)
 
     return freq, sample
-
 
 def load_imdb_lengths(csv_path: Path) -> np.ndarray:
     """Loads review lengths from the IMDB dataset."""
