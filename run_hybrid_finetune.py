@@ -124,12 +124,19 @@ def run_logic(args, out_dir, metadata):
             # 1. Predict (What the DB sees before execution)
             t0 = time.perf_counter()
             batch_pred = hybrid_est.predict_batch(batch_q)
-            total_infer_time += (time.perf_counter() - t0)
+            total_infer_time += time.perf_counter() - t0
+
+            # --- FIX: SANITY FLOOR (Никогда не предсказываем 0 строк) ---
+            batch_pred = np.maximum(batch_pred, 1.0)
+            batch_y_true = np.maximum(batch_y_true, 1.0)
+            # ------------------------------------------------------------
 
             all_pred_counts.extend(batch_pred)
 
             # Print batch metrics to see improvement in real-time
-            batch_qerrs = np.maximum(batch_y_true / (batch_pred + 1e-9), batch_pred / (batch_y_true + 1e-9))
+            batch_qerrs = np.maximum(
+                batch_y_true / (batch_pred + 1e-9), batch_pred / (batch_y_true + 1e-9)
+            )
 
             med_err = np.median(batch_qerrs)
             p95_err = np.percentile(batch_qerrs, 95)
@@ -141,13 +148,15 @@ def run_logic(args, out_dir, metadata):
             ft_log.write(log_line + "\n")
 
             # Сохраняем для CSV
-            batch_metrics.append({
-                "Batch": batch_num,
-                "Start_Idx": start_idx,
-                "End_Idx": end_idx,
-                "Median_QErr": med_err,
-                "P95_QErr": p95_err
-            })
+            batch_metrics.append(
+                {
+                    "Batch": batch_num,
+                    "Start_Idx": start_idx,
+                    "End_Idx": end_idx,
+                    "Median_QErr": med_err,
+                    "P95_QErr": p95_err,
+                }
+            )
 
             # 2. Execute & Learn (Feedback Update)
             t_ft0 = time.perf_counter()
@@ -157,9 +166,9 @@ def run_logic(args, out_dir, metadata):
                 batch_pred,
                 N=N,
                 error_threshold=args.ft_threshold,
-                alpha=args.ft_alpha
+                alpha=args.ft_alpha,
             )
-            total_ft_time += (time.perf_counter() - t_ft0)
+            total_ft_time += time.perf_counter() - t_ft0
 
         summary_msg = f"\nTotal Inference Time: {total_infer_time:.4f}s\nTotal Finetuning Time: {total_ft_time:.4f}s"
         print(summary_msg)
@@ -192,21 +201,45 @@ def run_logic(args, out_dir, metadata):
     print(f"\nOverall Online Experience: Median QErr={metrics['median_q_error']:.4f}")
 
     save_benchmark_results(
-        out_dir, Path(args.workload).stem, "Hybrid", queries, y_true_sel, y_pred_sel, metrics
+        out_dir,
+        Path(args.workload).stem,
+        "Hybrid",
+        queries,
+        y_true_sel,
+        y_pred_sel,
+        metrics,
     )
 
 
 def main():
     parser = get_common_parser("Run Hybrid Model Benchmark")
-    parser.add_argument("--points", type=int, default=200, help="Points per bucket for training")
+    parser.add_argument(
+        "--points", type=int, default=200, help="Points per bucket for training"
+    )
     parser.add_argument("--ident", type=float, default=1e-4, help="Identity threshold")
-    parser.add_argument("--penalty", type=float, default=1.5, help="Model selection penalty")
+    parser.add_argument(
+        "--penalty", type=float, default=1.5, help="Model selection penalty"
+    )
 
     # --- NEW: Finetuning parameters ---
-    parser.add_argument("--batch-size", type=int, default=1000, help="Number of queries per evaluation batch")
-    parser.add_argument("--ft-threshold", type=float, default=1.2,
-                        help="Q-Error threshold to trigger patch application")
-    parser.add_argument("--ft-alpha", type=float, default=0.3, help="Learning rate (weight) for sigmoid patches")
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1000,
+        help="Number of queries per evaluation batch",
+    )
+    parser.add_argument(
+        "--ft-threshold",
+        type=float,
+        default=1.2,
+        help="Q-Error threshold to trigger patch application",
+    )
+    parser.add_argument(
+        "--ft-alpha",
+        type=float,
+        default=0.3,
+        help="Learning rate (weight) for sigmoid patches",
+    )
 
     args = parser.parse_args()
     run_benchmark_suite(args, run_logic)

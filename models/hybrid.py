@@ -47,7 +47,6 @@ class HybridEstimator:
     ):
         self.buckets = buckets
         self.models = models if models is not None else {}
-        self.local_patches = {}  # Stores (center, steepness, weight)
         self.b_lo = None
         self.b_hi = None
         self.b_count = None
@@ -61,10 +60,11 @@ class HybridEstimator:
         self.complex_models = {}
 
     def feedback_update(
-        self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.1, alpha=0.3
+        self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.2, alpha=0.15
     ):
         """
-        High-speed vectorized feedback using bucket-level aggregation.
+        High-speed Dynamic Bucket Scaling (DBS).
+        Adjusts the total row count (mass) of buckets based on execution feedback.
         """
         # 1. Identify "Bad" Query Indices
         q_errs = np.maximum(
@@ -76,85 +76,68 @@ class HybridEstimator:
         if not np.any(bad_q_mask):
             return
 
-        # 2. Extract Data for Bad Queries
         bad_indices = np.where(bad_q_mask)[0]
         b_lo_vals = np.array([b.lo for b in self.buckets])
         b_hi_vals = np.array([b.hi for b in self.buckets])
 
-        # Accumulators to avoid tuning the same bucket 100 times in a loop
-        # bucket_idx -> [ (x_lo, x_hi, error_mass), ... ]
-        updates_per_bucket = {}
+        # Accumulate the true and predicted mass allocated to each bucket
+        bucket_true_mass = {}
+        bucket_pred_mass = {}
 
         for idx in bad_indices:
             q = queries[idx]
             y_true = y_true_counts[idx]
             y_pred = y_pred_counts[idx]
 
-            # Fast overlap search
             s_idx = np.searchsorted(b_hi_vals, q.low)
             e_idx = np.searchsorted(b_lo_vals, q.high, side="right")
 
+            # Determine spatial overlap
+            overlaps = []
             for i in range(s_idx, e_idx):
                 b = self.buckets[i]
-                width = b.hi - b.lo + 1
-
-                # Calculate local error mass for this specific bucket
-                x_lo = np.clip((q.low - b.lo) / width, 0.0, 1.0)
-                x_hi = np.clip((q.high - b.lo) / width, 0.0, 1.0)
-
-                q_w = q.high - q.low + 1
                 overlap_w = min(q.high, b.hi) - max(q.low, b.lo) + 1
-                share = overlap_w / q_w
+                if overlap_w > 0:
+                    overlaps.append((i, overlap_w))
 
-                if i not in updates_per_bucket:
-                    updates_per_bucket[i] = []
-                updates_per_bucket[i].append((x_lo, x_hi, y_true * share))
+            total_overlap = sum(w for _, w in overlaps)
+            if total_overlap == 0:
+                continue
 
-        # 3. Apply Aggregated Updates
+            # Distribute the feedback proportionally
+            for i, w in overlaps:
+                share = w / total_overlap
+
+                if i not in bucket_true_mass:
+                    bucket_true_mass[i] = 0.0
+                    bucket_pred_mass[i] = 0.0
+
+                bucket_true_mass[i] += y_true * share
+                bucket_pred_mass[i] += y_pred * share
+
+        # Apply EMA updates to bucket counts
         is_dirty = False
-        for b_idx, updates in updates_per_bucket.items():
-            # We take the mean center and sum the mass error to prevent oscillations
-            avg_x_lo = np.mean([u[0] for u in updates])
-            avg_x_hi = np.mean([u[1] for u in updates])
-            total_y_true = np.mean(
-                [u[2] for u in updates]
-            )  # Use mean to stabilize 'nudge'
+        for i in bucket_true_mass.keys():
+            true_m = bucket_true_mass[i]
+            pred_m = bucket_pred_mass[i]
 
-            self._fine_tune_bucket(b_idx, avg_x_lo, avg_x_hi, total_y_true, alpha=alpha)
+            if pred_m < 1e-5:
+                pred_m = 1.0  # Prevent division by zero
+
+            ratio = true_m / pred_m
+
+            # Clip the ratio to prevent insane single-batch explosions
+            ratio = np.clip(ratio, 0.2, 5.0)
+
+            # Exponential Moving Average for smooth adaptation
+            b = self.buckets[i]
+            new_count = b.count * (1.0 - alpha) + (b.count * ratio) * alpha
+
+            b.count = max(0.0, new_count)
             is_dirty = True
 
         if is_dirty:
             self._bake_vectorized_data()
-
-    def _fine_tune_bucket(self, b_idx, x_lo, x_hi, y_true_count, alpha=0.5):
-        """Adds a Sigmoid 'Staircase' to the CDF to represent missing mass spikes."""
-        b = self.buckets[b_idx]
-        if b.count == 0:
-            return
-
-        # Calculate local error
-        model = self.models.get(b_idx)
-        current_pred_mass = (
-            self._predict_local_cdf(model, x_hi) - self._predict_local_cdf(model, x_lo)
-        ) * b.count
-
-        # normalized error mass relative to total bucket count
-        error_mass = (y_true_count - current_pred_mass) / b.count
-
-        # Sigmoid parameters
-        center = (x_lo + x_hi) / 2.0
-        # Steepness (k): higher = sharper step. 100 is good for 'point' mass spikes.
-        steepness = 100.0
-        weight = error_mass * alpha
-
-        if b_idx not in self.local_patches:
-            self.local_patches[b_idx] = []
-
-        self.local_patches[b_idx].append((center, steepness, weight))
-
-        # Limit complexity
-        if len(self.local_patches[b_idx]) > 8:
-            self.local_patches[b_idx].pop(0)
 
     def train(
         self,
@@ -181,9 +164,6 @@ class HybridEstimator:
 
         for k, v in new_models.items():
             self.models[k] = v
-            # Clear old sigmoid patches if the bucket is fully rebuilt
-            if k in self.local_patches:
-                del self.local_patches[k]
 
         self._bake_vectorized_data()
 
@@ -199,7 +179,6 @@ class HybridEstimator:
         return total
 
     def predict_batch(self, queries: List[RangeQuery]) -> np.ndarray:
-        """Unified high-speed inference engine with Patch-Awareness."""
         if self.b_lo is None or len(self.b_lo) != len(self.buckets):
             self._bake_vectorized_data()
 
@@ -218,14 +197,12 @@ class HybridEstimator:
             if not np.any(mask):
                 continue
 
-            # Vectorized clamped coordinates
             lo_clamped = np.maximum(q_lo[mask], b_lo)
             hi_clamped = np.minimum(q_hi[mask], b_hi)
 
             x_hi = np.clip((hi_clamped - b_lo) / b_width, 0.0, 1.0)
             x_lo_prev = (lo_clamped - 1 - b_lo) / b_width
 
-            # Call Patch-Aware Predictor
             model = self.models.get(i)
             cdf_hi = self._predict_local_cdf_vec(model, x_hi, b_idx=i)
 
@@ -239,7 +216,6 @@ class HybridEstimator:
             model_pred = np.maximum(0.0, (cdf_hi - cdf_lo) * b_count)
             uniform_pred = ((hi_clamped - lo_clamped + 1) / b_width) * b_count
 
-            # 5% safety floor for zero-density predictions in dense areas
             total_counts[mask] += np.where(
                 model_pred < 1e-3, uniform_pred * 0.05, model_pred
             )
@@ -291,7 +267,7 @@ class HybridEstimator:
                 if type(model).__name__ == "IsotonicRegression":
                     self.mod_types[i] = 7
                 elif type(model).__name__ == "DecisionTreeRegressor":
-                    self.mod_types[i] = 8  # --- NEW: Added Decision Tree Type ---
+                    self.mod_types[i] = 8
                 else:
                     self.mod_types[i] = 3
                 self.complex_models[i] = model
@@ -320,16 +296,12 @@ class HybridEstimator:
             b_lo_idx = b.lo - mn
             b_hi_idx = b.hi - mn
 
-            # 1. Equidistant (Grid) Sampling
-            # Forces the models to map the CDF across the entire bucket evenly
             n_grid = points_per_bucket * 2
             if width <= n_grid:
                 xs_grid = np.arange(b.lo, b.hi + 1)
             else:
                 xs_grid = np.linspace(b.lo, b.hi, num=n_grid, dtype=int)
 
-            # 2. Uniform + Edge Sampling
-            # Adds stochastic noise and explicitly pins the bucket boundaries
             n_unif = points_per_bucket
             xs_unif = rng.integers(b.lo, b.hi + 1, size=n_unif)
             xs_edges = np.array([b.lo, b.hi, b.lo + 1, max(b.lo, b.hi - 1)])
@@ -337,7 +309,6 @@ class HybridEstimator:
             xs_train = np.unique(np.concatenate([xs_grid, xs_unif, xs_edges]))
             xs_train = np.sort(xs_train)
 
-            # Validation Sample (Purely Uniform)
             xs_val = np.unique(rng.integers(b.lo, b.hi + 1, size=points_per_bucket * 2))
 
             def build_rows(xs_arr):
@@ -369,7 +340,6 @@ class HybridEstimator:
     def _predict_local_cdf_vec(
         self, model, x_norm_arr: np.ndarray, b_idx: int = -1
     ) -> np.ndarray:
-        # 1. Base Model Prediction
         if model is None:
             base_pred = np.clip(x_norm_arr, 0.0, 1.0)
         elif isinstance(model, tuple):
@@ -396,17 +366,9 @@ class HybridEstimator:
         elif type(model).__name__ == "IsotonicRegression":
             base_pred = model.predict(x_norm_arr)
         elif type(model).__name__ == "DecisionTreeRegressor":
-            # --- NEW: Decision Tree Prediction ---
             base_pred = model.predict(x_norm_arr.reshape(-1, 1))
         else:
             base_pred = model.predict(x_norm_arr.reshape(-1, 1)).flatten()
-
-        # 2. Add Sigmoid Staircase Patches
-        if b_idx != -1 and b_idx in self.local_patches:
-            for center, k, weight in self.local_patches[b_idx]:
-                # Sigmoid correction: weight / (1 + exp(-k * (x - center)))
-                # This adds a permanent 'jump' in count mass at the center
-                base_pred += weight / (1.0 + np.exp(-k * (x_norm_arr - center)))
 
         return np.clip(base_pred, 0.0, 1.0)
 
@@ -438,7 +400,6 @@ class HybridEstimator:
         models = {}
         t0 = time.perf_counter()
 
-        # Relaxed exit threshold to skip slow neural nets when shifting to Uniform
         EARLY_EXIT_THRESHOLD = 1.3
         COMPLEX_MODEL_THRESHOLD = 1.05
 
@@ -464,7 +425,6 @@ class HybridEstimator:
             )
             weights = 1.0 + (local_probs[x_indices] / (local_probs.max() + 1e-9)) * 5.0
 
-            # Use a thread-safe local random generator for validation queries
             local_rng = np.random.default_rng(rng.integers(0, 9999999) + i)
             val_queries = self._generate_bucket_queries(
                 bucket, n_queries=500, rng=local_rng, freq=freq, mn=mn
@@ -478,13 +438,11 @@ class HybridEstimator:
                 )
                 return q_m, q_95, mdl
 
-            # 1. Identity (Uniform)
             best_q, best_p95, best_model = check(None)
             if best_q < EARLY_EXIT_THRESHOLD:
                 return i, best_model
 
             candidates = []
-            # 2. Linear & Power
             try:
                 m_lin = Ridge(alpha=1.0).fit(X_train, y_train, sample_weight=weights)
                 lin_mdl = ("linear", m_lin.coef_[0], m_lin.intercept_)
@@ -501,14 +459,12 @@ class HybridEstimator:
                 q, p95, _ = check(pow_mdl)
                 candidates.append((q, p95, pow_mdl))
 
-                # --- NEW: Log-Linear Fit ---
                 m_log = Ridge(alpha=1.0).fit(
                     np.log(X_train + 1e-7), y_train, sample_weight=weights
                 )
                 log_mdl = ("log_linear", m_log.coef_[0], m_log.intercept_)
                 q, p95, _ = check(log_mdl)
                 candidates.append((q, p95, log_mdl))
-                # ---------------------------
             except:
                 pass
 
@@ -520,7 +476,6 @@ class HybridEstimator:
             if best_q < EARLY_EXIT_THRESHOLD:
                 return i, best_model
 
-            # 3. Try Cubic Poly
             try:
                 poly_calc = PolynomialFeatures(degree=3, include_bias=False)
                 X_poly_train = poly_calc.fit_transform(X_train)
@@ -537,7 +492,6 @@ class HybridEstimator:
             if best_q < EARLY_EXIT_THRESHOLD:
                 return i, best_model
 
-            # --- NEW: Lightweight Decision Tree ---
             try:
                 dt_mdl = DecisionTreeRegressor(max_depth=4).fit(
                     X_train, y_train, sample_weight=weights
@@ -548,7 +502,6 @@ class HybridEstimator:
             except:
                 pass
 
-            # 4. Try Isotonic Regression
             try:
                 iso_mdl = IsotonicRegression(out_of_bounds="clip").fit(
                     X_train.flatten(), y_train
@@ -559,7 +512,6 @@ class HybridEstimator:
             except:
                 pass
 
-            # 5. Complex Fallback (Fourier MLP)
             if best_q > COMPLEX_MODEL_THRESHOLD:
                 try:
                     mapper = FourierFeatureMapper(num_bands=32, max_freq=1000.0)
@@ -576,8 +528,6 @@ class HybridEstimator:
 
             return i, best_model
 
-        # --- THIS IS THE MAGIC: PARALLEL EXECUTION ---
-        # It assigns the 873 buckets to different CPU cores simultaneously
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [executor.submit(train_worker, i) for i in rows_data.keys()]
 
@@ -614,7 +564,6 @@ class HybridEstimator:
         return model_pred
 
     def report_models(self, file_path=None):
-        """Prints a summary of which models were chosen for each bucket."""
         output = []
         output.append("\n" + "=" * 80)
         output.append(
