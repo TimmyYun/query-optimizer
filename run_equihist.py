@@ -26,8 +26,13 @@ def run_logic(args, out_dir, metadata):
     eh_learner = EquiHistLearner(ew_hist.buckets, learning_rate=args.lr)
 
     # Load Workload
-    queries, y_true = load_and_filter_workload(args.workload, mn, mx, freq)
-    true_cardinalities = y_true * N
+    queries, y_true_raw = load_and_filter_workload(args.workload, mn, mx, freq)
+
+    # --- FIX: SANITY FLOOR для реальности ---
+    # Реальных строк не может быть 0 (если запрос валидный)
+    true_cardinalities = np.maximum(y_true_raw * N, 1.0)
+    y_true_safe = true_cardinalities / N
+    # ----------------------------------------
 
     # Evaluate sequentially (No Batching)
     y_pred = []
@@ -37,6 +42,12 @@ def run_logic(args, out_dir, metadata):
     for q, truth in zip(queries, true_cardinalities):
         t0 = time.perf_counter()
         pred_val = eh_learner.predict(q)
+
+        # --- FIX: SANITY FLOOR для предикта ---
+        # База данных никогда не оценивает запрос в 0 строк
+        pred_val = max(pred_val, 1.0)
+        # ----------------------------------------
+
         inf_time_total += time.perf_counter() - t0
 
         y_pred.append(pred_val / N)
@@ -47,8 +58,8 @@ def run_logic(args, out_dir, metadata):
 
     y_pred = np.array(y_pred)
 
-    # Summarize
-    m = summarize(y_true, y_pred, "EquiHist")
+    # Summarize (Используем y_true_safe!)
+    m = summarize(y_true_safe, y_pred, "EquiHist")
     metrics = {
         "initial_build_time": initial_build_time,
         "update_time_total": update_time_total,
@@ -66,7 +77,7 @@ def run_logic(args, out_dir, metadata):
     )
 
     save_benchmark_results(
-        out_dir, Path(args.workload).stem, "EquiHist", queries, y_true, y_pred, metrics
+        out_dir, Path(args.workload).stem, "EquiHist", queries, y_true_safe, y_pred, metrics
     )
 
 
