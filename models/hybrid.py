@@ -5,9 +5,10 @@ from sklearn.linear_model import Ridge
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.neural_network import MLPRegressor
 from sklearn.isotonic import IsotonicRegression
-
+from sklearn.tree import DecisionTreeRegressor
 from .common import Bucket, RangeQuery, CDFTrainRow
 import concurrent.futures
+
 
 class FourierFeatureMapper:
     def __init__(self, num_bands: int = 10, max_freq: float = 1024.0):
@@ -60,14 +61,16 @@ class HybridEstimator:
         self.complex_models = {}
 
     def feedback_update(
-            self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.1, alpha=0.3
+        self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.1, alpha=0.3
     ):
         """
         High-speed vectorized feedback using bucket-level aggregation.
         """
         # 1. Identify "Bad" Query Indices
-        q_errs = np.maximum(y_true_counts / (y_pred_counts + 1e-9),
-                            y_pred_counts / (y_true_counts + 1e-9))
+        q_errs = np.maximum(
+            y_true_counts / (y_pred_counts + 1e-9),
+            y_pred_counts / (y_true_counts + 1e-9),
+        )
         bad_q_mask = q_errs > error_threshold
 
         if not np.any(bad_q_mask):
@@ -113,13 +116,16 @@ class HybridEstimator:
             # We take the mean center and sum the mass error to prevent oscillations
             avg_x_lo = np.mean([u[0] for u in updates])
             avg_x_hi = np.mean([u[1] for u in updates])
-            total_y_true = np.mean([u[2] for u in updates])  # Use mean to stabilize 'nudge'
+            total_y_true = np.mean(
+                [u[2] for u in updates]
+            )  # Use mean to stabilize 'nudge'
 
             self._fine_tune_bucket(b_idx, avg_x_lo, avg_x_hi, total_y_true, alpha=alpha)
             is_dirty = True
 
         if is_dirty:
             self._bake_vectorized_data()
+
     def _fine_tune_bucket(self, b_idx, x_lo, x_hi, y_true_count, alpha=0.5):
         """Adds a Sigmoid 'Staircase' to the CDF to represent missing mass spikes."""
         b = self.buckets[b_idx]
@@ -175,6 +181,9 @@ class HybridEstimator:
 
         for k, v in new_models.items():
             self.models[k] = v
+            # Clear old sigmoid patches if the bucket is fully rebuilt
+            if k in self.local_patches:
+                del self.local_patches[k]
 
         self._bake_vectorized_data()
 
@@ -281,6 +290,8 @@ class HybridEstimator:
             else:
                 if type(model).__name__ == "IsotonicRegression":
                     self.mod_types[i] = 7
+                elif type(model).__name__ == "DecisionTreeRegressor":
+                    self.mod_types[i] = 8  # --- NEW: Added Decision Tree Type ---
                 else:
                     self.mod_types[i] = 3
                 self.complex_models[i] = model
@@ -384,6 +395,9 @@ class HybridEstimator:
                 base_pred = x_norm_arr
         elif type(model).__name__ == "IsotonicRegression":
             base_pred = model.predict(x_norm_arr)
+        elif type(model).__name__ == "DecisionTreeRegressor":
+            # --- NEW: Decision Tree Prediction ---
+            base_pred = model.predict(x_norm_arr.reshape(-1, 1))
         else:
             base_pred = model.predict(x_norm_arr.reshape(-1, 1)).flatten()
 
@@ -415,11 +429,11 @@ class HybridEstimator:
         return np.median(q_errs), np.percentile(q_errs, 95)
 
     def _train_adaptive_models(
-            self,
-            rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
-            freq: np.ndarray,
-            mn: int,
-            rng: np.random.Generator,
+        self,
+        rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
+        freq: np.ndarray,
+        mn: int,
+        rng: np.random.Generator,
     ) -> Tuple[Dict[int, Any], float]:
         models = {}
         t0 = time.perf_counter()
@@ -438,10 +452,10 @@ class HybridEstimator:
             y_train = np.array([r.y_cdf for r in train_rows])
 
             b_lo_idx, b_hi_idx = bucket.lo - mn, bucket.hi - mn
-            b_ps = np.cumsum(freq[b_lo_idx: b_hi_idx + 1])
+            b_ps = np.cumsum(freq[b_lo_idx : b_hi_idx + 1])
             width = bucket.hi - bucket.lo + 1
 
-            local_freq = freq[b_lo_idx: b_hi_idx + 1]
+            local_freq = freq[b_lo_idx : b_hi_idx + 1]
             local_probs = local_freq / (local_freq.sum() + 1e-9)
             x_indices = np.clip(
                 np.array([r.x_norm * width for r in train_rows]).astype(int),
@@ -480,10 +494,21 @@ class HybridEstimator:
                 if q < 1.05:
                     return i, lin_mdl
 
-                m_pow = Ridge(alpha=1.0).fit(np.sqrt(X_train), y_train, sample_weight=weights)
+                m_pow = Ridge(alpha=1.0).fit(
+                    np.sqrt(X_train), y_train, sample_weight=weights
+                )
                 pow_mdl = ("power", m_pow.coef_[0], m_pow.intercept_)
                 q, p95, _ = check(pow_mdl)
                 candidates.append((q, p95, pow_mdl))
+
+                # --- NEW: Log-Linear Fit ---
+                m_log = Ridge(alpha=1.0).fit(
+                    np.log(X_train + 1e-7), y_train, sample_weight=weights
+                )
+                log_mdl = ("log_linear", m_log.coef_[0], m_log.intercept_)
+                q, p95, _ = check(log_mdl)
+                candidates.append((q, p95, log_mdl))
+                # ---------------------------
             except:
                 pass
 
@@ -499,7 +524,9 @@ class HybridEstimator:
             try:
                 poly_calc = PolynomialFeatures(degree=3, include_bias=False)
                 X_poly_train = poly_calc.fit_transform(X_train)
-                mdl_poly = Ridge(alpha=0.1).fit(X_poly_train, y_train, sample_weight=weights)
+                mdl_poly = Ridge(alpha=0.1).fit(
+                    X_poly_train, y_train, sample_weight=weights
+                )
                 poly_mdl = ("poly3", mdl_poly.coef_, mdl_poly.intercept_)
                 q, p95, _ = check(poly_mdl)
                 if q < best_q:
@@ -510,9 +537,22 @@ class HybridEstimator:
             if best_q < EARLY_EXIT_THRESHOLD:
                 return i, best_model
 
+            # --- NEW: Lightweight Decision Tree ---
+            try:
+                dt_mdl = DecisionTreeRegressor(max_depth=4).fit(
+                    X_train, y_train, sample_weight=weights
+                )
+                q, p95, _ = check(dt_mdl)
+                if q < best_q:
+                    best_q, best_p95, best_model = q, p95, dt_mdl
+            except:
+                pass
+
             # 4. Try Isotonic Regression
             try:
-                iso_mdl = IsotonicRegression(out_of_bounds="clip").fit(X_train.flatten(), y_train)
+                iso_mdl = IsotonicRegression(out_of_bounds="clip").fit(
+                    X_train.flatten(), y_train
+                )
                 q, p95, _ = check(iso_mdl)
                 if q < best_q:
                     best_q, best_p95, best_model = q, p95, iso_mdl
@@ -524,7 +564,9 @@ class HybridEstimator:
                 try:
                     mapper = FourierFeatureMapper(num_bands=32, max_freq=1000.0)
                     X_f_train = mapper.transform(X_train)
-                    mdl_f_mlp = MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=500).fit(X_f_train, y_train)
+                    mdl_f_mlp = MLPRegressor(
+                        hidden_layer_sizes=(64, 32), max_iter=500
+                    ).fit(X_f_train, y_train)
                     mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
                     q, p95, _ = check(mdl_fourier)
                     if q < best_q:
@@ -598,9 +640,23 @@ class HybridEstimator:
                 elif m_type == "log_linear":
                     m_name = "Log-Linear"
                     info = f"coef={model[1]:.4f}, int={model[2]:.4f}"
+                elif m_type == "power":
+                    m_name = "Power"
+                    info = f"coef={model[1]:.4f}, int={model[2]:.4f}"
+                elif m_type == "poly3":
+                    m_name = "Poly Cubic"
+                    info = "degree=3"
             else:
-                m_name = "Fourier MLP"
-                info = "Complex Neural Net"
+                m_type = type(model).__name__
+                if m_type == "IsotonicRegression":
+                    m_name = "Isotonic"
+                    info = "Step Function"
+                elif m_type == "DecisionTreeRegressor":
+                    m_name = "Decision Tree"
+                    info = f"depth={model.get_depth()}"
+                else:
+                    m_name = "Fourier MLP"
+                    info = "Complex Neural Net"
 
             range_str = f"[{b.lo}, {b.hi}]"
             output.append(

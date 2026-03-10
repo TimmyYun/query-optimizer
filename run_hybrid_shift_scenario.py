@@ -12,18 +12,12 @@ from benchmark_utils import (
     save_benchmark_results,
     setup_out_dir,
 )
-
-
-def load_dataset_meta(dataset_dir: str, dist: str):
-    meta_path = Path(dataset_dir) / dist / "meta.pkl"
-    if not meta_path.exists():
-        raise FileNotFoundError(f"Metadata not found: {meta_path}")
-    with open(meta_path, "rb") as f:
-        return pickle.load(f)
+from data.datasets import DatasetManager
 
 
 def get_sampled_freq(sample, mn, total_n, target_len):
-    counts = np.bincount(sample - mn, minlength=target_len)
+    clipped_sample = np.clip(sample - mn, 0, target_len - 1)
+    counts = np.bincount(clipped_sample, minlength=target_len)
     scaling_factor = total_n / len(sample)
     return counts * scaling_factor
 
@@ -77,7 +71,7 @@ def plot_shift_state(true_freq, est_freq, shift_pct, out_dir, init_name, target_
 
 
 def detect_bad_buckets(
-    hybrid_est, queries, y_true_counts, y_pred_counts, error_threshold=1.5
+    hybrid_est, queries, y_true_counts, y_pred_counts, error_threshold=1.2
 ):
     bad_buckets = set()
     b_lo_vals = np.array([b.lo for b in hybrid_est.buckets])
@@ -103,7 +97,7 @@ def main():
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--workload", type=str, required=True)
     parser.add_argument("--init-dist", type=str, default="normal")
-    parser.add_argument("--target-dist", type=str, default="uniform")
+    parser.add_argument("--target-dist", type=str, default="zipf")
     parser.add_argument("--points", type=int, default=200)
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--experiment-name", type=str, default=None)
@@ -118,12 +112,12 @@ def main():
     reports_dir.mkdir(exist_ok=True)
 
     # 1. Load Data
-    i_mn, i_mx, i_N, i_freq, i_sample, i_k, _, _ = load_dataset_meta(
-        args.dataset, args.init_dist
+    dm = DatasetManager()
+    shift_sequence, init_meta = dm.get_shift_sequence(
+        args.dataset, args.init_dist, args.target_dist, num_steps=10, seed=42
     )
-    t_mn, t_mx, t_N, t_freq, t_sample, _, _, _ = load_dataset_meta(
-        args.dataset, args.target_dist
-    )
+    i_mn, i_mx, i_N, i_freq, i_sample, i_k = init_meta
+
     GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
 
     i_est_freq = get_sampled_freq(i_sample, i_mn, i_N, len(i_freq))
@@ -138,11 +132,10 @@ def main():
     queries, _ = load_and_filter_workload(args.workload, GLOBAL_MIN, GLOBAL_MAX, i_freq)
     summary_records = []
 
-    for step in range(0, 11):
-        shift_pct = step * 0.1
-        current_N = (1.0 - shift_pct) * i_N + (shift_pct) * t_N
-        current_freq = (1.0 - shift_pct) * i_freq + (shift_pct) * t_freq
-
+    for shift_step_idx, (shift_pct, mixed_sample, current_freq, current_N) in enumerate(
+        shift_sequence
+    ):
+        step = shift_step_idx
         # Engine Truth
         ps = np.cumsum(current_freq)
         y_true_counts = np.array(
@@ -157,17 +150,25 @@ def main():
         )
         y_true_sel = y_true_counts / current_N
 
-        # Optimizer Sample
-        n_target = int(len(i_sample) * shift_pct)
-        mixed_sample = np.concatenate(
-            [
-                rng.choice(i_sample, len(i_sample) - n_target, replace=False),
-                rng.choice(t_sample, n_target, replace=False),
-            ]
-        )
         current_est_freq = get_sampled_freq(mixed_sample, i_mn, current_N, len(i_freq))
 
-        plot_shift_state(current_freq, current_est_freq, shift_pct, out_dir, args.init_dist, args.target_dist)
+        # --- UPDATE BUCKET COUNTS WITH NEW SAMPLE ---
+        ps_est = np.cumsum(current_est_freq)
+        for b in hybrid_est.buckets:
+            b_lo_idx = b.lo - i_mn
+            b_hi_idx = b.hi - i_mn
+            new_count = ps_est[b_hi_idx] - (ps_est[b_lo_idx - 1] if b_lo_idx > 0 else 0)
+            b.count = max(0.0, new_count)
+        hybrid_est._bake_vectorized_data()
+
+        plot_shift_state(
+            current_freq,
+            current_est_freq,
+            shift_pct,
+            out_dir,
+            args.init_dist,
+            args.target_dist,
+        )
 
         # --- STAGE 0: SHOCK (Measurement after Drift) ---
         y_pred_shock = hybrid_est.predict_batch(queries)
@@ -193,6 +194,8 @@ def main():
             n_rebuilt = len(bad_indices)
             if n_rebuilt > 0:
                 t1 = time.perf_counter()
+                # Use current_est_freq instead of i_mn, which represents the downsampled frequency
+                # similar to how the base model is trained in run_hybrid.py
                 hybrid_est.train(
                     current_est_freq, i_mn, args.points, rng, bucket_indices=bad_indices
                 )
@@ -203,7 +206,9 @@ def main():
                 )
 
             # --- NEW: Log Models after Rebuild ---
-            hybrid_est.report_models(file_path=reports_dir / f"models_shift_{shift_pct:.1f}.txt")
+            hybrid_est.report_models(
+                file_path=reports_dir / f"models_shift_{shift_pct:.1f}.txt"
+            )
 
         # Log and Print
         print(
@@ -227,6 +232,7 @@ def main():
         )
 
     pd.DataFrame(summary_records).to_csv(out_dir / f"adaptation_ft_rb.csv", index=False)
+
 
 if __name__ == "__main__":
     main()

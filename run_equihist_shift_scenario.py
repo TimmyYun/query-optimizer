@@ -11,6 +11,7 @@ from benchmark_utils import (
     setup_out_dir,
 )
 
+
 def load_dataset_meta(dataset_dir: str, dist: str):
     meta_path = Path(dataset_dir) / dist / "meta.pkl"
     if not meta_path.exists():
@@ -18,12 +19,13 @@ def load_dataset_meta(dataset_dir: str, dist: str):
     with open(meta_path, "rb") as f:
         return pickle.load(f)
 
+
 def main():
     parser = argparse.ArgumentParser(description="Equi-Hist Adaptation Analysis")
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--workload", type=str, required=True)
     parser.add_argument("--init-dist", type=str, default="normal")
-    parser.add_argument("--target-dist", type=str, default="uniform")
+    parser.add_argument("--target-dist", type=str, default="zipf")
     parser.add_argument("--buckets", type=int, default=None)
     parser.add_argument("--lr", type=float, default=0.5)
     parser.add_argument("--out-dir", type=str, default="results")
@@ -34,10 +36,14 @@ def main():
     out_dir = setup_out_dir(args, ds_out_name)
 
     # 1. Load Data
-    i_mn, i_mx, i_N, i_freq, i_sample, i_k, _, _ = load_dataset_meta(args.dataset, args.init_dist)
-    t_mn, t_mx, t_N, t_freq, t_sample, _, _, _ = load_dataset_meta(args.dataset, args.target_dist)
+    i_mn, i_mx, i_N, i_freq, i_sample, i_k, _, _ = load_dataset_meta(
+        args.dataset, args.init_dist
+    )
+    t_mn, t_mx, t_N, t_freq, t_sample, _, _, _ = load_dataset_meta(
+        args.dataset, args.target_dist
+    )
     GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
-    
+
     n_bins = args.buckets if args.buckets is not None else i_k
 
     print(f"\n>>> PHASE 1: Initial Training on {args.init_dist} <<<")
@@ -48,7 +54,7 @@ def main():
     eh_learner = EquiHistLearner(init_hist.buckets, learning_rate=args.lr)
 
     queries, _ = load_and_filter_workload(args.workload, GLOBAL_MIN, GLOBAL_MAX, i_freq)
-    
+
     summary_records = []
 
     for step in range(0, 11):
@@ -103,7 +109,9 @@ def main():
             }
         )
 
-    pd.DataFrame(summary_records).to_csv(out_dir / f"adaptation_equihist.csv", index=False)
+    pd.DataFrame(summary_records).to_csv(
+        out_dir / f"adaptation_equihist.csv", index=False
+    )
 
 
 if __name__ == "__main__":
