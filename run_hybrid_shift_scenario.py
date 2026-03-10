@@ -10,276 +10,99 @@ from benchmark_utils import load_and_filter_workload, save_benchmark_results
 
 
 def load_dataset_meta(dataset_dir: str, dist: str):
-    """Loads the meta.pkl containing dataset statistics and frequency arrays."""
     meta_path = Path(dataset_dir) / dist / "meta.pkl"
     if not meta_path.exists():
-        raise FileNotFoundError(
-            f"Metadata not found: {meta_path}. Run datasets.py first."
-        )
+        raise FileNotFoundError(f"Metadata not found: {meta_path}")
     with open(meta_path, "rb") as f:
         return pickle.load(f)
 
 
-def detect_drift(
-    hybrid_est: HybridEstimator,
-    target_freq: np.ndarray,
-    target_mn: int,
-    rng: np.random.Generator,
-    threshold: float = 1.5,
-) -> list:
-    """
-    Evaluates the existing ML models on the new data frequency.
-    Returns a list of bucket indices where the median Q-Error exceeds the threshold.
-    """
-    bad_buckets = []
-    for i, b in enumerate(hybrid_est.buckets):
-        if b.count == 0:
-            continue
-
-        val_queries = hybrid_est._generate_bucket_queries(
-            b, 200, rng, target_freq, target_mn
-        )
-        if not val_queries:
-            continue
-
-        q_lo = np.array([q.low for q in val_queries])
-        q_hi = np.array([q.high for q in val_queries])
-
-        b_lo_idx, b_hi_idx = b.lo - target_mn, b.hi - target_mn
-        b_ps = np.cumsum(target_freq[b_lo_idx : b_hi_idx + 1])
-        width = b.hi - b.lo + 1
-
-        q_m, _ = hybrid_est._eval_model_q_error_vec(
-            hybrid_est.models.get(i), q_lo, q_hi, b, b_ps, b.lo, width
-        )
-
-        if q_m > threshold:
-            bad_buckets.append(i)
-
-    return bad_buckets
-
-
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run Hybrid Model Data Shift Benchmark"
-    )
-    parser.add_argument(
-        "--dataset",
-        type=str,
-        required=True,
-        help="Base path to dataset directories (e.g., data/generated/60000000_hard)",
-    )
-    parser.add_argument(
-        "--workload",
-        type=str,
-        required=True,
-        help="Direct path to the workload.csv file",
-    )
-    parser.add_argument(
-        "--init-dist",
-        type=str,
-        default="normal",
-        help="Initial distribution to train on",
-    )
-    parser.add_argument(
-        "--target-dists",
-        type=str,
-        nargs="+",
-        default=["uniform", "zipf", "anti_zipf"],
-        help="Distributions to shift to",
-    )
-    parser.add_argument(
-        "--points", type=int, default=20, help="Points per bucket for training"
-    )
-    parser.add_argument(
-        "--drift-threshold",
-        type=float,
-        default=1.5,
-        help="Q-Error threshold to trigger bucket finetuning",
-    )
+    parser = argparse.ArgumentParser(description="Run Gradual Hybrid Model Shift Benchmark")
+    parser.add_argument("--dataset", type=str, required=True)
+    parser.add_argument("--workload", type=str, required=True)
+    parser.add_argument("--init-dist", type=str, default="normal")
+    parser.add_argument("--target-dist", type=str, default="zipf")
+    parser.add_argument("--points", type=int, default=200)
     args = parser.parse_args()
 
-    out_dir = Path("results/shift_scenario")
+    out_dir = Path(f"results/gradual_shift_{args.init_dist}_to_{args.target_dist}")
     out_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(42)
 
-    # Initialize a list to hold our summary table rows
+    # 1. Load both datasets
+    print(f"Loading {args.init_dist} (Source) and {args.target_dist} (Target)...")
+    i_mn, i_mx, i_N, i_freq, _, i_k, _, _ = load_dataset_meta(args.dataset, args.init_dist)
+    t_mn, t_mx, t_N, t_freq, _, _, _, _ = load_dataset_meta(args.dataset, args.target_dist)
+
+    # Ensure domains match for mixing (pad if necessary)
+    # Note: DOMAIN_MAX is usually 1,000,000 in your code, so freq arrays should be same size.
+
+    # 2. Initial Training Phase
+    print(f"\n>>> PHASE 1: Training on pure {args.init_dist} <<<")
+    init_hist = EquiWidthHistogram.build(i_mn, i_mx, i_k, i_freq)
+    hybrid_est = HybridEstimator(init_hist.buckets)
+    hybrid_est.train(i_freq, i_mn, args.points, rng)
+
+    # Load combined workload
+    queries, y_true_init = load_and_filter_workload(args.workload, i_mn, i_mx, i_freq)
+
     summary_records = []
 
-    # ==========================================
-    # Phase 1: Initial Training
-    # ==========================================
-    print(
-        f"\n{'=' * 60}\nPHASE 1: Initial Training on '{args.init_dist.upper()}'\n{'=' * 60}"
-    )
+    # 3. Gradual Shift Loop (10% to 100%)
+    for step in range(1, 11):
+        shift_pct = step * 0.1
+        print(f"\n>>> ITERATION {step}: Shift = {shift_pct:.0%} <<<")
 
-    init_mn, init_mx, init_N, init_freq, _, init_k, _, _ = load_dataset_meta(
-        args.dataset, args.init_dist
-    )
-    print(f"Using Freedman-Diaconis Bin Count: {init_k}")
+        # Mix Frequencies: Simulate 10% replacement
+        # Mixed Freq = (Initial * 0.9) + (Target * 0.1) ... and so on
+        current_freq = (1.0 - shift_pct) * i_freq + (shift_pct) * t_freq
+        current_N = (1.0 - shift_pct) * i_N + (shift_pct) * t_N
 
-    init_hist = EquiWidthHistogram.build(init_mn, init_mx, init_k, init_freq)
-    model_init = HybridEstimator(init_hist.buckets)
+        # IMPORTANT: Selectivity on mixed data requires a fresh ground truth for the workload
+        # We re-filter the workload to get the 'True' selectivity of the mixed data
+        _, y_true_mixed = load_and_filter_workload(args.workload, i_mn, i_mx, current_freq)
 
-    t_train_init = model_init.train(init_freq, init_mn, args.points, rng)
-    print(f"Initial Training Time: {t_train_init:.4f}s")
-
-    q_init, y_true_init = load_and_filter_workload(
-        args.workload, init_mn, init_mx, init_freq
-    )
-
-    t0 = time.perf_counter()
-    y_pred_init = model_init.predict_batch(q_init) / init_N
-    inf_time_init = time.perf_counter() - t0
-
-    m_init = summarize(y_true_init, y_pred_init, f"Init_{args.init_dist}")
-    print(
-        f"Initial Performance: Median QErr = {m_init['QErr_median']:.4f}, p95 QErr = {m_init['QErr_p95']:.4f}"
-    )
-
-    # ==========================================
-    # Phase 2 & 3: Shift and Finetune Loop
-    # ==========================================
-    for target_dist in args.target_dists:
-        print(
-            f"\n{'=' * 60}\nSHIFT SCENARIO: {args.init_dist} -> {target_dist}\n{'=' * 60}"
-        )
-        tgt_mn, tgt_mx, tgt_N, tgt_freq, _, _, _, _ = load_dataset_meta(
-            args.dataset, target_dist
-        )
-
-        q_tgt, y_true_tgt = load_and_filter_workload(
-            args.workload, tgt_mn, tgt_mx, tgt_freq
-        )
-
-        # ---------------------------------------------------------
-        # Phase 2: Zero-Shot Degradation
-        # ---------------------------------------------------------
-        tgt_hist = EquiWidthHistogram.build(tgt_mn, tgt_mx, init_k, tgt_freq)
-
-        model_shifted = HybridEstimator(
-            tgt_hist.buckets, models=dict(model_init.models)
-        )
-        model_shifted._bake_vectorized_data()
-
+        # A. Measurement (Before any fine-tuning in this step)
         t0 = time.perf_counter()
-        y_pred_shifted = model_shifted.predict_batch(q_tgt) / tgt_N
-        inf_time_shifted = time.perf_counter() - t0
+        y_pred_raw = hybrid_est.predict_batch(queries)
+        inf_time = time.perf_counter() - t0
 
-        m_shifted = summarize(y_true_tgt, y_pred_shifted, f"Shifted_to_{target_dist}")
-        print(
-            f"[Before Finetune] Median QErr: {m_shifted['QErr_median']:.4f} | p95 QErr: {m_shifted['QErr_p95']:.4f}"
+        y_pred_sel = y_pred_raw / current_N
+        m = summarize(y_true_mixed, y_pred_sel, f"Shift_{shift_pct:.1f}")
+
+        # B. Feedback Fine-Tuning (The model learns from the shifted data)
+        t_ft_start = time.perf_counter()
+        hybrid_est.feedback_update(
+            queries=queries,
+            y_true_counts=y_true_mixed * current_N,
+            y_pred_counts=y_pred_raw,
+            N=current_N,
+            error_threshold=1.5
         )
+        ft_time = time.perf_counter() - t_ft_start
 
-        # ---------------------------------------------------------
-        # Phase 3: Drift Detection & Finetuning
-        # ---------------------------------------------------------
-        print("Detecting drifted buckets...")
-        bad_buckets = detect_drift(
-            model_shifted, tgt_freq, tgt_mn, rng, threshold=args.drift_threshold
-        )
-        percent_bad = (len(bad_buckets) / init_k) * 100
-        print(
-            f"Detected {len(bad_buckets)} / {init_k} buckets ({percent_bad:.1f}%) exceeding QErr > {args.drift_threshold}"
-        )
+        print(f"Step {step} Results: Median QErr = {m['QErr_median']:.4f}, FT Time = {ft_time:.4f}s")
 
-        if len(bad_buckets) > 0:
-            print(f"Finetuning {len(bad_buckets)} buckets...")
-            t_finetune = model_shifted.train(
-                tgt_freq, tgt_mn, args.points, rng, bucket_indices=bad_buckets
-            )
-            print(
-                f"Finetune Time: {t_finetune:.4f}s (vs {t_train_init:.4f}s full train)"
-            )
-        else:
-            print("No finetuning required!")
-            t_finetune = 0.0
+        summary_records.append({
+            "Shift %": f"{shift_pct:.0%}",
+            "Median QErr": m["QErr_median"],
+            "95% QErr": m["QErr_p95"],
+            "Avg QErr": m["QErr_avg"],
+            "Inference Time": inf_time,
+            "FineTune Time": ft_time
+        })
 
-        t0 = time.perf_counter()
-        y_pred_finetuned = model_shifted.predict_batch(q_tgt) / tgt_N
-        inf_time_finetuned = time.perf_counter() - t0
+    # 4. Save and Display Results
+    df_summary = pd.DataFrame(summary_records)
+    print("\n" + "=" * 80)
+    print(f"GRADUAL SHIFT SUMMARY: {args.init_dist.upper()} -> {args.target_dist.upper()}")
+    print("=" * 80)
+    print(df_summary.to_string(index=False))
 
-        m_finetune = summarize(y_true_tgt, y_pred_finetuned, f"Finetuned_{target_dist}")
-        print(
-            f"[After Finetune]  Median QErr: {m_finetune['QErr_median']:.4f} | p95 QErr: {m_finetune['QErr_p95']:.4f}"
-        )
-
-        # Append exhaustive unrounded data to summary table
-        summary_records.append(
-            {
-                "Dataset Count": init_N,
-                "Workload Count": len(q_tgt),
-                "Init Dist": args.init_dist,
-                "Shift Dist": target_dist,
-                # Init Metrics
-                "Init Train Time (s)": t_train_init,
-                "Init Infer Time (s)": inf_time_init,
-                "Init Avg QErr": m_init["QErr_avg"],
-                "Init 25% QErr": m_init["QErr_p25"],
-                "Init Median QErr": m_init["QErr_median"],
-                "Init 75% QErr": m_init["QErr_p75"],
-                "Init 95% QErr": m_init["QErr_p95"],
-                # Shift Metrics
-                "Shift Infer Time (s)": inf_time_shifted,
-                "Shift Avg QErr": m_shifted["QErr_avg"],
-                "Shift 25% QErr": m_shifted["QErr_p25"],
-                "Shift Median QErr": m_shifted["QErr_median"],
-                "Shift 75% QErr": m_shifted["QErr_p75"],
-                "Shift 95% QErr": m_shifted["QErr_p95"],
-                # Finetune Metrics
-                "FT Train Time (s)": t_finetune,
-                "FT Infer Time (s)": inf_time_finetuned,
-                "FT Avg QErr": m_finetune["QErr_avg"],
-                "FT 25% QErr": m_finetune["QErr_p25"],
-                "FT Median QErr": m_finetune["QErr_median"],
-                "FT 75% QErr": m_finetune["QErr_p75"],
-                "FT 95% QErr": m_finetune["QErr_p95"],
-            }
-        )
-
-        # Save individual iteration results for charting
-        workload_name = Path(args.workload).stem
-        save_benchmark_results(
-            out_dir,
-            workload_name,
-            f"Shift_{args.init_dist}_to_{target_dist}",
-            q_tgt,
-            y_true_tgt,
-            y_pred_shifted,
-            {
-                "median_q_error": m_shifted["QErr_median"],
-                "p95_q_error": m_shifted["QErr_p95"],
-            },
-        )
-        save_benchmark_results(
-            out_dir,
-            workload_name,
-            f"Finetuned_{target_dist}",
-            q_tgt,
-            y_true_tgt,
-            y_pred_finetuned,
-            {
-                "median_q_error": m_finetune["QErr_median"],
-                "p95_q_error": m_finetune["QErr_p95"],
-                "train_time": t_finetune,
-            },
-        )
-
-    # ==========================================
-    # Final Summary Table Output
-    # ==========================================
-    if summary_records:
-        df_summary = pd.DataFrame(summary_records)
-        print("\n" + "=" * 120)
-        print("SHIFT SCENARIO SUMMARY TABLE")
-        print("=" * 120)
-        print(df_summary.to_string(index=False))
-        print("=" * 120)
-
-        # Save to CSV
-        summary_csv_path = out_dir / f"shift_summary_{args.init_dist}.csv"
-        df_summary.to_csv(summary_csv_path, index=False)
-        print(f"\nSaved raw summary table to: {summary_csv_path}")
+    summary_csv = out_dir / "gradual_shift_metrics.csv"
+    df_summary.to_csv(summary_csv, index=False)
+    print(f"\nSummary saved to: {summary_csv}")
 
 
 if __name__ == "__main__":

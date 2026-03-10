@@ -33,12 +33,24 @@ def plot_bucket_debug(hybrid_est, queries, y_true, y_pred, output_path):
     )
 
     fig, ax1 = plt.subplots(figsize=(14, 6))
-    ax1.bar(range(n_buckets), bucket_counts, color="lightgray", alpha=0.5, label="Bucket Row Count")
+    ax1.bar(
+        range(n_buckets),
+        bucket_counts,
+        color="lightgray",
+        alpha=0.5,
+        label="Bucket Row Count",
+    )
     ax1.set_xlabel("Bucket Index")
     ax1.set_ylabel("Estimated Row Count", color="gray")
 
     ax2 = ax1.twinx()
-    ax2.plot(range(n_buckets), median_errs, color="red", linewidth=1.5, label="Median Q-Error")
+    ax2.plot(
+        range(n_buckets),
+        median_errs,
+        color="red",
+        linewidth=1.5,
+        label="Median Q-Error",
+    )
     ax2.set_ylabel("Median Q-Error (Log Scale)", color="red")
     ax2.set_yscale("log")
 
@@ -97,7 +109,6 @@ def run_logic(args, out_dir, metadata):
     # --- VISUALIZATION & SUMMARY ---
     debug_plot_path = out_dir / "initial_baseline_debug.png"
     plot_bucket_debug(hybrid_est, queries, y_true, y_pred, debug_plot_path)
-
 
     # Summarize
     m = summarize(y_true, y_pred, "Hybrid")

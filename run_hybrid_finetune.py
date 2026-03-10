@@ -108,6 +108,10 @@ def run_logic(args, out_dir, metadata):
     hybrid_est.train(estimated_freq, mn, args.points, rng)
     t_initial_train = time.perf_counter() - t_initial_train_start
 
+    # Report Model Selections
+    model_report_path = out_dir / "model_selection_Hybrid.txt"
+    hybrid_est.report_models(file_path=model_report_path)
+
     # Load Workload
     queries, y_true = load_and_filter_workload(args.workload, mn, mx, freq)
     n_queries = len(queries)
