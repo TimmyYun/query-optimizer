@@ -191,69 +191,32 @@ class HybridEstimator:
 
         for i in range(len(self.buckets)):
             b_count = self.b_count[i]
-            if b_count == 0:
-                continue
+            if b_count == 0: continue
 
             b_lo, b_hi, b_width = self.b_lo[i], self.b_hi[i], self.b_width[i]
-
             mask = (q_hi >= b_lo) & (q_lo <= b_hi)
-            if not np.any(mask):
-                continue
+            if not np.any(mask): continue
 
-            lo_clamped = np.maximum(q_lo[mask], b_lo)
-            hi_clamped = np.minimum(q_hi[mask], b_hi)
+            # Normalized coordinates
+            x_hi = np.clip((np.minimum(q_hi[mask], b_hi) - b_lo) / b_width, 0.0, 1.0)
+            x_lo_prev = (np.maximum(q_lo[mask], b_lo) - 1 - b_lo) / b_width
 
-            x_hi = np.clip((hi_clamped - b_lo) / b_width, 0.0, 1.0)
-            x_lo_prev = (lo_clamped - 1 - b_lo) / b_width
+            # --- FIX: CALL THE PATCH-AWARE FUNCTION ---
+            model = self.models.get(i)
+            cdf_hi = self._predict_local_cdf_vec(model, x_hi, b_idx=i)
 
-            m_type = self.mod_types[i]
-
-            def get_cdf_vec(x_arr):
-                xa = np.clip(x_arr, 0.0, 1.0)
-                if m_type == 0:
-                    return xa
-                elif m_type == 1:
-                    p = self.lin_params[i]
-                    return np.clip(xa * p[0] + p[1], 0.0, 1.0)
-                elif m_type == 2:
-                    p = self.poly_params[i]
-                    return np.clip(p[2] + p[0] * xa + p[1] * (xa**2), 0.0, 1.0)
-                elif m_type == 4:
-                    p = self.log_params[i]
-                    return np.clip(p[0] * np.log(xa + 1e-7) + p[1], 0.0, 1.0)
-                elif m_type == 5:
-                    p = self.power_params[i]
-                    return np.clip(p[0] * np.sqrt(xa) + p[1], 0.0, 1.0)
-                elif m_type == 6:
-                    p = self.poly3_params[i]
-                    return np.clip(
-                        p[3] + p[0] * xa + p[1] * (xa**2) + p[2] * (xa**3), 0.0, 1.0
-                    )
-                elif m_type == 7:
-                    return np.clip(self.complex_models[i].predict(xa), 0.0, 1.0)
-                else:
-                    return np.clip(
-                        self.complex_models[i].predict(xa.reshape(-1, 1)).flatten(),
-                        0.0,
-                        1.0,
-                    )
-
-            cdf_hi = get_cdf_vec(x_hi)
-            lo_mask = x_lo_prev >= 0
             cdf_lo = np.zeros_like(cdf_hi)
-            if np.any(lo_mask):
-                cdf_lo[lo_mask] = get_cdf_vec(x_lo_prev[lo_mask])
+            lo_active = x_lo_prev >= 0
+            if np.any(lo_active):
+                cdf_lo[lo_active] = self._predict_local_cdf_vec(model, x_lo_prev[lo_active], b_idx=i)
 
             model_pred = np.maximum(0.0, cdf_hi - cdf_lo) * b_count
-            uniform_pred = ((hi_clamped - lo_clamped + 1) / b_width) * b_count
 
-            # Using 5% uniform minimum to bound huge errors on clusters
-            total_counts[mask] += np.where(
-                model_pred < 1e-3, uniform_pred * 0.05, model_pred
-            )
+            # 5% safety floor
+            uniform_pred = ((np.minimum(q_hi[mask], b_hi) - np.maximum(q_lo[mask], b_lo) + 1) / b_width) * b_count
+            total_counts[mask] += np.where(model_pred < 1e-3, uniform_pred * 0.05, model_pred)
 
         return total_counts
-
     def _bake_vectorized_data(self):
         n = len(self.buckets)
         self.b_lo = np.array([b.lo for b in self.buckets], dtype=np.float64)
