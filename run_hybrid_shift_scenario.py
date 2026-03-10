@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from models import EquiWidthHistogram, HybridEstimator, summarize
-from benchmark_utils import load_and_filter_workload, save_benchmark_results
+from benchmark_utils import load_and_filter_workload, save_benchmark_results, setup_out_dir
 
 
 def load_dataset_meta(dataset_dir: str, dist: str):
@@ -50,11 +50,13 @@ def main():
     parser.add_argument("--workload", type=str, required=True)
     parser.add_argument("--init-dist", type=str, default="normal")
     parser.add_argument("--target-dist", type=str, default="zipf")
-    parser.add_argument("--points", type=int, default=200)
+    parser.add_argument("--points", type=int, default=500)
+    parser.add_argument("--out-dir", type=str, default="results", help="Base directory for results")
+    parser.add_argument("--experiment-name", type=str, default=None, help="Experiment ID or name")
     args = parser.parse_args()
 
-    out_dir = Path(f"results/gradual_shift_breakdown")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    ds_out_name = f"/{args.init_dist}_to_{args.target_dist}"
+    out_dir = setup_out_dir(args, ds_out_name)
     rng = np.random.default_rng(42)
 
     # 1. Load Data
