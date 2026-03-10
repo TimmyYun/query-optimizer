@@ -17,8 +17,35 @@ def load_dataset_meta(dataset_dir: str, dist: str):
         return pickle.load(f)
 
 
+def get_sampled_freq(sample, mn, total_n, target_len):
+    """Optimizer's view: Scaled counts from the 100k sample."""
+    counts = np.bincount(sample - mn, minlength=target_len)
+    scaling_factor = total_n / len(sample)
+    return counts * scaling_factor
+
+
+def detect_bad_buckets(
+    hybrid_est, queries, y_true_counts, y_pred_counts, error_threshold=1.5
+):
+    bad_buckets = set()
+    b_lo_vals = np.array([b.lo for b in hybrid_est.buckets])
+    b_hi_vals = np.array([b.hi for b in hybrid_est.buckets])
+
+    for idx, q in enumerate(queries):
+        q_err = max(
+            y_true_counts[idx] / (y_pred_counts[idx] + 1e-9),
+            y_pred_counts[idx] / (y_true_counts[idx] + 1e-9),
+        )
+        if q_err > error_threshold:
+            start_idx = np.searchsorted(b_hi_vals, q.low)
+            end_idx = np.searchsorted(b_lo_vals, q.high, side="right")
+            for i in range(start_idx, end_idx):
+                bad_buckets.add(i)
+    return list(bad_buckets)
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Run Gradual Hybrid Model Shift Benchmark")
+    parser = argparse.ArgumentParser(description="Detailed Hybrid Adaptation Analysis")
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--workload", type=str, required=True)
     parser.add_argument("--init-dist", type=str, default="normal")
@@ -26,83 +53,120 @@ def main():
     parser.add_argument("--points", type=int, default=200)
     args = parser.parse_args()
 
-    out_dir = Path(f"results/gradual_shift_{args.init_dist}_to_{args.target_dist}")
+    out_dir = Path(f"results/gradual_shift_breakdown")
     out_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(42)
 
-    # 1. Load both datasets
-    print(f"Loading {args.init_dist} (Source) and {args.target_dist} (Target)...")
-    i_mn, i_mx, i_N, i_freq, _, i_k, _, _ = load_dataset_meta(args.dataset, args.init_dist)
-    t_mn, t_mx, t_N, t_freq, _, _, _, _ = load_dataset_meta(args.dataset, args.target_dist)
+    # 1. Load Data
+    i_mn, i_mx, i_N, i_freq, i_sample, i_k, _, _ = load_dataset_meta(
+        args.dataset, args.init_dist
+    )
+    t_mn, t_mx, t_N, t_freq, t_sample, _, _, _ = load_dataset_meta(
+        args.dataset, args.target_dist
+    )
+    GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
 
-    # Ensure domains match for mixing (pad if necessary)
-    # Note: DOMAIN_MAX is usually 1,000,000 in your code, so freq arrays should be same size.
-
-    # 2. Initial Training Phase
-    print(f"\n>>> PHASE 1: Training on pure {args.init_dist} <<<")
-    init_hist = EquiWidthHistogram.build(i_mn, i_mx, i_k, i_freq)
+    # 2. Initial Training (Pure Source)
+    i_est_freq = get_sampled_freq(i_sample, i_mn, i_N, len(i_freq))
+    print(f"\n>>> PHASE 1: Training on {args.init_dist} (Sample Only) <<<")
+    init_hist = EquiWidthHistogram.build_from_sample(i_mn, i_mx, i_k, i_sample, i_N)
     hybrid_est = HybridEstimator(init_hist.buckets)
-    hybrid_est.train(i_freq, i_mn, args.points, rng)
+    hybrid_est.train(i_est_freq, i_mn, args.points, rng)
 
-    # Load combined workload
-    queries, y_true_init = load_and_filter_workload(args.workload, i_mn, i_mx, i_freq)
-
+    queries, _ = load_and_filter_workload(args.workload, GLOBAL_MIN, GLOBAL_MAX, i_freq)
     summary_records = []
 
-    # 3. Gradual Shift Loop (10% to 100%)
-    for step in range(1, 11):
+    # 3. Gradual Shift Loop
+    for step in range(0, 11):
         shift_pct = step * 0.1
-        print(f"\n>>> ITERATION {step}: Shift = {shift_pct:.0%} <<<")
-
-        # Mix Frequencies: Simulate 10% replacement
-        # Mixed Freq = (Initial * 0.9) + (Target * 0.1) ... and so on
-        current_freq = (1.0 - shift_pct) * i_freq + (shift_pct) * t_freq
         current_N = (1.0 - shift_pct) * i_N + (shift_pct) * t_N
+        current_freq = (1.0 - shift_pct) * i_freq + (shift_pct) * t_freq
 
-        # IMPORTANT: Selectivity on mixed data requires a fresh ground truth for the workload
-        # We re-filter the workload to get the 'True' selectivity of the mixed data
-        _, y_true_mixed = load_and_filter_workload(args.workload, i_mn, i_mx, current_freq)
-
-        # A. Measurement (Before any fine-tuning in this step)
-        t0 = time.perf_counter()
-        y_pred_raw = hybrid_est.predict_batch(queries)
-        inf_time = time.perf_counter() - t0
-
-        y_pred_sel = y_pred_raw / current_N
-        m = summarize(y_true_mixed, y_pred_sel, f"Shift_{shift_pct:.1f}")
-
-        # B. Feedback Fine-Tuning (The model learns from the shifted data)
-        t_ft_start = time.perf_counter()
-        hybrid_est.feedback_update(
-            queries=queries,
-            y_true_counts=y_true_mixed * current_N,
-            y_pred_counts=y_pred_raw,
-            N=current_N,
-            error_threshold=1.5
+        # Database Engine Truth
+        ps = np.cumsum(current_freq)
+        y_true_counts = np.array(
+            [
+                max(
+                    1.0,
+                    ps[min(len(current_freq) - 1, q.high)]
+                    - (ps[q.low - 1] if q.low > 0 else 0),
+                )
+                for q in queries
+            ]
         )
-        ft_time = time.perf_counter() - t_ft_start
+        y_true_sel = y_true_counts / current_N
 
-        print(f"Step {step} Results: Median QErr = {m['QErr_median']:.4f}, FT Time = {ft_time:.4f}s")
+        # Mixed Optimizer Sample
+        n_target = int(len(i_sample) * shift_pct)
+        mixed_sample = np.concatenate(
+            [
+                rng.choice(i_sample, len(i_sample) - n_target, replace=False),
+                rng.choice(t_sample, n_target, replace=False),
+            ]
+        )
+        current_est_freq = get_sampled_freq(mixed_sample, i_mn, current_N, len(i_freq))
 
-        summary_records.append({
-            "Shift %": f"{shift_pct:.0%}",
-            "Median QErr": m["QErr_median"],
-            "95% QErr": m["QErr_p95"],
-            "Avg QErr": m["QErr_avg"],
-            "Inference Time": inf_time,
-            "FineTune Time": ft_time
-        })
+        # --- STAGE 0: SHOCK (Measurement before update) ---
+        y_pred_shock = hybrid_est.predict_batch(queries)
+        m_shock = summarize(
+            y_true_sel, y_pred_shock / current_N, f"Shock_{shift_pct:.1f}"
+        )
 
-    # 4. Save and Display Results
-    df_summary = pd.DataFrame(summary_records)
-    print("\n" + "=" * 80)
-    print(f"GRADUAL SHIFT SUMMARY: {args.init_dist.upper()} -> {args.target_dist.upper()}")
-    print("=" * 80)
-    print(df_summary.to_string(index=False))
+        m_rb, m_ft = m_shock, m_shock
+        t_rb, t_ft, n_bad = 0.0, 0.0, 0
 
-    summary_csv = out_dir / "gradual_shift_metrics.csv"
-    df_summary.to_csv(summary_csv, index=False)
-    print(f"\nSummary saved to: {summary_csv}")
+        if step > 0:
+            # --- STAGE 1: REBUILD (Structural Tournament) ---
+            bad_indices = detect_bad_buckets(
+                hybrid_est, queries, y_true_counts, y_pred_shock
+            )
+            n_bad = len(bad_indices)
+            if n_bad > 0:
+                t0 = time.perf_counter()
+                hybrid_est.train(
+                    current_est_freq, i_mn, args.points, rng, bucket_indices=bad_indices
+                )
+                t_rb = time.perf_counter() - t0
+                y_pred_rb = hybrid_est.predict_batch(queries)
+                m_rb = summarize(
+                    y_true_sel, y_pred_rb / current_N, f"RB_{shift_pct:.1f}"
+                )
+
+            # --- STAGE 2: FINETUNE (Precision Alignment) ---
+            t1 = time.perf_counter()
+            y_pred_for_ft = hybrid_est.predict_batch(queries)
+            hybrid_est.feedback_update(queries, y_true_counts, y_pred_for_ft, current_N)
+            t_ft = time.perf_counter() - t1
+            y_pred_ft = hybrid_est.predict_batch(queries)
+            m_ft = summarize(y_true_sel, y_pred_ft / current_N, f"FT_{shift_pct:.1f}")
+
+        print(
+            f"Shift {shift_pct:>4.0%}: [Shock: {m_shock['QErr_median']:.2f}] -> "
+            f"[RB: {m_rb['QErr_median']:.2f}] -> [FT: {m_ft['QErr_median']:.2f}] | RB: {n_bad}"
+        )
+
+        summary_records.append(
+            {
+                "Shift %": f"{shift_pct:.0%}",
+                "Shock_Med": m_shock["QErr_median"],
+                "Shock_P95": m_shock["QErr_p95"],
+                "RB_Med": m_rb["QErr_median"],
+                "RB_P95": m_rb["QErr_p95"],
+                "FT_Med": m_ft["QErr_median"],
+                "FT_P95": m_ft["QErr_p95"],
+                "RB_Time": t_rb,
+                "FT_Time": t_ft,
+                "Rebuilt_Count": n_bad,
+            }
+        )
+
+    # 4. Save Results
+    df = pd.DataFrame(summary_records)
+    df.to_csv(
+        out_dir / f"adaptation_breakdown_{args.init_dist}_{args.target_dist}.csv",
+        index=False,
+    )
+    print(f"\nSaved detailed breakdown to {out_dir}")
 
 
 if __name__ == "__main__":

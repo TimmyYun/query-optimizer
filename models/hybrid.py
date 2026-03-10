@@ -59,14 +59,16 @@ class HybridEstimator:
         self.models = models if models is not None else {}
         self.last_train_time = 0.0
 
+        # --- NEW: Locality Patches ---
+        # Stores (center, sigma, weight) for local corrections
+        self.local_patches = {}
+
         # Vectorized Data Storage
         self.b_lo = None
         self.b_hi = None
         self.b_count = None
         self.b_width = None
-        self.mod_types = (
-            None  # 0: id, 1: lin, 2: poly, 3: complex, 4: log, 5: pow, 6: poly3, 7: iso
-        )
+        self.mod_types = None
         self.lin_params = None
         self.poly_params = None
         self.poly3_params = None
@@ -77,92 +79,67 @@ class HybridEstimator:
     def feedback_update(
         self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.5
     ):
-        """
-        Refines buckets that caused high Q-Error using Binary Search for speed.
-        """
-        # Pre-calculate bucket boundaries for fast searching
         b_lo_vals = np.array([b.lo for b in self.buckets])
         b_hi_vals = np.array([b.hi for b in self.buckets])
-
-        # Track if we actually changed anything
         is_dirty = False
 
         for idx, q in enumerate(queries):
             if y_true_counts[idx] <= 0:
                 continue
 
-            # Calculate Q-Error
             q_err = max(
                 y_true_counts[idx] / (y_pred_counts[idx] + 1e-9),
                 y_pred_counts[idx] / (y_true_counts[idx] + 1e-9),
             )
 
             if q_err > error_threshold:
-                # OPTIMIZATION: Binary search for overlapping buckets
                 start_idx = np.searchsorted(b_hi_vals, q.low)
                 end_idx = np.searchsorted(b_lo_vals, q.high, side="right")
 
                 for i in range(start_idx, end_idx):
                     b = self.buckets[i]
-                    overlap_lo = max(q.low, b.lo)
-                    overlap_hi = min(q.high, b.hi)
+                    # Get normalized range within the bucket [0, 1]
+                    width = b.hi - b.lo + 1
+                    x_lo = np.clip((q.low - b.lo) / width, 0.0, 1.0)
+                    x_hi = np.clip((q.high - b.lo) / width, 0.0, 1.0)
 
-                    if overlap_lo <= overlap_hi:
-                        q_width = q.high - q.low + 1
-                        overlap_width = overlap_hi - overlap_lo + 1
-                        share = overlap_width / q_width
+                    # Calculate share of the query count belonging to this bucket
+                    q_width = q.high - q.low + 1
+                    overlap_width = min(q.high, b.hi) - max(q.low, b.lo) + 1
+                    share = overlap_width / q_width
 
-                        # Nudge the bucket
-                        self._fine_tune_bucket(
-                            i, overlap_hi, y_true_counts[idx] * share
-                        )
-                        is_dirty = True
+                    self._fine_tune_bucket(i, x_lo, x_hi, y_true_counts[idx] * share)
+                    is_dirty = True
 
-        # Only re-bake if the model actually learned something new
         if is_dirty:
             self._bake_vectorized_data()
 
-    def _fine_tune_bucket(self, b_idx, query_x_hi, y_true_count, alpha=0.3):
-        """
-        Nudges the model parameters without destroying the model type/shape.
-        """
+    def _fine_tune_bucket(self, b_idx, x_lo, x_hi, y_true_count, alpha=0.4):
         b = self.buckets[b_idx]
-        effective_b_count = max(b.count, y_true_count)
-        if effective_b_count == 0:
+        if b.count == 0:
             return
 
-        width = b.hi - b.lo + 1
-        x_norm = np.clip((query_x_hi - b.lo) / width, 0.0, 1.0)
-        suggested_cdf = np.clip(y_true_count / effective_b_count, 0.0, 1.0)
+        # 1. Calculate error in this specific range
+        current_pred_mass = (
+            self._predict_local_cdf(self.models.get(b_idx), x_hi)
+            - self._predict_local_cdf(self.models.get(b_idx), x_lo)
+        ) * b.count
 
-        model = self.models.get(b_idx)
+        error_mass = (y_true_count - current_pred_mass) / b.count
 
-        # CASE 1: Tuple-based Models (Linear, Power, Poly, Poly3, Log-Linear)
-        if isinstance(model, tuple):
-            m_type, params, intercept = model[0], model[1], model[2]
-            current_pred = self._predict_local_cdf(model, x_norm)
+        # 2. Add a Gaussian Patch
+        center = (x_lo + x_hi) / 2.0
+        # Sigma is proportional to the query width (minimum 0.05 to avoid spikes)
+        sigma = max(0.05, (x_hi - x_lo) / 2.0)
+        weight = error_mass * alpha
 
-            # Nudge the intercept to shift the entire curve up or down
-            diff = (suggested_cdf - current_pred) * alpha
-            self.models[b_idx] = (m_type, params, intercept + diff)
+        if b_idx not in self.local_patches:
+            self.local_patches[b_idx] = []
 
-        # CASE 2: Fourier MLP (Preserve via Online Backpropagation)
-        elif isinstance(model, FourierModelWrapper):
-            X_f = model.mapper.transform(np.array([[x_norm]]))
-            y_t = np.array([suggested_cdf])
-            # High-performance weight update
-            model.model.partial_fit(X_f, y_t)
-
-        # CASE 3: Isotonic Regression (Fallback with Linear Patch)
-        elif type(model).__name__ == "IsotonicRegression":
-            current_pred = self._predict_local_cdf(model, x_norm)
-            diff = (suggested_cdf - current_pred) * alpha
-            # We 'bridge' the isotonic gap with a linear anchor
-            self.models[b_idx] = ("linear", 1.0, (current_pred + diff) - x_norm)
-
-        # CASE 4: Uniform/None (Initialize as Linear)
-        else:
-            self.models[b_idx] = ("linear", 1.0, suggested_cdf - x_norm)
+        # Keep only the last 5 patches to prevent performance degradation
+        self.local_patches[b_idx].append((center, sigma, weight))
+        if len(self.local_patches[b_idx]) > 5:
+            self.local_patches[b_idx].pop(0)
 
     def train(
         self,
@@ -395,20 +372,19 @@ class HybridEstimator:
             queries.append(RangeQuery(lo, hi))
         return queries
 
-    def _predict_local_cdf_vec(self, model, x_norm_arr: np.ndarray) -> np.ndarray:
-        """
-        Maps the 6 model types to their mathematical formulas for batch prediction.
-        """
+    def _predict_local_cdf_vec(
+        self, model, x_norm_arr: np.ndarray, b_idx: int = -1
+    ) -> np.ndarray:
+        # --- Base Model Prediction ---
         if model is None:
-            return np.clip(x_norm_arr, 0.0, 1.0)
-
-        if isinstance(model, tuple):
+            base_pred = np.clip(x_norm_arr, 0.0, 1.0)
+        elif isinstance(model, tuple):
             m_type = model[0]
             if m_type == "linear":
-                return np.clip(x_norm_arr * model[1] + model[2], 0.0, 1.0)
+                base_pred = np.clip(x_norm_arr * model[1] + model[2], 0.0, 1.0)
             elif m_type == "poly3":
                 p, inter = model[1], model[2]
-                return np.clip(
+                base_pred = np.clip(
                     inter
                     + p[0] * x_norm_arr
                     + p[1] * (x_norm_arr**2)
@@ -417,26 +393,28 @@ class HybridEstimator:
                     1.0,
                 )
             elif m_type == "power":
-                return np.clip(model[1] * np.sqrt(x_norm_arr) + model[2], 0.0, 1.0)
-            elif m_type == "poly":
-                p, inter = model[1], model[2]
-                return np.clip(
-                    inter + p[0] * x_norm_arr + p[1] * (x_norm_arr**2), 0.0, 1.0
+                base_pred = np.clip(model[1] * np.sqrt(x_norm_arr) + model[2], 0.0, 1.0)
+            else:  # Default Linear
+                base_pred = np.clip(x_norm_arr * model[1] + model[2], 0.0, 1.0)
+        elif type(model).__name__ == "IsotonicRegression":
+            base_pred = np.clip(model.predict(x_norm_arr), 0.0, 1.0)
+        else:
+            base_pred = np.clip(
+                model.predict(x_norm_arr.reshape(-1, 1)).flatten(), 0.0, 1.0
+            )
+
+        # --- NEW: Apply Local Patches ---
+        if b_idx != -1 and b_idx in self.local_patches:
+            for center, sigma, weight in self.local_patches[b_idx]:
+                # Gaussian Correction: weight * exp(-0.5 * ((x - center)/sigma)^2)
+                # Note: We integrate this to keep it as a CDF nudge,
+                # but for narrow patches, a simple Gaussian scaled by the sigmoid works well.
+                correction = weight * np.exp(
+                    -0.5 * ((x_norm_arr - center) / sigma) ** 2
                 )
-            elif m_type == "log_linear":
-                return np.clip(
-                    model[1] * np.log(x_norm_arr + 1e-7) + model[2], 0.0, 1.0
-                )
+                base_pred += correction
 
-        # Neural Net or Isotonic
-        if type(model).__name__ == "IsotonicRegression":
-            return np.clip(model.predict(x_norm_arr), 0.0, 1.0)
-
-        if isinstance(model, FourierModelWrapper):
-            # Flatten to handle both 1D and 2D batch inputs from predict_batch
-            return np.clip(model.predict(x_norm_arr.reshape(-1, 1)).flatten(), 0.0, 1.0)
-
-        return np.clip(x_norm_arr, 0.0, 1.0)
+        return np.clip(base_pred, 0.0, 1.0)
 
     def _eval_model_q_error_vec(
         self, model, queries_lo, queries_hi, bucket, b_ps, b_lo, width
