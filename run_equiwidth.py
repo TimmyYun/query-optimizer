@@ -15,6 +15,19 @@ def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
     n_bins = args.buckets if args.buckets is not None else n_bins_data
 
+    # --- NEW: Автоматическое определение пути к ворклоаду ---
+    workload_path = Path(args.workload)
+    if not workload_path.exists():
+        # Если передан не путь, а число (count), ищем внутри папки датасета
+        potential_path = Path(args.dataset) / f"workload_driven_{args.workload}.csv"
+        if potential_path.exists():
+            workload_path = potential_path
+        else:
+            raise FileNotFoundError(
+                f"Workload not found at {args.workload} or {potential_path}"
+            )
+    # -------------------------------------------------------
+
     # Build Histogram
     t0 = time.perf_counter()
     ew_hist = EquiWidthHistogram.build_from_sample(
@@ -23,10 +36,7 @@ def run_logic(args, out_dir, metadata):
     build_time = time.perf_counter() - t0
 
     # Load Workload
-    # y_true_sel is selectivity (fraction of N)
-    queries, y_true_sel = load_and_filter_workload(args.workload, mn, mx, freq)
-
-    # Convert selectivity to absolute counts
+    queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
     y_true_counts = y_true_sel * N
 
     # Evaluate
@@ -34,16 +44,12 @@ def run_logic(args, out_dir, metadata):
     y_pred_counts = ew_hist.predict_batch(queries)
     infer_time = time.perf_counter() - t0
 
-    # --- FIX: SANITY FLOOR (Никогда не предсказываем и не имеем 0 строк) ---
     y_pred_counts = np.maximum(y_pred_counts, 1.0)
     y_true_counts = np.maximum(y_true_counts, 1.0)
-    # -----------------------------------------------------------------------
 
-    # Convert safely clamped counts back to selectivity for standard summarize()
     y_pred = y_pred_counts / N
     y_true_safe = y_true_counts / N
 
-    # Summarize
     m = summarize(y_true_safe, y_pred, "Equi-Width")
     metrics = {
         "build_time": build_time,
@@ -56,11 +62,11 @@ def run_logic(args, out_dir, metadata):
     }
 
     print(
-        f"Equi-Width: Median QErr={metrics['median_q_error']:.4f}, Build={build_time:.4f}s, Inf={infer_time:.4f}s"
+        f"Equi-Width: Median QErr={metrics['median_q_error']:.4f}, Build={build_time:.4f}s"
     )
 
     save_benchmark_results(
-        out_dir, Path(args.workload).stem, "EquiWidth", queries, y_true_safe, y_pred, metrics
+        out_dir, workload_path.stem, "EquiWidth", queries, y_true_safe, y_pred, metrics
     )
 
 

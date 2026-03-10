@@ -66,7 +66,7 @@ def plot_query_distribution(dist_dir: Path, workload_file: Path):
         color="salmon",
         alpha=0.7,
         edgecolor="black",
-        linewidth=0.2
+        linewidth=0.2,
     )
 
     plt.xlabel("Bucket Index (from histogram_buckets.csv)")
@@ -88,8 +88,12 @@ def plot_query_distribution(dist_dir: Path, workload_file: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Plot query distribution for generated workloads.")
-    parser.add_argument("--rows", type=str, default="60000000_hard", help="Dataset folder name.")
+    parser = argparse.ArgumentParser(
+        description="Plot query distribution for generated workloads."
+    )
+    parser.add_argument(
+        "--rows", type=str, default="60000000_hard", help="Dataset folder name."
+    )
     args = parser.parse_args()
 
     base_dir = Path("data/generated") / args.rows

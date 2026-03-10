@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import time
 from pathlib import Path
-
 import numpy as np
 from models import EquiWidthHistogram, EquiHistLearner, summarize
 from benchmark_utils import (
@@ -16,7 +15,18 @@ def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
     n_bins = args.buckets if args.buckets is not None else n_bins_data
 
-    # Build Initial Histogram (Equi-Width)
+    # --- NEW: Автоматическое определение пути к ворклоаду ---
+    workload_path = Path(args.workload)
+    if not workload_path.exists():
+        potential_path = Path(args.dataset) / f"workload_driven_{args.workload}.csv"
+        if potential_path.exists():
+            workload_path = potential_path
+        else:
+            raise FileNotFoundError(
+                f"Workload not found at {args.workload} or {potential_path}"
+            )
+    # -------------------------------------------------------
+
     t0 = time.perf_counter()
     ew_hist = EquiWidthHistogram.build_from_sample(
         mn=mn, mx=mx, bins=n_bins, sample=sample, total_rows=N
@@ -25,31 +35,18 @@ def run_logic(args, out_dir, metadata):
 
     eh_learner = EquiHistLearner(ew_hist.buckets, learning_rate=args.lr)
 
-    # Load Workload
-    queries, y_true_raw = load_and_filter_workload(args.workload, mn, mx, freq)
-
-    # --- FIX: SANITY FLOOR для реальности ---
-    # Реальных строк не может быть 0 (если запрос валидный)
+    queries, y_true_raw = load_and_filter_workload(str(workload_path), mn, mx, freq)
     true_cardinalities = np.maximum(y_true_raw * N, 1.0)
     y_true_safe = true_cardinalities / N
-    # ----------------------------------------
 
-    # Evaluate sequentially (No Batching)
     y_pred = []
     inf_time_total = 0.0
     update_time_total = 0.0
 
     for q, truth in zip(queries, true_cardinalities):
         t0 = time.perf_counter()
-        pred_val = eh_learner.predict(q)
-
-        # --- FIX: SANITY FLOOR для предикта ---
-        # База данных никогда не оценивает запрос в 0 строк
-        pred_val = max(pred_val, 1.0)
-        # ----------------------------------------
-
+        pred_val = max(eh_learner.predict(q), 1.0)
         inf_time_total += time.perf_counter() - t0
-
         y_pred.append(pred_val / N)
 
         t0 = time.perf_counter()
@@ -57,9 +54,8 @@ def run_logic(args, out_dir, metadata):
         update_time_total += time.perf_counter() - t0
 
     y_pred = np.array(y_pred)
-
-    # Summarize (Используем y_true_safe!)
     m = summarize(y_true_safe, y_pred, "EquiHist")
+
     metrics = {
         "initial_build_time": initial_build_time,
         "update_time_total": update_time_total,
@@ -77,7 +73,7 @@ def run_logic(args, out_dir, metadata):
     )
 
     save_benchmark_results(
-        out_dir, Path(args.workload).stem, "EquiHist", queries, y_true_safe, y_pred, metrics
+        out_dir, workload_path.stem, "EquiHist", queries, y_true_safe, y_pred, metrics
     )
 
 

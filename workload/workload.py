@@ -6,6 +6,7 @@ import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
 import pickle
+
 """
 Workload Module
 ===============
@@ -77,7 +78,7 @@ def generate_workload(
 
 
 def generate_data_driven_workload(
-        n: int, sample: np.ndarray, seed: int = 42, max_width: int = 1000
+    n: int, sample: np.ndarray, seed: int = 42, max_width: int = 1000
 ) -> List[RangeQuery]:
     """
     НОВАЯ ЛОГИКА: Генерирует запросы на основе реальных данных из сэмпла.
@@ -102,6 +103,7 @@ def generate_data_driven_workload(
         queries.append(RangeQuery(int(l), int(r)))
 
     return queries
+
 
 def plot_workload_distribution(
     queries: list,
@@ -257,13 +259,20 @@ def process_single_dist(dataset_dir: Path, count: int, max_width: int):
     print(f"Saved to: {out_path}")
     return True
 
+
 def main():
     parser = argparse.ArgumentParser(description="Generate workload queries.")
     parser.add_argument("--count", type=int, required=True, help="Number of queries.")
-    parser.add_argument("--domain-max", type=int, default=1_000_000, help="Max domain value.")
+    parser.add_argument(
+        "--domain-max", type=int, default=1_000_000, help="Max domain value."
+    )
     parser.add_argument("--rows", type=str, help="Dataset folder (e.g. 60000000).")
-    parser.add_argument("--dist", type=str, help="Optional: Specific distribution only.")
-    parser.add_argument("--wide", action="store_true", help="Generate wide random queries.")
+    parser.add_argument(
+        "--dist", type=str, help="Optional: Specific distribution only."
+    )
+    parser.add_argument(
+        "--wide", action="store_true", help="Generate wide random queries."
+    )
     parser.add_argument("--max-width", type=int, default=1000, help="Max query width.")
 
     args = parser.parse_args()
@@ -300,7 +309,9 @@ def main():
         workload_dir = Path("data/workloads")
         workload_dir.mkdir(parents=True, exist_ok=True)
         mode_name = "wide" if args.wide else "narrow"
-        queries = generate_workload(args.count, 0, args.domain_max, wide=args.wide, max_width=args.max_width)
+        queries = generate_workload(
+            args.count, 0, args.domain_max, wide=args.wide, max_width=args.max_width
+        )
         out_path = workload_dir / f"{mode_name}_{args.count}.csv"
         save_workload_csv(queries, out_path)
         print(f"Successfully saved to: {out_path}")

@@ -104,7 +104,9 @@ def run_logic(args, out_dir, metadata):
     infer_time = time.perf_counter() - t0
 
     # --- FIX: SANITY FLOOR (Защита от нулей) ---
-    y_true_counts = y_true_sel * N  # переводим селективность в абсолютное количество строк
+    y_true_counts = (
+        y_true_sel * N
+    )  # переводим селективность в абсолютное количество строк
 
     y_pred_counts = np.maximum(y_pred_counts, 1.0)
     y_true_counts = np.maximum(y_true_counts, 1.0)
@@ -136,8 +138,15 @@ def run_logic(args, out_dir, metadata):
     )
 
     save_benchmark_results(
-        out_dir, Path(args.workload).stem, "Hybrid", queries, y_true_safe, y_pred_safe, metrics
+        out_dir,
+        Path(args.workload).stem,
+        "Hybrid",
+        queries,
+        y_true_safe,
+        y_pred_safe,
+        metrics,
     )
+
 
 def main():
     parser = get_common_parser("Run Hybrid Model Benchmark")

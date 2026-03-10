@@ -403,11 +403,11 @@ class HybridEstimator:
         return np.median(q_errs), np.percentile(q_errs, 95)
 
     def _train_adaptive_models(
-            self,
-            rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
-            freq: np.ndarray,
-            mn: int,
-            rng: np.random.Generator,
+        self,
+        rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
+        freq: np.ndarray,
+        mn: int,
+        rng: np.random.Generator,
     ) -> Tuple[Dict[int, Any], float]:
         models = {}
         t0 = time.perf_counter()

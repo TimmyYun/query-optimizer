@@ -28,7 +28,9 @@ def run_analysis_for_file(workload_path: Path, output_dir: Path, dist_name: str)
     plt.fill_between(range(len(coverage)), coverage, color="purple", alpha=0.3)
     plt.xlabel("Domain Value")
     plt.ylabel("Number of Overlapping Queries")
-    plt.title(f"Workload Coverage Density: {dist_name}\n(Targeting high-density data zones)")
+    plt.title(
+        f"Workload Coverage Density: {dist_name}\n(Targeting high-density data zones)"
+    )
     plt.grid(True, alpha=0.3)
     plt.ticklabel_format(style="plain", axis="x")
     plt.savefig(output_dir / "coverage_density.png")
@@ -62,8 +64,12 @@ def run_analysis_for_file(workload_path: Path, output_dir: Path, dist_name: str)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate plots for all workloads in a dataset folder.")
-    parser.add_argument("--rows", type=str, required=True, help="Dataset folder (e.g. 60000000).")
+    parser = argparse.ArgumentParser(
+        description="Generate plots for all workloads in a dataset folder."
+    )
+    parser.add_argument(
+        "--rows", type=str, required=True, help="Dataset folder (e.g. 60000000)."
+    )
     args = parser.parse_args()
 
     base_dir = Path("data/generated") / args.rows
