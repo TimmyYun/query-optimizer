@@ -113,11 +113,29 @@ def main():
     reports_dir.mkdir(exist_ok=True)
 
     dm = DatasetManager()
+
+    # --- НОВАЯ ЛОГИКА: Автоматическое определение пути к ворклоаду ---
+    workload_path = Path(args.workload)
+    if not workload_path.exists():
+        # Ищем ворклоад в папке начального распределения (init-dist)
+        # Путь: data/generated/60000000/normal/workload_driven_1000000.csv
+        init_dist_dir = dm.base_path / "generated" / args.dataset / args.init_dist
+        potential_path = init_dist_dir / f"workload_driven_{args.workload}.csv"
+
+        if potential_path.exists():
+            workload_path = potential_path
+        else:
+            raise FileNotFoundError(
+                f"Workload not found at {args.workload} or {potential_path}"
+            )
+    print(f"Using workload: {workload_path}")
+    # --------------------------------------------------------------
+
     shift_dir = (
-        dm.base_path
-        / "generated"
-        / args.dataset
-        / f"shift_{args.init_dist}_to_{args.target_dist}"
+            dm.base_path
+            / "generated"
+            / args.dataset
+            / f"shift_{args.init_dist}_to_{args.target_dist}"
     )
 
     if not shift_dir.exists():
@@ -139,7 +157,8 @@ def main():
 
     hybrid_est.report_models(file_path=reports_dir / "models_shift_0.0.txt")
 
-    queries, _ = load_and_filter_workload(args.workload, GLOBAL_MIN, GLOBAL_MAX, i_freq)
+    # Используем найденный workload_path
+    queries, _ = load_and_filter_workload(str(workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
     summary_records = []
 
     # ПРОГОН ПО ВСЕМ ШАГАМ ДРИФТА
