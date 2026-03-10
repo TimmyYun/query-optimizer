@@ -29,7 +29,9 @@ poetry run python data/datasets.py --rows 60000000 --all
 DOMAIN_MAX = 1_000_000
 
 
-def plot_sample_distribution(sample: np.ndarray, dist_name: str, output_path: Path, n_bins: int):
+def plot_sample_distribution(
+    sample: np.ndarray, dist_name: str, output_path: Path, n_bins: int
+):
     """
     Plots the distribution of the 100k reservoir sample.
     Used to verify that the sample is a 'mini-me' of the 60M dataset.
@@ -54,7 +56,7 @@ def plot_sample_distribution(sample: np.ndarray, dist_name: str, output_path: Pa
         edgecolor="black",
         alpha=0.7,
         log=use_log,
-        label="Reservoir Sample (100k)"
+        label="Reservoir Sample (100k)",
     )
 
     plt.title(f"Sample Distribution: {dist_name} (FD Bins: {n_bins})")
@@ -77,6 +79,7 @@ def plot_sample_distribution(sample: np.ndarray, dist_name: str, output_path: Pa
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(output_path, dpi=150)
     plt.close()
+
 
 def clamp_int(x, lo, hi):
     """Clamps an integer x between lo and hi (inclusive)."""
@@ -140,7 +143,9 @@ def gen_values(
         ndv_target = min(300_000, span)
         if use_micro_dist:
             v = lo + shift + rng.zipf(a=1.4, size=n)
-            v = np.clip(v, lo, hi) # This ensures it spreads across the whole 300k range
+            v = np.clip(
+                v, lo, hi
+            )  # This ensures it spreads across the whole 300k range
             # Macro: Global Zipfian cliff/tail
             # macro_ranks = np.arange(1, ndv_target + 1)
             # macro_probs = 1.0 / (macro_ranks**1.0)
@@ -247,7 +252,7 @@ def scan_min_max_count(
 
 
 def build_frequency_and_sample(
-        csv_path: Path, mn: int, mx: int, n_rows: int, sample_size: int, seed: int
+    csv_path: Path, mn: int, mx: int, n_rows: int, sample_size: int, seed: int
 ) -> Tuple[np.ndarray, np.ndarray]:
     width = mx - mn + 1
     if width <= 0:
@@ -261,12 +266,12 @@ def build_frequency_and_sample(
 
     # Bring back the high-performance parameters
     for ch in pd.read_csv(
-            csv_path,
-            header=None,
-            names=["v"],
-            dtype="int64",
-            chunksize=1_000_000,
-            engine="c",
+        csv_path,
+        header=None,
+        names=["v"],
+        dtype="int64",
+        chunksize=1_000_000,
+        engine="c",
     ):
         vals = ch["v"].to_numpy()
 
@@ -292,6 +297,7 @@ def build_frequency_and_sample(
         sample = np.array([], dtype=np.int64)
 
     return freq, sample
+
 
 def load_imdb_lengths(csv_path: Path) -> np.ndarray:
     """Loads review lengths from the IMDB dataset."""
