@@ -208,48 +208,44 @@ def aggregate_summaries(results_dir="results"):
         print(f"Processing Experiment {experiment_id}...")
         all_data = []
 
-        for ds_parent_dir in experiment_dir.iterdir():
-            if not ds_parent_dir.is_dir():
-                continue
+        # Handle nested dataset dirs like "60000000_hard/uniform"
+        # we can use glob to find all summary_*.json files within the experiment dir
+        for summary_json_path in experiment_dir.rglob("summary_*.json"):
+            try:
+                with open(summary_json_path, "r") as f:
+                    summary = json.load(f)
+                    model = summary["model"]
+                    wl_name = summary["wl_name"]
+                    metrics = summary["metrics"]
 
-            # Handle nested dataset dirs like "60000000_hard/uniform"
-            # we can use glob to find all summary_*.json files within the experiment dir
-            for summary_json_path in experiment_dir.rglob("summary_*.json"):
-                try:
-                    with open(summary_json_path, "r") as f:
-                        summary = json.load(f)
-                        model = summary["model"]
-                        wl_name = summary["wl_name"]
-                        metrics = summary["metrics"]
+                    # Extract dataset name based on directory structure: exp_dir/ds_name/wl_name/summary...
+                    # Rel path from exp_dir
+                    rel_path = summary_json_path.relative_to(experiment_dir)
+                    # Dataset name could be multiple parts, e.g. "60000000_hard/uniform".
+                    # It's everything before the last part (summary.json)
+                    if len(rel_path.parts) >= 2:
+                        dataset_name = "/".join(rel_path.parts[:-1])
+                    else:
+                        dataset_name = rel_path.parts[0]
 
-                        # Extract dataset name based on directory structure: exp_dir/ds_name/wl_name/summary...
-                        # Rel path from exp_dir
-                        rel_path = summary_json_path.relative_to(experiment_dir)
-                        # Dataset name could be multiple parts, e.g. "60000000_hard/uniform".
-                        # It's everything before the last part (summary.json)
-                        if len(rel_path.parts) >= 2:
-                            dataset_name = "/".join(rel_path.parts[:-1])
-                        else:
-                            dataset_name = rel_path.parts[0]
-
-                        all_data.append(
-                            {
-                                "Dataset": dataset_name,
-                                "Workload": wl_name,
-                                "Model": model,
-                                "Avg Q-Error": metrics.get("avg_q_error"),
-                                "25% Q-Error": metrics.get("p25_q_error"),
-                                "75% Q-Error": metrics.get("p75_q_error"),
-                                "95% Q-Error": metrics.get("p95_q_error"),
-                                "Median Q-Error": metrics.get("median_q_error"),
-                                "Training Time (s)": metrics.get("train_time")
-                                or metrics.get("build_time")
-                                or metrics.get("total_train_time"),
-                                "Inference Time (s)": metrics.get("infer_time"),
-                            }
-                        )
-                except Exception as e:
-                    print(f"  Warning: Could not read {summary_json_path}: {e}")
+                    all_data.append(
+                        {
+                            "Dataset": dataset_name,
+                            "Workload": wl_name,
+                            "Model": model,
+                            "Avg Q-Error": metrics.get("avg_q_error"),
+                            "25% Q-Error": metrics.get("p25_q_error"),
+                            "75% Q-Error": metrics.get("p75_q_error"),
+                            "95% Q-Error": metrics.get("p95_q_error"),
+                            "Median Q-Error": metrics.get("median_q_error"),
+                            "Training Time (s)": metrics.get("train_time")
+                            or metrics.get("build_time")
+                            or metrics.get("total_train_time"),
+                            "Inference Time (s)": metrics.get("infer_time"),
+                        }
+                    )
+            except Exception as e:
+                print(f"  Warning: Could not read {summary_json_path}: {e}")
 
         if not all_data:
             continue

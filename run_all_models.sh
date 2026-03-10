@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Multi-Model Execution Script (Smart Workload)
+# Multi-Model Execution Script (Smart Workload & Auto-Discovery)
 # ===============================================
 
 if [ -z "$1" ]; then
@@ -16,6 +16,7 @@ COUNT=""
 BUCKETS=""
 EXTRA_ARGS=""
 
+# Парсинг аргументов
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dataset)
@@ -23,7 +24,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --count)
-            COUNT="$2" # Например, 100000
+            COUNT="$2"
             shift 2
             ;;
         --buckets)
@@ -42,25 +43,51 @@ if [ -z "$DATASET" ] || [ -z "$COUNT" ]; then
     exit 1
 fi
 
-run_model() {
-    local script=$1
-    local name=$2
-    echo -e "\n>>> Running $name Baseline <<<"
+# Внутренняя функция для запуска набора моделей
+execute_suite() {
+    local target_path=$1
+    local current_exp_name=$2
 
-    # Мы передаем COUNT в параметр --workload, а Python-скрипт сам найдет файл
-    local cmd="poetry run python \"$script\" \
-        --experiment-name \"$EXP_NAME\" \
-        --dataset \"$DATASET\" \
-        --workload \"$COUNT\""
+    run_model() {
+        local script=$1
+        local name=$2
+        echo -e "\n>>> Running $name Baseline for $target_path <<<"
 
-    if [ ! -z "$BUCKETS" ]; then
-        cmd="$cmd --buckets $BUCKETS"
-    fi
+        # Мы передаем только EXP_NAME. Python сам добавит имя датасета в путь.
+        local cmd="poetry run python \"$script\" \
+            --experiment-name \"$current_exp_name\" \
+            --dataset \"$target_path\" \
+            --workload \"$COUNT\""
 
-    cmd="$cmd $EXTRA_ARGS"
-    eval $cmd
+        if [ ! -z "$BUCKETS" ]; then
+            cmd="$cmd --buckets $BUCKETS"
+        fi
+
+        cmd="$cmd $EXTRA_ARGS"
+        eval $cmd
+    }
+
+    run_model "run_equiwidth.py" "Equi-Width"
+    run_model "run_equihist.py" "Equi-Hist"
+    run_model "run_hybrid.py" "Hybrid"
 }
 
-run_model "run_equiwidth.py" "Equi-Width"
-run_model "run_equihist.py" "Equi-Hist"
-run_model "run_hybrid.py" "Hybrid"
+# --- ЛОГИКА АВТООБНАРУЖЕНИЯ ---
+if [ -f "${DATASET}/meta.pkl" ]; then
+    # Если это одиночный датасет (файл meta.pkl найден в корне)
+    execute_suite "$DATASET" "$EXP_NAME"
+else
+    # Если это папка с набором распределений
+    echo "Scanning $DATASET for distributions..."
+    for d in "$DATASET"/*/ ; do
+        if [ -f "${d}meta.pkl" ]; then
+            # Передаем исходный EXP_NAME.
+            # Python-скрипт сам создаст папку распределения внутри results/$EXP_NAME/
+            execute_suite "$d" "$EXP_NAME"
+        fi
+    done
+fi
+
+echo -e "\n===================================================="
+echo "All tasks for $EXP_NAME Completed."
+echo "===================================================="
