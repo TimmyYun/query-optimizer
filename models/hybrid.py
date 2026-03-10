@@ -74,6 +74,80 @@ class HybridEstimator:
         self.power_params = None
         self.complex_models = {}
 
+    def feedback_update(
+        self,
+        queries: List[RangeQuery],
+        y_true: np.ndarray,  # These are raw counts from the DB
+        y_pred: np.ndarray,  # These are raw counts from our model
+        N: int,  # Total rows in the table
+        error_threshold: float = 2.0,
+    ):
+        q_errors = np.maximum(y_true / (y_pred + 1e-9), y_pred / (y_true + 1e-9))
+        bad_indices = np.where(q_errors > error_threshold)[0]
+
+        if len(bad_indices) == 0:
+            return
+
+        for idx in bad_indices:
+            q = queries[idx]
+            actual_sel = y_true[idx] / N
+
+            # Find the buckets that this query touched
+            for i in range(len(self.buckets)):
+                b = self.buckets[i]
+                if q.low <= b.hi and q.high >= b.lo:
+                    # Logic: We now know a "True Point" in this bucket's CDF.
+                    # We 'nudge' the specific model for this bucket.
+                    self._fine_tune_bucket(i, q, actual_sel, N)
+
+        # After nudging, we must re-bake the vectorized arrays
+        self._bake_vectorized_data()
+
+    def _fine_tune_bucket(
+        self,
+        b_idx: int,
+        query: RangeQuery,
+        actual_sel: float,
+        N: int,
+        alpha: float = 0.3,
+    ):
+        """
+        Adjusts a single bucket's model using a learning rate (alpha).
+        alpha = 1.0: Trust the new query 100% (Overfits).
+        alpha = 0.1: Gently nudge the model (Stable).
+        """
+        b = self.buckets[b_idx]
+
+        # 1. Handle the 'Empty Bucket' Trap
+        # If the sample thought the bucket was empty (0), we can't divide by it.
+        # We assume the bucket now has at least enough rows to satisfy this query.
+        effective_b_count = max(b.count, actual_sel * N)
+        if effective_b_count == 0:
+            return  # Truly no data here
+
+        width = b.hi - b.lo + 1
+        x_norm = np.clip((query.high - b.lo) / width, 0.0, 1.0)
+
+        # 2. Calculate the 'Target' CDF the query suggests
+        # This is the % of this bucket that is covered by this query
+        suggested_cdf = np.clip(actual_sel * (N / effective_b_count), 0.0, 1.0)
+
+        # 3. Apply Learning Rate (Smoothing)
+        # We calculate the current prediction to see how far off we were
+        current_cdf = self._predict_local_cdf(self.models.get(b_idx), x_norm)
+
+        # New CDF = (1 - alpha) * Old + (alpha) * New
+        target_cdf = (1 - alpha) * current_cdf + (alpha) * suggested_cdf
+
+        # 4. Update Model Parameters (Linear Nudge)
+        # We default to a linear model for the fine-tune to keep it fast
+        # Solving for new_intercept: target_cdf = (slope * x_norm) + intercept
+        # We keep the slope (m) at 1.0 (Uniform) for unknown areas.
+        m = 1.0
+        new_c = target_cdf - (m * x_norm)
+
+        self.models[b_idx] = ("linear", m, new_c)
+
     def train(
         self,
         freq: np.ndarray,
