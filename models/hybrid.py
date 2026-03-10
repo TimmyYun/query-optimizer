@@ -77,7 +77,7 @@ class HybridEstimator:
         self.complex_models = {}
 
     def feedback_update(
-        self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.5
+        self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.1
     ):
         b_lo_vals = np.array([b.lo for b in self.buckets])
         b_hi_vals = np.array([b.hi for b in self.buckets])
