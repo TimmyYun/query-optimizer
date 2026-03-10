@@ -113,6 +113,10 @@ def main():
     out_dir = setup_out_dir(args, ds_out_name)
     rng = np.random.default_rng(42)
 
+    # --- NEW: Create a directory for the model reports ---
+    reports_dir = out_dir / "model_reports"
+    reports_dir.mkdir(exist_ok=True)
+
     # 1. Load Data
     i_mn, i_mx, i_N, i_freq, i_sample, i_k, _, _ = load_dataset_meta(
         args.dataset, args.init_dist
@@ -127,6 +131,9 @@ def main():
     init_hist = EquiWidthHistogram.build_from_sample(i_mn, i_mx, i_k, i_sample, i_N)
     hybrid_est = HybridEstimator(init_hist.buckets)
     hybrid_est.train(i_est_freq, i_mn, args.points, rng)
+
+    # --- NEW: Log Initial Models (0% Shift) ---
+    hybrid_est.report_models(file_path=reports_dir / "models_shift_0.0.txt")
 
     queries, _ = load_and_filter_workload(args.workload, GLOBAL_MIN, GLOBAL_MAX, i_freq)
     summary_records = []
@@ -160,7 +167,6 @@ def main():
         )
         current_est_freq = get_sampled_freq(mixed_sample, i_mn, current_N, len(i_freq))
 
-        # --- NEW: VISUALIZATION ---
         plot_shift_state(current_freq, current_est_freq, shift_pct, out_dir, args.init_dist, args.target_dist)
 
         # --- STAGE 0: SHOCK (Measurement after Drift) ---
@@ -174,7 +180,6 @@ def main():
 
         if step > 0:
             # --- STAGE 1: FINETUNE (Precision Alignment) ---
-            # We first try to nudge parameters based on query feedback
             t0 = time.perf_counter()
             hybrid_est.feedback_update(queries, y_true_counts, y_pred_shock, current_N)
             t_ft = time.perf_counter() - t0
@@ -182,7 +187,6 @@ def main():
             m_ft = summarize(y_true_sel, y_pred_ft / current_N, f"FT_{shift_pct:.1f}")
 
             # --- STAGE 2: REBUILD (Structural Tournament) ---
-            # Identify buckets that are STILL bad after finetuning
             bad_indices = detect_bad_buckets(
                 hybrid_est, queries, y_true_counts, y_pred_ft
             )
@@ -198,7 +202,10 @@ def main():
                     y_true_sel, y_pred_rb / current_N, f"RB_{shift_pct:.1f}"
                 )
 
-        # Log and Print (Note the order: Shock -> FT -> RB)
+            # --- NEW: Log Models after Rebuild ---
+            hybrid_est.report_models(file_path=reports_dir / f"models_shift_{shift_pct:.1f}.txt")
+
+        # Log and Print
         print(
             f"Shift {shift_pct:>4.0%}: [Shock: {m_shock['QErr_median']:.2f}] -> "
             f"[FT: {m_ft['QErr_median']:.2f}] -> [RB: {m_rb['QErr_median']:.2f}] | Rebuilt: {n_rebuilt}"
@@ -220,7 +227,6 @@ def main():
         )
 
     pd.DataFrame(summary_records).to_csv(out_dir / f"adaptation_ft_rb.csv", index=False)
-
 
 if __name__ == "__main__":
     main()

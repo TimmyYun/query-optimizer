@@ -425,10 +425,10 @@ class HybridEstimator:
         t0 = time.perf_counter()
 
         # Relaxed exit threshold to skip slow neural nets when shifting to Uniform
-        EARLY_EXIT_THRESHOLD = 1.1
+        EARLY_EXIT_THRESHOLD = 1.3
         COMPLEX_MODEL_THRESHOLD = 1.05
 
-        def train_bucket(i):
+        def train_worker(i):
             train_rows, val_rows = rows_data[i]
             bucket = self.buckets[i]
             if not train_rows or bucket.count == 0:
@@ -464,11 +464,13 @@ class HybridEstimator:
                 )
                 return q_m, q_95, mdl
 
+            # 1. Identity (Uniform)
             best_q, best_p95, best_model = check(None)
             if best_q < EARLY_EXIT_THRESHOLD:
                 return i, best_model
 
             candidates = []
+            # 2. Linear & Power
             try:
                 m_lin = Ridge(alpha=1.0).fit(X_train, y_train, sample_weight=weights)
                 lin_mdl = ("linear", m_lin.coef_[0], m_lin.intercept_)
@@ -493,6 +495,7 @@ class HybridEstimator:
             if best_q < EARLY_EXIT_THRESHOLD:
                 return i, best_model
 
+            # 3. Try Cubic Poly
             try:
                 poly_calc = PolynomialFeatures(degree=3, include_bias=False)
                 X_poly_train = poly_calc.fit_transform(X_train)
@@ -507,6 +510,7 @@ class HybridEstimator:
             if best_q < EARLY_EXIT_THRESHOLD:
                 return i, best_model
 
+            # 4. Try Isotonic Regression
             try:
                 iso_mdl = IsotonicRegression(out_of_bounds="clip").fit(X_train.flatten(), y_train)
                 q, p95, _ = check(iso_mdl)
@@ -515,6 +519,7 @@ class HybridEstimator:
             except:
                 pass
 
+            # 5. Complex Fallback (Fourier MLP)
             if best_q > COMPLEX_MODEL_THRESHOLD:
                 try:
                     mapper = FourierFeatureMapper(num_bands=32, max_freq=1000.0)
@@ -529,12 +534,11 @@ class HybridEstimator:
 
             return i, best_model
 
-        # --- EXECUTE IN PARALLEL ---
+        # --- THIS IS THE MAGIC: PARALLEL EXECUTION ---
+        # It assigns the 873 buckets to different CPU cores simultaneously
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            # Submit all bucket jobs to the thread pool
-            futures = [executor.submit(train_bucket, i) for i in rows_data.keys()]
+            futures = [executor.submit(train_worker, i) for i in rows_data.keys()]
 
-            # Collect results as they finish
             for future in concurrent.futures.as_completed(futures):
                 i, best_model = future.result()
                 models[i] = best_model
