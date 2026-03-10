@@ -125,13 +125,17 @@ class HybridEstimator:
                 pred_m = 1.0  # Prevent division by zero
 
             ratio = true_m / pred_m
-
-            # Clip the ratio to prevent insane single-batch explosions
             ratio = np.clip(ratio, 0.2, 5.0)
 
-            # Exponential Moving Average for smooth adaptation
             b = self.buckets[i]
-            new_count = b.count * (1.0 - alpha) + (b.count * ratio) * alpha
+
+            # --- FIX: ZERO-COUNT REVIVAL ---
+            if b.count < 1.0 and true_m > 0:
+                # Если бакет был "мертв" (0 строк в сэмпле), но реальные данные есть
+                new_count = true_m * alpha
+            else:
+                # Стандартное EMA обновление
+                new_count = b.count * (1.0 - alpha) + (b.count * ratio) * alpha
 
             b.count = max(0.0, new_count)
             is_dirty = True
