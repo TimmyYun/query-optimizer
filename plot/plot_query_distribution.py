@@ -2,17 +2,18 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
+import argparse
 
-WORKLOAD_TYPE = "wide"
-DATA_DIR = Path("data/generated/60000000_simple")
-WORKLOAD_FILE = Path(f"workload/1000000/{WORKLOAD_TYPE}/workload.csv")
+# Глобальный лимит домена
+DOMAIN_MAX = 1_000_000
 
 
-def plot_query_distribution(dist_name):
-    print(f"[{dist_name}] Starting processing...")
+def plot_query_distribution(dist_dir: Path, workload_file: Path):
+    dist_name = dist_dir.name
+    print(f"[{dist_name}] Processing workload: {workload_file.name}...")
 
-    # 1. Load Histogram Buckets
-    buckets_file = DATA_DIR / dist_name / "histogram_buckets.csv"
+    # 1. Загрузка бакетов гистограммы (из datasets.py)
+    buckets_file = dist_dir / "histogram_buckets.csv"
     if not buckets_file.exists():
         print(f"[{dist_name}] Skipped: buckets file not found.")
         return
@@ -22,115 +23,91 @@ def plot_query_distribution(dist_name):
     bin_ends = buckets_df["bin_end"].values
     bin_counts = buckets_df["count"].values
 
-    # 2. Load Workload
-    # Load only relevant columns
-    queries_df = pd.read_csv(WORKLOAD_FILE, usecols=["low", "high"])
+    # 2. Загрузка Data-Driven ворклоада
+    queries_df = pd.read_csv(workload_file, usecols=["low", "high"])
     q_low = queries_df["low"].values
     q_high = queries_df["high"].values
 
     n_queries = len(q_low)
     n_buckets = len(bin_starts)
 
-    print(f"[{dist_name}] Loaded {n_queries} queries and {n_buckets} buckets.")
-
-    # 3. Vectorized Processing
-    # We want to calculate overlaps.
-    # Since Q=1M and B=~400, a Q x B matrix is ~400M entries.
-    # bytes: 400MB usually fine for bool array.
-
-    # Broadcast arrays to shape (Q, B)
-    # q_low: (Q, 1)
-    # bin_start: (1, B)
-
-    # Overlap condition: max(q_low, b_start) < min(q_high, b_end)
-    # Equivalent to: (q_low < b_end) & (q_high > b_start)
-
-    # Create column vectors for queries
+    # 3. Векторизованный расчет пересечений (Broadcasting)
+    # Создаем матрицы (Q, B), где Q - запросы, B - бакеты
     Q_low = q_low[:, np.newaxis]
     Q_high = q_high[:, np.newaxis]
-
-    # Create row vectors for buckets
     B_start = bin_starts[np.newaxis, :]
     B_end = bin_ends[np.newaxis, :]
 
-    print(f"[{dist_name}] Calculating overlap matrix...")
-    # This matrix is True where query i overlaps bucket j
+    # overlap_matrix[i, j] == True, если запрос i пересекает бакет j
     overlap_matrix = (Q_low < B_end) & (Q_high > B_start)
 
-    # 4. Determine Valid Queries (Selectivity > 0)
-    # A query is valid if it overlaps with any bucket that has data.
-    # We need a mask for non-empty buckets.
-    non_empty_buckets_mask = bin_counts > 0  # Shape (B,)
-
-    # Check if query overlaps with ANY non-empty bucket
-    # valid_queries_mask[i] is True if query i overlaps with a bucket where bin_count > 0
-    # We can compute this by checking overlap with only non-empty buckets.
-
-    print(f"[{dist_name}] identifying valid queries...")
-    # Project overlap matrix to only non-empty buckets
+    # 4. Определение валидных запросов (Selectivity > 0)
+    # Запрос валиден, если он пересекает хотя бы один бакет, в котором есть данные
+    non_empty_buckets_mask = bin_counts > 0
     overlap_with_data = overlap_matrix & non_empty_buckets_mask[np.newaxis, :]
-
-    # A query is valid if it has at least one True in this projected matrix
     valid_queries_mask = np.any(overlap_with_data, axis=1)
 
     valid_count = np.sum(valid_queries_mask)
-    print(f"[{dist_name}] Valid queries (selectivity > 0): {valid_count} / {n_queries}")
+    print(f"[{dist_name}] Valid queries: {valid_count} / {n_queries}")
 
-    # 5. Count Bucket Hits for Valid Queries
-    # Now we only care about valid queries.
-    # We want to sum the overlap_matrix for valid rows.
-
-    # Filter overlap matrix to keep only valid queries
+    # 5. Подсчет "хитов" по бакетам для валидных запросов
     valid_overlap_matrix = overlap_matrix[valid_queries_mask]
-
-    # Sum along axis 0 (sum over queries) to get count per bucket
     bucket_hit_counts = np.sum(valid_overlap_matrix, axis=0)
 
-    # 6. Plotting
-    print(f"[{dist_name}] Plotting...")
+    # 6. Визуализация
     plt.figure(figsize=(12, 6))
 
-    # Plot bars
+    # Рисуем гистограмму распределения запросов по индексам бакетов
     plt.bar(
         range(n_buckets),
         bucket_hit_counts,
         width=1.0,
         align="edge",
-        color="skyblue",
-        edgecolor="none",
+        color="salmon",
+        alpha=0.7,
+        edgecolor="black",
+        linewidth=0.2
     )
 
-    plt.xlabel("Bucket Index")
-    plt.ylabel("Count of Queries")
+    plt.xlabel("Bucket Index (from histogram_buckets.csv)")
+    plt.ylabel("Number of Intersecting Queries")
     plt.title(
-        f"Query Distribution over Buckets ({dist_name})\n(Only queries with selectivity > 0)"
+        f"Query Distribution over Buckets: {dist_name}\n"
+        f"(Workload: {workload_file.name} | Valid Queries: {valid_count})"
     )
     plt.grid(axis="y", alpha=0.3)
 
-    # Add text for valid query count
-    plt.figtext(0.02, 0.02, f"Total Valid Queries: {valid_count}", fontsize=10)
+    # Добавляем инфо-текст
+    plt.figtext(0.02, 0.02, f"Total Queries in CSV: {n_queries}", fontsize=9)
 
-    output_path = (
-        DATA_DIR / dist_name / f"{WORKLOAD_TYPE}_query_distribution_{dist_name}.png"
-    )
-    plt.savefig(output_path, dpi=100)
+    # Сохраняем в папку рядом с ворклоадом
+    output_path = dist_dir / f"plot_distribution_{workload_file.stem}.png"
+    plt.savefig(output_path, dpi=120)
     plt.close()
     print(f"[{dist_name}] Saved plot to {output_path}")
 
 
 def main():
-    # Loop over subdirectories in DATA_DIR
-    if not DATA_DIR.exists():
-        print(f"Data directory {DATA_DIR} does not exist.")
+    parser = argparse.ArgumentParser(description="Plot query distribution for generated workloads.")
+    parser.add_argument("--rows", type=str, default="60000000_hard", help="Dataset folder name.")
+    args = parser.parse_args()
+
+    base_dir = Path("data/generated") / args.rows
+    if not base_dir.exists():
+        print(f"Error: Directory {base_dir} not found.")
         return
 
-    for path in DATA_DIR.iterdir():
-        if path.is_dir():
-            dist_name = path.name
-            try:
-                plot_query_distribution(dist_name)
-            except Exception as e:
-                print(f"Error processing {dist_name}: {e}")
+    # Проходим по всем папкам распределений (zipf, normal, etc.)
+    for dist_dir in base_dir.iterdir():
+        if dist_dir.is_dir():
+            # Ищем файлы ворклоадов внутри папки
+            workload_files = list(dist_dir.glob("workload_driven_*.csv"))
+
+            for wf in workload_files:
+                try:
+                    plot_query_distribution(dist_dir, wf)
+                except Exception as e:
+                    print(f"Error processing {dist_dir.name} with {wf.name}: {e}")
 
 
 if __name__ == "__main__":

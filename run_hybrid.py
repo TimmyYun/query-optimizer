@@ -67,7 +67,6 @@ def run_logic(args, out_dir, metadata):
     rng = np.random.default_rng(42)
 
     # --- STEP 1: USE PRE-GENERATED RESERVOIR SAMPLE ---
-    # Using the exact 100,000-row sample for 100% methodological honesty
     obs_freq = np.bincount(sample - mn, minlength=len(freq))
 
     # Scale the sample back up to N (Crucial for Cardinality Estimation)
@@ -76,7 +75,6 @@ def run_logic(args, out_dir, metadata):
     # --------------------------------------------------
 
     # Build Initial Buckets using the ESTIMATED frequency
-    # (Realistic: Histograms are almost always built from samples)
     ew_hist = EquiWidthHistogram.build_from_sample(
         mn=mn, mx=mx, bins=n_bins, sample=sample, total_rows=N
     )
@@ -90,7 +88,6 @@ def run_logic(args, out_dir, metadata):
         fourier_penalty=args.penalty,
     )
 
-    # The models now learn from the 'estimated_freq'
     t_train = hybrid_est.train(estimated_freq, mn, args.points, rng)
 
     # Report Model Selections
@@ -98,20 +95,32 @@ def run_logic(args, out_dir, metadata):
     hybrid_est.report_models(file_path=model_report_path)
 
     # Load Workload
-    queries, y_true = load_and_filter_workload(args.workload, mn, mx, freq)
+    # Здесь y_true_sel - это селективность (доля от общего числа строк)
+    queries, y_true_sel = load_and_filter_workload(args.workload, mn, mx, freq)
 
     # Evaluate
     t0 = time.perf_counter()
     y_pred_counts = hybrid_est.predict_batch(queries)
-    y_pred = y_pred_counts / N
     infer_time = time.perf_counter() - t0
+
+    # --- FIX: SANITY FLOOR (Защита от нулей) ---
+    y_true_counts = y_true_sel * N  # переводим селективность в абсолютное количество строк
+
+    y_pred_counts = np.maximum(y_pred_counts, 1.0)
+    y_true_counts = np.maximum(y_true_counts, 1.0)
+
+    # Возвращаем обратно в селективность для совместимости с функциями метрик
+    y_pred_safe = y_pred_counts / N
+    y_true_safe = y_true_counts / N
+    # -------------------------------------------
 
     # --- VISUALIZATION & SUMMARY ---
     debug_plot_path = out_dir / "initial_baseline_debug.png"
-    plot_bucket_debug(hybrid_est, queries, y_true, y_pred, debug_plot_path)
+    # Передаем безопасные значения
+    plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, debug_plot_path)
 
     # Summarize
-    m = summarize(y_true, y_pred, "Hybrid")
+    m = summarize(y_true_safe, y_pred_safe, "Hybrid")
     metrics = {
         "train_time": t_train,
         "infer_time": infer_time,
@@ -127,9 +136,8 @@ def run_logic(args, out_dir, metadata):
     )
 
     save_benchmark_results(
-        out_dir, Path(args.workload).stem, "Hybrid", queries, y_true, y_pred, metrics
+        out_dir, Path(args.workload).stem, "Hybrid", queries, y_true_safe, y_pred_safe, metrics
     )
-
 
 def main():
     parser = get_common_parser("Run Hybrid Model Benchmark")
