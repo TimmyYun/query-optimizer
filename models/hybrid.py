@@ -285,6 +285,16 @@ class HybridEstimator:
         bucket_indices: List[int] = None,
     ) -> Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]]:
         ps = np.cumsum(freq)
+
+        # --- FIX: Безопасное получение кумулятивной суммы ---
+        def get_ps_safe(val):
+            idx = val - mn
+            if idx < 0:
+                return 0.0
+            if idx >= len(ps):
+                return float(ps[-1])
+            return float(ps[idx])
+
         target_indices = (
             bucket_indices if bucket_indices is not None else range(len(self.buckets))
         )
@@ -297,8 +307,6 @@ class HybridEstimator:
                 continue
 
             width = b.hi - b.lo + 1
-            b_lo_idx = b.lo - mn
-            b_hi_idx = b.hi - mn
 
             n_grid = points_per_bucket * 2
             if width <= n_grid:
@@ -315,12 +323,12 @@ class HybridEstimator:
 
             xs_val = np.unique(rng.integers(b.lo, b.hi + 1, size=points_per_bucket * 2))
 
+            base_cnt = get_ps_safe(b.lo - 1)
+
             def build_rows(xs_arr):
-                base_cnt = ps[b_lo_idx - 1] if b_lo_idx > 0 else 0
                 res = []
                 for x in xs_arr:
-                    x_idx = x - mn
-                    y_cdf = (ps[x_idx] - base_cnt) / b.count
+                    y_cdf = (get_ps_safe(x) - base_cnt) / b.count
                     res.append(
                         CDFTrainRow(
                             x_norm=(x - b.lo) / width, y_cdf=np.clip(y_cdf, 0.0, 1.0)
@@ -395,11 +403,11 @@ class HybridEstimator:
         return np.median(q_errs), np.percentile(q_errs, 95)
 
     def _train_adaptive_models(
-        self,
-        rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
-        freq: np.ndarray,
-        mn: int,
-        rng: np.random.Generator,
+            self,
+            rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
+            freq: np.ndarray,
+            mn: int,
+            rng: np.random.Generator,
     ) -> Tuple[Dict[int, Any], float]:
         models = {}
         t0 = time.perf_counter()
@@ -416,12 +424,21 @@ class HybridEstimator:
             X_train = np.array([r.x_norm for r in train_rows]).reshape(-1, 1)
             y_train = np.array([r.y_cdf for r in train_rows])
 
-            b_lo_idx, b_hi_idx = bucket.lo - mn, bucket.hi - mn
-            b_ps = np.cumsum(freq[b_lo_idx : b_hi_idx + 1])
             width = bucket.hi - bucket.lo + 1
 
-            local_freq = freq[b_lo_idx : b_hi_idx + 1]
+            # --- FIX: Железобетонное извлечение частот без Out of Bounds ---
+            v_arr = np.arange(bucket.lo, bucket.hi + 1)
+            idx_arr = v_arr - mn
+            valid_mask = (idx_arr >= 0) & (idx_arr < len(freq))
+
+            local_freq = np.zeros(width, dtype=np.float64)
+            if np.any(valid_mask):
+                local_freq[valid_mask] = freq[idx_arr[valid_mask]]
+
+            b_ps = np.cumsum(local_freq)
             local_probs = local_freq / (local_freq.sum() + 1e-9)
+            # -------------------------------------------------------------
+
             x_indices = np.clip(
                 np.array([r.x_norm * width for r in train_rows]).astype(int),
                 0,

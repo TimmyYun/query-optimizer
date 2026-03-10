@@ -96,7 +96,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Detailed Hybrid Adaptation Analysis (FT -> RB)"
     )
-    parser.add_argument("--rows", type=str, default="60000000_hard")
+    parser.add_argument("--dataset", type=str, default="60000000")
     parser.add_argument("--workload", type=str, required=True)
     parser.add_argument("--init-dist", type=str, default="normal")
     parser.add_argument("--target-dist", type=str, default="zipf")
@@ -116,7 +116,7 @@ def main():
     shift_dir = (
         dm.base_path
         / "generated"
-        / args.rows
+        / args.dataset
         / f"shift_{args.init_dist}_to_{args.target_dist}"
     )
 
