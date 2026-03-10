@@ -7,7 +7,7 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.isotonic import IsotonicRegression
 
 from .common import Bucket, RangeQuery, CDFTrainRow
-
+import concurrent.futures
 
 class FourierFeatureMapper:
     def __init__(self, num_bands: int = 10, max_freq: float = 1024.0):
@@ -415,33 +415,33 @@ class HybridEstimator:
         return np.median(q_errs), np.percentile(q_errs, 95)
 
     def _train_adaptive_models(
-        self,
-        rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
-        freq: np.ndarray,
-        mn: int,
-        rng: np.random.Generator,
+            self,
+            rows_data: Dict[int, Tuple[List[CDFTrainRow], List[CDFTrainRow]]],
+            freq: np.ndarray,
+            mn: int,
+            rng: np.random.Generator,
     ) -> Tuple[Dict[int, Any], float]:
         models = {}
         t0 = time.perf_counter()
 
-        EARLY_EXIT_THRESHOLD = 1.2
+        # Relaxed exit threshold to skip slow neural nets when shifting to Uniform
+        EARLY_EXIT_THRESHOLD = 1.1
         COMPLEX_MODEL_THRESHOLD = 1.05
 
-        for i, (train_rows, val_rows) in rows_data.items():
+        def train_bucket(i):
+            train_rows, val_rows = rows_data[i]
             bucket = self.buckets[i]
             if not train_rows or bucket.count == 0:
-                models[i] = None
-                continue
+                return i, None
 
             X_train = np.array([r.x_norm for r in train_rows]).reshape(-1, 1)
             y_train = np.array([r.y_cdf for r in train_rows])
 
             b_lo_idx, b_hi_idx = bucket.lo - mn, bucket.hi - mn
-            b_ps = np.cumsum(freq[b_lo_idx : b_hi_idx + 1])
+            b_ps = np.cumsum(freq[b_lo_idx: b_hi_idx + 1])
             width = bucket.hi - bucket.lo + 1
 
-            # Map weights to exactly where the training mass is
-            local_freq = freq[b_lo_idx : b_hi_idx + 1]
+            local_freq = freq[b_lo_idx: b_hi_idx + 1]
             local_probs = local_freq / (local_freq.sum() + 1e-9)
             x_indices = np.clip(
                 np.array([r.x_norm * width for r in train_rows]).astype(int),
@@ -450,8 +450,10 @@ class HybridEstimator:
             )
             weights = 1.0 + (local_probs[x_indices] / (local_probs.max() + 1e-9)) * 5.0
 
+            # Use a thread-safe local random generator for validation queries
+            local_rng = np.random.default_rng(rng.integers(0, 9999999) + i)
             val_queries = self._generate_bucket_queries(
-                bucket, n_queries=500, rng=rng, freq=freq, mn=mn
+                bucket, n_queries=500, rng=local_rng, freq=freq, mn=mn
             )
             q_lo = np.array([q.low for q in val_queries])
             q_hi = np.array([q.high for q in val_queries])
@@ -462,27 +464,21 @@ class HybridEstimator:
                 )
                 return q_m, q_95, mdl
 
-            # 1. Identity (Uniform)
             best_q, best_p95, best_model = check(None)
             if best_q < EARLY_EXIT_THRESHOLD:
-                models[i] = best_model
-                continue
+                return i, best_model
 
             candidates = []
-            # 2. Linear & Power
             try:
                 m_lin = Ridge(alpha=1.0).fit(X_train, y_train, sample_weight=weights)
                 lin_mdl = ("linear", m_lin.coef_[0], m_lin.intercept_)
                 q, p95, _ = check(lin_mdl)
                 candidates.append((q, p95, lin_mdl))
 
-                if q < 1.05:  # If Linear is perfect, skip Poly and MLP.
-                    models[i] = lin_mdl
-                    continue
+                if q < 1.05:
+                    return i, lin_mdl
 
-                m_pow = Ridge(alpha=1.0).fit(
-                    np.sqrt(X_train), y_train, sample_weight=weights
-                )
+                m_pow = Ridge(alpha=1.0).fit(np.sqrt(X_train), y_train, sample_weight=weights)
                 pow_mdl = ("power", m_pow.coef_[0], m_pow.intercept_)
                 q, p95, _ = check(pow_mdl)
                 candidates.append((q, p95, pow_mdl))
@@ -495,16 +491,12 @@ class HybridEstimator:
                     best_q, best_p95, best_model = q, p95, mdl
 
             if best_q < EARLY_EXIT_THRESHOLD:
-                models[i] = best_model
-                continue
+                return i, best_model
 
-            # 3. Try Cubic Poly (S-Curve)
             try:
                 poly_calc = PolynomialFeatures(degree=3, include_bias=False)
                 X_poly_train = poly_calc.fit_transform(X_train)
-                mdl_poly = Ridge(alpha=0.1).fit(
-                    X_poly_train, y_train, sample_weight=weights
-                )
+                mdl_poly = Ridge(alpha=0.1).fit(X_poly_train, y_train, sample_weight=weights)
                 poly_mdl = ("poly3", mdl_poly.coef_, mdl_poly.intercept_)
                 q, p95, _ = check(poly_mdl)
                 if q < best_q:
@@ -513,28 +505,21 @@ class HybridEstimator:
                 pass
 
             if best_q < EARLY_EXIT_THRESHOLD:
-                models[i] = best_model
-                continue
+                return i, best_model
 
-            # 4. Try Isotonic Regression (Guaranteed Monotonicity for Sparse/Normal)
             try:
-                iso_mdl = IsotonicRegression(out_of_bounds="clip").fit(
-                    X_train.flatten(), y_train
-                )
+                iso_mdl = IsotonicRegression(out_of_bounds="clip").fit(X_train.flatten(), y_train)
                 q, p95, _ = check(iso_mdl)
                 if q < best_q:
                     best_q, best_p95, best_model = q, p95, iso_mdl
             except:
                 pass
 
-            # 5. Complex Fallback (Fourier MLP)
             if best_q > COMPLEX_MODEL_THRESHOLD:
                 try:
                     mapper = FourierFeatureMapper(num_bands=32, max_freq=1000.0)
                     X_f_train = mapper.transform(X_train)
-                    mdl_f_mlp = MLPRegressor(
-                        hidden_layer_sizes=(64, 32), max_iter=500
-                    ).fit(X_f_train, y_train)
+                    mdl_f_mlp = MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=500).fit(X_f_train, y_train)
                     mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
                     q, p95, _ = check(mdl_fourier)
                     if q < best_q:
@@ -542,7 +527,17 @@ class HybridEstimator:
                 except:
                     pass
 
-            models[i] = best_model
+            return i, best_model
+
+        # --- EXECUTE IN PARALLEL ---
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # Submit all bucket jobs to the thread pool
+            futures = [executor.submit(train_bucket, i) for i in rows_data.keys()]
+
+            # Collect results as they finish
+            for future in concurrent.futures.as_completed(futures):
+                i, best_model = future.result()
+                models[i] = best_model
 
         return models, time.perf_counter() - t0
 

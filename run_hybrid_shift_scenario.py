@@ -104,7 +104,7 @@ def main():
     parser.add_argument("--workload", type=str, required=True)
     parser.add_argument("--init-dist", type=str, default="normal")
     parser.add_argument("--target-dist", type=str, default="uniform")
-    parser.add_argument("--points", type=int, default=500)
+    parser.add_argument("--points", type=int, default=200)
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--experiment-name", type=str, default=None)
     args = parser.parse_args()
