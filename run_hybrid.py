@@ -12,19 +12,24 @@ from benchmark_utils import (
 import matplotlib.pyplot as plt
 
 
-def plot_bucket_debug(hybrid_est, queries, y_true, y_pred, output_path):
+def plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, output_path):
     """
-    Visualizes the performance of each bucket after initial training.
+    Визуализирует производительность каждого бакета.
+    Использует уже очищенные (safe) данные предикта и реальности.
     """
     n_buckets = len(hybrid_est.buckets)
     bucket_counts = np.array([b.count for b in hybrid_est.buckets])
-    q_errors = np.maximum(y_true / (y_pred + 1e-9), y_pred / (y_true + 1e-9))
+
+    # --- FIX: Теперь считаем ошибку по очищенным данным без 1e-9 ---
+    # Так как y_true_safe и y_pred_safe уже >= 1.0/N, деления на 0 не будет
+    q_errors = np.maximum(y_true_safe / y_pred_safe, y_pred_safe / y_true_safe)
 
     bucket_err_lists = [[] for _ in range(n_buckets)]
     for idx, q in enumerate(queries):
         err = q_errors[idx]
         for b_idx in range(n_buckets):
             b = hybrid_est.buckets[b_idx]
+            # Проверяем пересечение запроса с бакетом
             if q.low <= b.hi and q.high >= b.lo:
                 bucket_err_lists[b_idx].append(err)
 
@@ -41,7 +46,7 @@ def plot_bucket_debug(hybrid_est, queries, y_true, y_pred, output_path):
         label="Bucket Row Count",
     )
     ax1.set_xlabel("Bucket Index")
-    ax1.set_ylabel("Estimated Row Count", color="gray")
+    ax1.set_ylabel("Estimated Row Count (Mass)", color="gray")
 
     ax2 = ax1.twinx()
     ax2.plot(
@@ -52,21 +57,31 @@ def plot_bucket_debug(hybrid_est, queries, y_true, y_pred, output_path):
         label="Median Q-Error",
     )
     ax2.set_ylabel("Median Q-Error (Log Scale)", color="red")
-    ax2.set_yscale("log")
+    ax2.set_yscale("log")  # Логарифмическая шкала важна для Zipf
 
-    plt.title(f"Initial Training Baseline: Error vs. Density")
+    plt.title(f"Bucket Analysis: Error vs. Density (Safe Mode)")
     fig.tight_layout()
     plt.savefig(output_path, dpi=150)
     plt.close()
     print(f"Debug plot saved to {output_path}")
-
 
 def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
     n_bins = args.buckets if args.buckets is not None else n_bins_data
     rng = np.random.default_rng(42)
 
-    # --- STEP 1: USE PRE-GENERATED RESERVOIR SAMPLE ---
+    # --- NEW: Автоматическое определение пути к ворклоаду ---
+    workload_path = Path(args.workload)
+    if not workload_path.exists():
+        potential_path = Path(args.dataset) / f"workload_driven_{args.workload}.csv"
+        if potential_path.exists():
+            workload_path = potential_path
+        else:
+            raise FileNotFoundError(
+                f"Workload not found at {args.workload} or {potential_path}"
+            )
+    # -------------------------------------------------------
+
     obs_freq = np.bincount(sample - mn, minlength=len(freq))
 
     # Scale the sample back up to N (Crucial for Cardinality Estimation)
@@ -94,24 +109,13 @@ def run_logic(args, out_dir, metadata):
     model_report_path = out_dir / "model_selection_Hybrid.txt"
     hybrid_est.report_models(file_path=model_report_path)
 
-    # Load Workload
-    # Здесь y_true_sel - это селективность (доля от общего числа строк)
-    queries, y_true_sel = load_and_filter_workload(args.workload, mn, mx, freq)
+    queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
 
-    # Evaluate
     t0 = time.perf_counter()
-    y_pred_counts = hybrid_est.predict_batch(queries)
+    y_pred_counts = np.maximum(hybrid_est.predict_batch(queries), 1.0)
     infer_time = time.perf_counter() - t0
 
-    # --- FIX: SANITY FLOOR (Защита от нулей) ---
-    y_true_counts = (
-        y_true_sel * N
-    )  # переводим селективность в абсолютное количество строк
-
-    y_pred_counts = np.maximum(y_pred_counts, 1.0)
-    y_true_counts = np.maximum(y_true_counts, 1.0)
-
-    # Возвращаем обратно в селективность для совместимости с функциями метрик
+    y_true_counts = np.maximum(y_true_sel * N, 1.0)
     y_pred_safe = y_pred_counts / N
     y_true_safe = y_true_counts / N
     # -------------------------------------------
@@ -139,7 +143,7 @@ def run_logic(args, out_dir, metadata):
 
     save_benchmark_results(
         out_dir,
-        Path(args.workload).stem,
+        workload_path.stem,
         "Hybrid",
         queries,
         y_true_safe,
@@ -150,13 +154,9 @@ def run_logic(args, out_dir, metadata):
 
 def main():
     parser = get_common_parser("Run Hybrid Model Benchmark")
-    parser.add_argument(
-        "--points", type=int, default=200, help="Points per bucket for training"
-    )
+    parser.add_argument("--points", type=int, default=200, help="Points per bucket")
     parser.add_argument("--ident", type=float, default=1e-4, help="Identity threshold")
-    parser.add_argument(
-        "--penalty", type=float, default=1.5, help="Model selection penalty"
-    )
+    parser.add_argument("--penalty", type=float, default=1.5, help="Model penalty")
     args = parser.parse_args()
     run_benchmark_suite(args, run_logic)
 
