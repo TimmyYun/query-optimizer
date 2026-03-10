@@ -9,6 +9,74 @@ from benchmark_utils import (
     load_and_filter_workload,
     save_benchmark_results,
 )
+import matplotlib.pyplot as plt
+
+
+def plot_bucket_debug(hybrid_est, queries, y_true, y_pred, output_path):
+    """
+    Visualizes the performance of each bucket.
+    X-axis: Bucket Index
+    Y-axis (Left): Row Count in Bucket
+    Y-axis (Right): Median Q-Error of queries intersecting that bucket
+    """
+    n_buckets = len(hybrid_est.buckets)
+    bucket_counts = np.array([b.count for b in hybrid_est.buckets])
+
+    # 1. Calculate Q-Error for every individual query
+    # We use y_true/y_pred selectivity, so we multiply by N to get counts if needed,
+    # but the ratio remains the same.
+    q_errors = np.maximum(y_true / (y_pred + 1e-9), y_pred / (y_true + 1e-9))
+
+    # 2. Map Query Errors to Buckets
+    bucket_err_lists = [[] for _ in range(n_buckets)]
+    for idx, q in enumerate(queries):
+        err = q_errors[idx]
+        # Find all buckets this query intersects
+        for b_idx in range(n_buckets):
+            b = hybrid_est.buckets[b_idx]
+            if q.low <= b.hi and q.high >= b.lo:
+                bucket_err_lists[b_idx].append(err)
+
+    # 3. Calculate Median per Bucket
+    median_errs = np.array(
+        [np.median(errs) if len(errs) > 0 else 1.0 for errs in bucket_err_lists]
+    )
+
+    # 4. Create the Plot
+    fig, ax1 = plt.subplots(figsize=(14, 6))
+
+    # Bar plot for bucket sizes (The Data Distribution)
+    ax1.bar(
+        range(n_buckets),
+        bucket_counts,
+        color="lightgray",
+        alpha=0.5,
+        label="Bucket Row Count",
+    )
+    ax1.set_xlabel("Bucket Index")
+    ax1.set_ylabel("Row Count (Initial Estimate)", color="gray")
+    ax1.tick_params(axis="y", labelcolor="gray")
+
+    # Line plot for Q-Error (The Performance)
+    ax2 = ax1.twinx()
+    ax2.plot(
+        range(n_buckets),
+        median_errs,
+        color="red",
+        linewidth=1.5,
+        label="Median Q-Error",
+    )
+    ax2.set_ylabel("Median Q-Error (Lower is Better)", color="red")
+    ax2.set_yscale("log")  # Q-Error is often best viewed in Log scale
+    ax2.tick_params(axis="y", labelcolor="red")
+
+    plt.title(
+        f"Bucket-Level Debugging: Error vs. Density\n(Total Buckets: {n_buckets})"
+    )
+    fig.tight_layout()
+    plt.savefig(output_path, dpi=150)
+    plt.close()
+    print(f"Debug plot saved to {output_path}")
 
 
 def run_logic(args, out_dir, metadata):
@@ -69,14 +137,17 @@ def run_logic(args, out_dir, metadata):
         t_ft_start = time.perf_counter()
         hybrid_est.feedback_update(
             queries=q_batch,
-            y_true=y_true_batch * N,
-            y_pred=y_pred_counts,
+            y_true_counts=y_true_batch * N,  # Signature Match
+            y_pred_counts=y_pred_counts,  # Signature Match
             N=N,
             error_threshold=1.5,
         )
         total_fine_tune_time += time.perf_counter() - t_ft_start
 
         print(f"Processed queries {i} to {end}... model refined.")
+
+    debug_plot_path = out_dir / "bucket_error_debug.png"
+    plot_bucket_debug(hybrid_est, queries, y_true, y_pred_all, debug_plot_path)
 
     # --- SUMMARIZATION ---
     m = summarize(y_true, y_pred_all, "Hybrid-Incremental")

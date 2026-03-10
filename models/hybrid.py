@@ -75,78 +75,70 @@ class HybridEstimator:
         self.complex_models = {}
 
     def feedback_update(
-        self,
-        queries: List[RangeQuery],
-        y_true: np.ndarray,  # These are raw counts from the DB
-        y_pred: np.ndarray,  # These are raw counts from our model
-        N: int,  # Total rows in the table
-        error_threshold: float = 2.0,
+        self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.5
     ):
-        q_errors = np.maximum(y_true / (y_pred + 1e-9), y_pred / (y_true + 1e-9))
-        bad_indices = np.where(q_errors > error_threshold)[0]
+        # Pre-calculate bucket boundaries for fast searching
+        b_lo_vals = np.array([b.lo for b in self.buckets])
+        b_hi_vals = np.array([b.hi for b in self.buckets])
 
-        if len(bad_indices) == 0:
-            return
+        for idx, q in enumerate(queries):
+            if y_true_counts[idx] <= 0:
+                continue
 
-        for idx in bad_indices:
-            q = queries[idx]
-            actual_sel = y_true[idx] / N
+            q_err = max(
+                y_true_counts[idx] / (y_pred_counts[idx] + 1e-9),
+                y_pred_counts[idx] / (y_true_counts[idx] + 1e-9),
+            )
 
-            # Find the buckets that this query touched
-            for i in range(len(self.buckets)):
-                b = self.buckets[i]
-                if q.low <= b.hi and q.high >= b.lo:
-                    # Logic: We now know a "True Point" in this bucket's CDF.
-                    # We 'nudge' the specific model for this bucket.
-                    self._fine_tune_bucket(i, q, actual_sel, N)
+            if q_err > error_threshold:
+                # OPTIMIZATION: Use searchsorted instead of looping over all buckets
+                # Find the index of the first bucket that could overlap
+                start_idx = np.searchsorted(b_hi_vals, q.low)
+                # Find the index of the last bucket that could overlap
+                end_idx = np.searchsorted(b_lo_vals, q.high, side="right")
 
-        # After nudging, we must re-bake the vectorized arrays
+                for i in range(start_idx, end_idx):
+                    b = self.buckets[i]
+                    overlap_lo = max(q.low, b.lo)
+                    overlap_hi = min(q.high, b.hi)
+
+                    q_width = q.high - q.low + 1
+                    overlap_width = overlap_hi - overlap_lo + 1
+                    share = overlap_width / q_width
+                    self._fine_tune_bucket(i, overlap_hi, y_true_counts[idx] * share)
+
         self._bake_vectorized_data()
 
-    def _fine_tune_bucket(
-        self,
-        b_idx: int,
-        query: RangeQuery,
-        actual_sel: float,
-        N: int,
-        alpha: float = 0.3,
-    ):
-        """
-        Adjusts a single bucket's model using a learning rate (alpha).
-        alpha = 1.0: Trust the new query 100% (Overfits).
-        alpha = 0.1: Gently nudge the model (Stable).
-        """
+    def _fine_tune_bucket(self, b_idx, query_x_hi, y_true_count, alpha=0.3):
         b = self.buckets[b_idx]
 
-        # 1. Handle the 'Empty Bucket' Trap
-        # If the sample thought the bucket was empty (0), we can't divide by it.
-        # We assume the bucket now has at least enough rows to satisfy this query.
-        effective_b_count = max(b.count, actual_sel * N)
+        # Rescue empty buckets from divide-by-zero
+        effective_b_count = max(b.count, y_true_count)
         if effective_b_count == 0:
-            return  # Truly no data here
+            return
 
         width = b.hi - b.lo + 1
-        x_norm = np.clip((query.high - b.lo) / width, 0.0, 1.0)
+        x_norm = np.clip((query_x_hi - b.lo) / width, 0.0, 1.0)
+        suggested_cdf = np.clip(y_true_count / effective_b_count, 0.0, 1.0)
 
-        # 2. Calculate the 'Target' CDF the query suggests
-        # This is the % of this bucket that is covered by this query
-        suggested_cdf = np.clip(actual_sel * (N / effective_b_count), 0.0, 1.0)
+        model = self.models.get(b_idx)
 
-        # 3. Apply Learning Rate (Smoothing)
-        # We calculate the current prediction to see how far off we were
-        current_cdf = self._predict_local_cdf(self.models.get(b_idx), x_norm)
+        # CASE 1: Fourier MLP (Preserve shape, update weights)
+        if isinstance(model, FourierModelWrapper):
+            # Transform x to Fourier space
+            X_f = model.mapper.transform(np.array([[x_norm]]))
+            y_t = np.array([suggested_cdf])
+            # Online update (Backprop)
+            model.model.partial_fit(X_f, y_t)
 
-        # New CDF = (1 - alpha) * Old + (alpha) * New
-        target_cdf = (1 - alpha) * current_cdf + (alpha) * suggested_cdf
-
-        # 4. Update Model Parameters (Linear Nudge)
-        # We default to a linear model for the fine-tune to keep it fast
-        # Solving for new_intercept: target_cdf = (slope * x_norm) + intercept
-        # We keep the slope (m) at 1.0 (Uniform) for unknown areas.
-        m = 1.0
-        new_c = target_cdf - (m * x_norm)
-
-        self.models[b_idx] = ("linear", m, new_c)
+        # CASE 2: Linear / Poly / None (Nudge intercept)
+        else:
+            current_pred = self._predict_local_cdf(model, x_norm)
+            target_cdf = (1 - alpha) * current_pred + (alpha) * suggested_cdf
+            # Default to linear for stability during online updates
+            m = 1.0
+            new_c = target_cdf - (m * x_norm)
+            self.models[b_idx] = ("linear", m, new_c)
 
     def train(
         self,
