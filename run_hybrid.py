@@ -54,17 +54,23 @@ def run_logic(args, out_dir, metadata):
     n_bins = args.buckets if args.buckets is not None else n_bins_data
     rng = np.random.default_rng(42)
 
-    # --- STEP 1: INITIAL TRAINING DATA PREP ---
+    # --- STEP 1: USE PRE-GENERATED RESERVOIR SAMPLE ---
+    # Using the exact 100,000-row sample for 100% methodological honesty
     obs_freq = np.bincount(sample - mn, minlength=len(freq))
+
+    # Scale the sample back up to N (Crucial for Cardinality Estimation)
     scaling_factor = N / len(sample)
     estimated_freq = obs_freq * scaling_factor
+    # --------------------------------------------------
 
-    # Build Buckets
+    # Build Initial Buckets using the ESTIMATED frequency
+    # (Realistic: Histograms are almost always built from samples)
     ew_hist = EquiWidthHistogram.build_from_sample(
         mn=mn, mx=mx, bins=n_bins, sample=sample, total_rows=N
     )
 
-    # Initialize Model
+    # Train Hybrid using the ESTIMATED frequency
+    print(f"Training Hybrid Model on 100000 Sample (Bins: {n_bins})...")
     hybrid_est = HybridEstimator(
         ew_hist.buckets,
         identity_threshold=args.ident,
@@ -72,26 +78,29 @@ def run_logic(args, out_dir, metadata):
         fourier_penalty=args.penalty,
     )
 
-    # --- MEASURE INITIAL TRAINING ---
-    t_start = time.perf_counter()
-    hybrid_est.train(estimated_freq, mn, args.points, rng)
-    t_train = time.perf_counter() - t_start
+    # The models now learn from the 'estimated_freq'
+    t_train = hybrid_est.train(estimated_freq, mn, args.points, rng)
+
+    # Report Model Selections
+    model_report_path = out_dir / "model_selection_Hybrid.txt"
+    hybrid_est.report_models(file_path=model_report_path)
 
     # Load Workload
     queries, y_true = load_and_filter_workload(args.workload, mn, mx, freq)
 
-    # --- MEASURE PURE INFERENCE ---
-    t_inf_start = time.perf_counter()
+    # Evaluate
+    t0 = time.perf_counter()
     y_pred_counts = hybrid_est.predict_batch(queries)
     y_pred = y_pred_counts / N
-    infer_time = time.perf_counter() - t_inf_start
+    infer_time = time.perf_counter() - t0
 
     # --- VISUALIZATION & SUMMARY ---
     debug_plot_path = out_dir / "initial_baseline_debug.png"
     plot_bucket_debug(hybrid_est, queries, y_true, y_pred, debug_plot_path)
 
-    m = summarize(y_true, y_pred, "Hybrid-Baseline")
 
+    # Summarize
+    m = summarize(y_true, y_pred, "Hybrid")
     metrics = {
         "train_time": t_train,
         "infer_time": infer_time,
@@ -102,12 +111,9 @@ def run_logic(args, out_dir, metadata):
         "avg_q_error": m["QErr_avg"],
     }
 
-    print("-" * 30)
-    print(f"Hybrid Baseline Results (No Fine-Tune):")
-    print(f"Median QErr: {metrics['median_q_error']:.4f}")
-    print(f"p95 QErr:    {metrics['p95_q_error']:.4f}")
-    print(f"Train Time:  {t_train:.4f}s")
-    print("-" * 30)
+    print(
+        f"Hybrid: Median QErr={metrics['median_q_error']:.4f}, Train={t_train:.4f}s, Inf={infer_time:.4f}s"
+    )
 
     save_benchmark_results(
         out_dir, Path(args.workload).stem, "Hybrid", queries, y_true, y_pred, metrics
@@ -115,10 +121,14 @@ def run_logic(args, out_dir, metadata):
 
 
 def main():
-    parser = get_common_parser("Run Hybrid Model Baseline")
-    parser.add_argument("--points", type=int, default=200, help="Points per bucket for training")
+    parser = get_common_parser("Run Hybrid Model Benchmark")
+    parser.add_argument(
+        "--points", type=int, default=200, help="Points per bucket for training"
+    )
     parser.add_argument("--ident", type=float, default=1e-4, help="Identity threshold")
-    parser.add_argument("--penalty", type=float, default=1.5, help="Model selection penalty")
+    parser.add_argument(
+        "--penalty", type=float, default=1.5, help="Model selection penalty"
+    )
     args = parser.parse_args()
     run_benchmark_suite(args, run_logic)
 
