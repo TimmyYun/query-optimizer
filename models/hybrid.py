@@ -77,24 +77,29 @@ class HybridEstimator:
     def feedback_update(
         self, queries, y_true_counts, y_pred_counts, N, error_threshold=1.5
     ):
+        """
+        Refines buckets that caused high Q-Error using Binary Search for speed.
+        """
         # Pre-calculate bucket boundaries for fast searching
         b_lo_vals = np.array([b.lo for b in self.buckets])
         b_hi_vals = np.array([b.hi for b in self.buckets])
+
+        # Track if we actually changed anything
+        is_dirty = False
 
         for idx, q in enumerate(queries):
             if y_true_counts[idx] <= 0:
                 continue
 
+            # Calculate Q-Error
             q_err = max(
                 y_true_counts[idx] / (y_pred_counts[idx] + 1e-9),
                 y_pred_counts[idx] / (y_true_counts[idx] + 1e-9),
             )
 
             if q_err > error_threshold:
-                # OPTIMIZATION: Use searchsorted instead of looping over all buckets
-                # Find the index of the first bucket that could overlap
+                # OPTIMIZATION: Binary search for overlapping buckets
                 start_idx = np.searchsorted(b_hi_vals, q.low)
-                # Find the index of the last bucket that could overlap
                 end_idx = np.searchsorted(b_lo_vals, q.high, side="right")
 
                 for i in range(start_idx, end_idx):
@@ -102,17 +107,26 @@ class HybridEstimator:
                     overlap_lo = max(q.low, b.lo)
                     overlap_hi = min(q.high, b.hi)
 
-                    q_width = q.high - q.low + 1
-                    overlap_width = overlap_hi - overlap_lo + 1
-                    share = overlap_width / q_width
-                    self._fine_tune_bucket(i, overlap_hi, y_true_counts[idx] * share)
+                    if overlap_lo <= overlap_hi:
+                        q_width = q.high - q.low + 1
+                        overlap_width = overlap_hi - overlap_lo + 1
+                        share = overlap_width / q_width
 
-        self._bake_vectorized_data()
+                        # Nudge the bucket
+                        self._fine_tune_bucket(
+                            i, overlap_hi, y_true_counts[idx] * share
+                        )
+                        is_dirty = True
+
+        # Only re-bake if the model actually learned something new
+        if is_dirty:
+            self._bake_vectorized_data()
 
     def _fine_tune_bucket(self, b_idx, query_x_hi, y_true_count, alpha=0.3):
+        """
+        Nudges the model parameters without destroying the model type/shape.
+        """
         b = self.buckets[b_idx]
-
-        # Rescue empty buckets from divide-by-zero
         effective_b_count = max(b.count, y_true_count)
         if effective_b_count == 0:
             return
@@ -123,22 +137,32 @@ class HybridEstimator:
 
         model = self.models.get(b_idx)
 
-        # CASE 1: Fourier MLP (Preserve shape, update weights)
-        if isinstance(model, FourierModelWrapper):
-            # Transform x to Fourier space
+        # CASE 1: Tuple-based Models (Linear, Power, Poly, Poly3, Log-Linear)
+        if isinstance(model, tuple):
+            m_type, params, intercept = model[0], model[1], model[2]
+            current_pred = self._predict_local_cdf(model, x_norm)
+
+            # Nudge the intercept to shift the entire curve up or down
+            diff = (suggested_cdf - current_pred) * alpha
+            self.models[b_idx] = (m_type, params, intercept + diff)
+
+        # CASE 2: Fourier MLP (Preserve via Online Backpropagation)
+        elif isinstance(model, FourierModelWrapper):
             X_f = model.mapper.transform(np.array([[x_norm]]))
             y_t = np.array([suggested_cdf])
-            # Online update (Backprop)
+            # High-performance weight update
             model.model.partial_fit(X_f, y_t)
 
-        # CASE 2: Linear / Poly / None (Nudge intercept)
-        else:
+        # CASE 3: Isotonic Regression (Fallback with Linear Patch)
+        elif type(model).__name__ == "IsotonicRegression":
             current_pred = self._predict_local_cdf(model, x_norm)
-            target_cdf = (1 - alpha) * current_pred + (alpha) * suggested_cdf
-            # Default to linear for stability during online updates
-            m = 1.0
-            new_c = target_cdf - (m * x_norm)
-            self.models[b_idx] = ("linear", m, new_c)
+            diff = (suggested_cdf - current_pred) * alpha
+            # We 'bridge' the isotonic gap with a linear anchor
+            self.models[b_idx] = ("linear", 1.0, (current_pred + diff) - x_norm)
+
+        # CASE 4: Uniform/None (Initialize as Linear)
+        else:
+            self.models[b_idx] = ("linear", 1.0, suggested_cdf - x_norm)
 
     def train(
         self,
@@ -372,6 +396,9 @@ class HybridEstimator:
         return queries
 
     def _predict_local_cdf_vec(self, model, x_norm_arr: np.ndarray) -> np.ndarray:
+        """
+        Maps the 6 model types to their mathematical formulas for batch prediction.
+        """
         if model is None:
             return np.clip(x_norm_arr, 0.0, 1.0)
 
@@ -379,34 +406,37 @@ class HybridEstimator:
             m_type = model[0]
             if m_type == "linear":
                 return np.clip(x_norm_arr * model[1] + model[2], 0.0, 1.0)
-            elif m_type == "poly":
-                coefs, inter = model[1], model[2]
-                return np.clip(
-                    inter + coefs[0] * x_norm_arr + coefs[1] * (x_norm_arr**2), 0.0, 1.0
-                )
             elif m_type == "poly3":
-                coefs, inter = model[1], model[2]
+                p, inter = model[1], model[2]
                 return np.clip(
                     inter
-                    + coefs[0] * x_norm_arr
-                    + coefs[1] * (x_norm_arr**2)
-                    + coefs[2] * (x_norm_arr**3),
+                    + p[0] * x_norm_arr
+                    + p[1] * (x_norm_arr**2)
+                    + p[2] * (x_norm_arr**3),
                     0.0,
                     1.0,
+                )
+            elif m_type == "power":
+                return np.clip(model[1] * np.sqrt(x_norm_arr) + model[2], 0.0, 1.0)
+            elif m_type == "poly":
+                p, inter = model[1], model[2]
+                return np.clip(
+                    inter + p[0] * x_norm_arr + p[1] * (x_norm_arr**2), 0.0, 1.0
                 )
             elif m_type == "log_linear":
                 return np.clip(
                     model[1] * np.log(x_norm_arr + 1e-7) + model[2], 0.0, 1.0
                 )
-            elif m_type == "power":
-                return np.clip(model[1] * np.sqrt(x_norm_arr) + model[2], 0.0, 1.0)
 
+        # Neural Net or Isotonic
         if type(model).__name__ == "IsotonicRegression":
-            preds = model.predict(x_norm_arr)
-        else:
-            preds = model.predict(x_norm_arr.reshape(-1, 1)).flatten()
+            return np.clip(model.predict(x_norm_arr), 0.0, 1.0)
 
-        return np.clip(preds, 0.0, 1.0)
+        if isinstance(model, FourierModelWrapper):
+            # Flatten to handle both 1D and 2D batch inputs from predict_batch
+            return np.clip(model.predict(x_norm_arr.reshape(-1, 1)).flatten(), 0.0, 1.0)
+
+        return np.clip(x_norm_arr, 0.0, 1.0)
 
     def _eval_model_q_error_vec(
         self, model, queries_lo, queries_hi, bucket, b_ps, b_lo, width
@@ -487,6 +517,10 @@ class HybridEstimator:
                 lin_mdl = ("linear", m_lin.coef_[0], m_lin.intercept_)
                 q, p95, _ = check(lin_mdl)
                 candidates.append((q, p95, lin_mdl))
+
+                if q < 1.05:  # If Linear is perfect, skip Poly and MLP.
+                    models[i] = lin_mdl
+                    continue
 
                 m_pow = Ridge(alpha=1.0).fit(
                     np.sqrt(X_train), y_train, sample_weight=weights
