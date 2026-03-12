@@ -48,14 +48,13 @@ def main():
 
     GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
 
-    # Определение пути к ворклоаду (Smart Workload logic)
-    workload_path = Path(args.workload)
-    if not workload_path.exists():
-        init_dist_dir = dm.base_path / "generated" / args.dataset / args.init_dist
-        workload_path = init_dist_dir / f"workload_driven_{args.workload}.csv"
-
-    print(f"Using workload: {workload_path}")
-    queries, _ = load_and_filter_workload(str(workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
+    # Ожидаем count в args.workload (например '1000')
+    workload_count_str = args.workload
+    if workload_count_str.endswith('.csv'):
+        import re
+        match = re.search(r'\d+', args.workload)
+        if match:
+            workload_count_str = match.group(0)
 
     # Строим начальную гистограмму и инициализируем Learner
     print(f"\n>>> PHASE 1: Initial Building on {args.init_dist} <<<")
@@ -69,6 +68,13 @@ def main():
         shift_pct = step / 20.0
         with open(shift_dir / f"step_{step}.pkl", "rb") as f:
             step_mn, step_mx, current_N, current_freq, mixed_sample, step_k = pickle.load(f)
+
+        # Загружаем ворклоад для ТЕКУЩЕГО шага (динамический drift)
+        step_workload_path = shift_dir / f"step_{step}_workload_driven_{workload_count_str}.csv"
+        if not step_workload_path.exists():
+            raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
+        
+        queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
 
         # 1. Считаем реальность (Engine Truth)
         ps = np.cumsum(current_freq)

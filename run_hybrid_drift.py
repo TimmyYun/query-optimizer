@@ -114,21 +114,15 @@ def main():
 
     dm = DatasetManager()
 
-    # --- НОВАЯ ЛОГИКА: Автоматическое определение пути к ворклоаду ---
-    workload_path = Path(args.workload)
-    if not workload_path.exists():
-        # Ищем ворклоад в папке начального распределения (init-dist)
-        # Путь: data/generated/60000000/normal/workload_driven_1000000.csv
-        init_dist_dir = dm.base_path / "generated" / args.dataset / args.init_dist
-        potential_path = init_dist_dir / f"workload_driven_{args.workload}.csv"
-
-        if potential_path.exists():
-            workload_path = potential_path
-        else:
-            raise FileNotFoundError(
-                f"Workload not found at {args.workload} or {potential_path}"
-            )
-    print(f"Using workload: {workload_path}")
+    # --- Рабочий процесс с динамическим ворклоадом ---
+    # Мы ожидаем, что в аргументе --workload передано число, например '1000'
+    workload_count_str = args.workload
+    if workload_count_str.endswith('.csv'):
+        # на случай если был передан старый формат, вырежем цифры
+        import re
+        match = re.search(r'\d+', args.workload)
+        if match:
+            workload_count_str = match.group(0)
     # --------------------------------------------------------------
 
     shift_dir = (
@@ -157,8 +151,6 @@ def main():
 
     hybrid_est.report_models(file_path=reports_dir / "models_shift_0.0.txt")
 
-    # Используем найденный workload_path
-    queries, _ = load_and_filter_workload(str(workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
     summary_records = []
 
     # ПРОГОН ПО ВСЕМ ШАГАМ ДРИФТА
@@ -169,6 +161,13 @@ def main():
             step_mn, step_mx, current_N, current_freq, mixed_sample, step_k = (
                 pickle.load(f)
             )
+
+        # Загружаем ворклоад для ТЕКУЩЕГО шага (динамический drift)
+        step_workload_path = shift_dir / f"step_{step}_workload_driven_{workload_count_str}.csv"
+        if not step_workload_path.exists():
+            raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
+        
+        queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
 
         # 1. Считаем реальную массу запросов (Engine Truth)
         ps = np.cumsum(current_freq)
@@ -261,7 +260,7 @@ def main():
                 )
 
             hybrid_est.report_models(
-                file_path=reports_dir / f"models_shift_{shift_pct:.1f}.txt"
+                file_path=reports_dir / f"models_shift_{shift_pct:.2f}.txt"
             )
 
         # Вывод в консоль

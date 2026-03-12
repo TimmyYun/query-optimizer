@@ -49,9 +49,9 @@ def generate_shift_sequence(
     f_init = align_frequency(freq_i, mn_i)
     f_target = align_frequency(freq_t, mn_t)
 
-    max_y_freq = max(np.max(f_init), np.max(f_target))
+    max_y_freq = np.max(f_init + f_target)
 
-    out_dir = dm.base_path / "generated" / rows / f"shift_{init_dist}_to_{target_dist}"
+    out_dir = dm.base_path / "generated" / rows / f"shift_{init_dist}_to_{target_dist}_5%_workload"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(
@@ -66,7 +66,8 @@ def generate_shift_sequence(
         print(f"Processing Shift {alpha:>4.0%}...")
 
         # 1. Смешиваем частоты (Ground Truth)
-        mixed_freq_float = (1.0 - alpha) * f_init + alpha * f_target
+        # Суммируем 100% начального и постепенно добавляем до 100% от целевого
+        mixed_freq_float = f_init + alpha * f_target
         mixed_freq = np.round(mixed_freq_float).astype(np.int64)
 
         active_indices = np.nonzero(mixed_freq)[0]
