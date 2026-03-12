@@ -25,7 +25,7 @@ def align_frequency(freq, mn):
 
 
 def generate_shift_sequence(
-    rows: str, init_dist: str, target_dist: str, steps: int = 10, seed: int = 42
+    rows: str, init_dist: str, target_dist: str, steps: int = 20, seed: int = 42
 ):
     dm = DatasetManager()
     rng = np.random.default_rng(seed)

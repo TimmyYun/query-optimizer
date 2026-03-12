@@ -23,7 +23,7 @@ echo "============================================="
 echo "---------------------------------------------"
 echo "1) Hybrid Model"
 echo "---------------------------------------------"
-poetry run python run_hybrid_shift_scenario.py \
+poetry run python run_hybrid_drift.py \
     --dataset "$DATASET" \
     --workload "$WORKLOAD" \
     --init-dist "$INIT_DIST" \
@@ -34,7 +34,7 @@ poetry run python run_hybrid_shift_scenario.py \
 echo "---------------------------------------------"
 echo "2) Equi-Width Model"
 echo "---------------------------------------------"
-poetry run python run_equiwidth_shift_scenario.py \
+poetry run python run_equiwidth_drift.py \
     --dataset "$DATASET" \
     --workload "$WORKLOAD" \
     --init-dist "$INIT_DIST" \
@@ -45,7 +45,7 @@ poetry run python run_equiwidth_shift_scenario.py \
 echo "---------------------------------------------"
 echo "3) Equi-Hist Model"
 echo "---------------------------------------------"
-poetry run python run_equihist_shift_scenario.py \
+poetry run python run_equihist_drift.py \
     --dataset "$DATASET" \
     --workload "$WORKLOAD" \
     --init-dist "$INIT_DIST" \

@@ -65,8 +65,8 @@ def main():
     summary_records = []
 
     # ПРОГОН ПО ВСЕМ ШАГАМ ДРИФТА
-    for step in range(11):
-        shift_pct = step / 10.0
+    for step in range(21):
+        shift_pct = step / 20.0
         with open(shift_dir / f"step_{step}.pkl", "rb") as f:
             step_mn, step_mx, current_N, current_freq, mixed_sample, step_k = pickle.load(f)
 
