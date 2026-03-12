@@ -37,7 +37,7 @@ def main():
     out_dir = setup_out_dir(args, ds_out_name)
 
     dm = DatasetManager()
-    shift_dir = dm.base_path / "generated" / args.dataset / f"shift_{args.init_dist}_to_{args.target_dist}"
+    shift_dir = dm.base_path / "generated" / args.dataset / f"shift_{args.init_dist}_to_{args.target_dist}_5%"
 
     if not shift_dir.exists():
         raise FileNotFoundError(f"Directory {shift_dir} not found. Run generate_shifts.py first.")
