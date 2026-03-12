@@ -31,13 +31,14 @@ def main():
     parser.add_argument("--lr", type=float, default=0.5, help="Learning Rate for EquiHist")
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--experiment-name", type=str, default=None)
+    parser.add_argument("--shift-workload", action="store_true", help="If set, uses step-wise workloads from shift directory instead of static workload.")
     args = parser.parse_args()
 
     ds_out_name = f"gradual_{args.init_dist}_to_{args.target_dist}_EquiHist"
     out_dir = setup_out_dir(args, ds_out_name)
 
     dm = DatasetManager()
-    shift_dir = dm.base_path / "generated" / args.dataset / f"shift_{args.init_dist}_to_{args.target_dist}_5%"
+    shift_dir = dm.base_path / "generated" / args.dataset / f"shift_{args.init_dist}_to_{args.target_dist}_5%_workload"
 
     if not shift_dir.exists():
         raise FileNotFoundError(f"Directory {shift_dir} not found. Run generate_shifts.py first.")
@@ -56,6 +57,23 @@ def main():
         if match:
             workload_count_str = match.group(0)
 
+    # --- Определение статического ворклоада (Fallback) ---
+    static_workload_path = Path(args.workload)
+    if not static_workload_path.exists():
+        init_dist_dir = dm.base_path / "generated" / args.dataset / args.init_dist
+        static_workload_path = init_dist_dir / f"workload_driven_{workload_count_str}.csv"
+        if not static_workload_path.exists():
+            print(f"Warning: Static workload not found at {static_workload_path}")
+    
+    if not args.shift_workload:
+        print(f"Using static workload: {static_workload_path}")
+    else:
+        print(f"Using dynamic shift workloads with count: {workload_count_str}")
+    # --------------------------------------------------------------
+
+    if not args.shift_workload:
+        queries, _ = load_and_filter_workload(str(static_workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
+
     # Строим начальную гистограмму и инициализируем Learner
     print(f"\n>>> PHASE 1: Initial Building on {args.init_dist} <<<")
     ew_hist = EquiWidthHistogram.build_from_sample(i_mn, i_mx, i_k, i_sample, i_N)
@@ -69,12 +87,13 @@ def main():
         with open(shift_dir / f"step_{step}.pkl", "rb") as f:
             step_mn, step_mx, current_N, current_freq, mixed_sample, step_k = pickle.load(f)
 
-        # Загружаем ворклоад для ТЕКУЩЕГО шага (динамический drift)
-        step_workload_path = shift_dir / f"step_{step}_workload_driven_{workload_count_str}.csv"
-        if not step_workload_path.exists():
-            raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
-        
-        queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
+        if args.shift_workload:
+            # Загружаем ворклоад для ТЕКУЩЕГО шага (динамический drift)
+            step_workload_path = shift_dir / f"step_{step}_workload_driven_{workload_count_str}.csv"
+            if not step_workload_path.exists():
+                raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
+            
+            queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
 
         # 1. Считаем реальность (Engine Truth)
         ps = np.cumsum(current_freq)

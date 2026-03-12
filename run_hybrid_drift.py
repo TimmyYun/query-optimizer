@@ -103,6 +103,7 @@ def main():
     parser.add_argument("--points", type=int, default=200)
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--experiment-name", type=str, default=None)
+    parser.add_argument("--shift-workload", action="store_true", help="If set, uses step-wise workloads from shift directory instead of static workload.")
     args = parser.parse_args()
 
     ds_out_name = f"gradual_{args.init_dist}_to_{args.target_dist}_FT_RB"
@@ -123,13 +124,25 @@ def main():
         match = re.search(r'\d+', args.workload)
         if match:
             workload_count_str = match.group(0)
+    # --- Определение статического ворклоада (Fallback) ---
+    static_workload_path = Path(args.workload)
+    if not static_workload_path.exists():
+        init_dist_dir = dm.base_path / "generated" / args.dataset / args.init_dist
+        static_workload_path = init_dist_dir / f"workload_driven_{workload_count_str}.csv"
+        if not static_workload_path.exists():
+            print(f"Warning: Static workload not found at {static_workload_path}")
+    
+    if not args.shift_workload:
+        print(f"Using static workload: {static_workload_path}")
+    else:
+        print(f"Using dynamic shift workloads with count: {workload_count_str}")
     # --------------------------------------------------------------
 
     shift_dir = (
             dm.base_path
             / "generated"
             / args.dataset
-            / f"shift_{args.init_dist}_to_{args.target_dist}_5%"
+            / f"shift_{args.init_dist}_to_{args.target_dist}_5%_workload"
     )
 
     if not shift_dir.exists():
@@ -143,6 +156,9 @@ def main():
 
     GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
 
+    if not args.shift_workload:
+        queries, _ = load_and_filter_workload(str(static_workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
+    
     i_est_freq = get_sampled_freq(i_sample, i_mn, i_N, len(i_freq))
     print(f"\n>>> PHASE 1: Initial Training on {args.init_dist} <<<")
     init_hist = EquiWidthHistogram.build_from_sample(i_mn, i_mx, i_k, i_sample, i_N)
@@ -162,12 +178,13 @@ def main():
                 pickle.load(f)
             )
 
-        # Загружаем ворклоад для ТЕКУЩЕГО шага (динамический drift)
-        step_workload_path = shift_dir / f"step_{step}_workload_driven_{workload_count_str}.csv"
-        if not step_workload_path.exists():
-            raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
-        
-        queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
+        if args.shift_workload:
+            # Загружаем ворклоад для ТЕКУЩЕГО шага (динамический drift)
+            step_workload_path = shift_dir / f"step_{step}_workload_driven_{workload_count_str}.csv"
+            if not step_workload_path.exists():
+                raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
+            
+            queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
 
         # 1. Считаем реальную массу запросов (Engine Truth)
         ps = np.cumsum(current_freq)
