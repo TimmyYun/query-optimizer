@@ -64,7 +64,7 @@ def plot_shift_state(true_freq, est_freq, shift_pct, out_dir, init_name, target_
 
     plot_path = out_dir / "plots"
     plot_path.mkdir(exist_ok=True)
-    plt.savefig(plot_path / f"shift_{shift_pct:.1f}.png", dpi=150)
+    plt.savefig(plot_path / f"shift_{shift_pct:.2f}.png", dpi=150)
     plt.close()
 
 
@@ -135,7 +135,7 @@ def main():
             dm.base_path
             / "generated"
             / args.dataset
-            / f"shift_{args.init_dist}_to_{args.target_dist}"
+            / f"shift_{args.init_dist}_to_{args.target_dist}_5%"
     )
 
     if not shift_dir.exists():
