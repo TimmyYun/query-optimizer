@@ -243,6 +243,25 @@ def load_workload_csv(input_path: Path) -> List[RangeQuery]:
 
 def process_single_dist(dataset_dir: Path, count: int, max_width: int):
     """Вспомогательная функция для обработки одной папки распределения."""
+    
+    # 1. Проверяем, является ли это папкой с шифтами (с промежуточными датасетами)
+    step_files = list(dataset_dir.glob("step_*.pkl"))
+    if step_files:
+        print(f"--- Processing Shift Directory: {dataset_dir.name} ---")
+        for step_file in step_files:
+            with open(step_file, "rb") as f:
+                # В generate_shifts.py структура: (step_mn, step_mx, step_N, trimmed_freq, mixed_sample, step_k)
+                meta = pickle.load(f)
+                sample = meta[4]
+
+            queries = generate_data_driven_workload(count, sample, max_width=max_width)
+            # Сохраняем ворклоуд с учетом шага
+            out_path = dataset_dir / f"{step_file.stem}_workload_driven_{count}.csv"
+            save_workload_csv(queries, out_path)
+            print(f"Saved to: {out_path}")
+        return True
+
+    # 2. Обработка обычных датасетов
     meta_path = dataset_dir / "meta.pkl"
     if not meta_path.exists():
         return False
@@ -287,7 +306,7 @@ def main():
             # Режим 1: Только одна указанная дистрибуция
             dataset_dir = base_dir / args.dist
             if not process_single_dist(dataset_dir, args.count, args.max_width):
-                print(f"Error: Could not find meta.pkl in {dataset_dir}")
+                print(f"Error: Could not find meta.pkl or step_*.pkl in {dataset_dir}")
         else:
             # Режим 2: ПАКЕТНЫЙ РЕЖИМ (Автоматически для всех папок)
             print(f"Scanning {base_dir} for distributions...")
@@ -299,7 +318,7 @@ def main():
                         processed_count += 1
 
             if processed_count == 0:
-                print("No valid distribution folders (with meta.pkl) found.")
+                print("No valid distribution folders (with meta.pkl or step_*.pkl) found.")
             else:
                 print(f"\nDone! Processed {processed_count} distributions.")
 
