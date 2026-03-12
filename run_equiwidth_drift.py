@@ -127,6 +127,7 @@ def main():
         y_true_sel = y_true_counts / current_N
 
         # 2. Обновляем массу бакетов (Симуляция ANALYZE в БД)
+        t0_build = time.perf_counter()
         current_est_freq = get_sampled_freq(mixed_sample, step_mn, current_N, len(current_freq))
         ps_est = np.cumsum(current_est_freq)
 
@@ -135,6 +136,8 @@ def main():
             b_hi_idx = max(0, min(len(ps_est) - 1, b.hi - step_mn))
             new_count = ps_est[b_hi_idx] - (ps_est[b_lo_idx - 1] if b_lo_idx > 0 else 0)
             b.count = max(0.0, new_count)
+            
+        build_time = time.perf_counter() - t0_build
 
         plot_shift_state(current_freq, current_est_freq, shift_pct, out_dir, args.init_dist, args.target_dist)
 
@@ -152,7 +155,8 @@ def main():
             "Median Q-Error": m["QErr_median"],
             "P95 Q-Error": m["QErr_p95"],
             "Avg Q-Error": m["QErr_avg"],
-            "Inference Time": infer_time
+            "Inference Time": infer_time,
+            "Build Time": build_time
         })
 
     pd.DataFrame(summary_records).to_csv(out_dir / "equiwidth_drift_analysis.csv", index=False)
