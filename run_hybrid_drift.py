@@ -161,9 +161,11 @@ def main():
     
     i_est_freq = get_sampled_freq(i_sample, i_mn, i_N, len(i_freq))
     print(f"\n>>> PHASE 1: Initial Training on {args.init_dist} <<<")
+    t0_build = time.perf_counter()
     init_hist = EquiWidthHistogram.build_from_sample(i_mn, i_mx, i_k, i_sample, i_N)
     hybrid_est = HybridEstimator(init_hist.buckets)
     hybrid_est.train(i_est_freq, i_mn, args.points, rng)
+    build_time = time.perf_counter() - t0_build
 
     hybrid_est.report_models(file_path=reports_dir / "models_shift_0.0.txt")
 
@@ -298,6 +300,7 @@ def main():
                 "Rebuilt_Count": n_rebuilt,
                 "FT_Time": t_ft,
                 "RB_Time": t_rb,
+                "Build_Time": build_time if step == 0 else 0.0,
             }
         )
 
