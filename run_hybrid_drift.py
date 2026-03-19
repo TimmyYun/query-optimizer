@@ -142,7 +142,7 @@ def main():
             dm.base_path
             / "generated"
             / args.dataset
-            / f"shift_{args.init_dist}_to_{args.target_dist}_5%_dataset"
+            / f"shift_{args.init_dist}_to_{args.target_dist}_5%"
     )
 
     if not shift_dir.exists():
@@ -230,22 +230,24 @@ def main():
         # ==========================================
         # СТАДИЯ 0: SHOCK (Как модель реагирует сразу)
         # ==========================================
+        t0_eval = time.perf_counter()
         y_pred_shock = np.maximum(
             hybrid_est.predict_batch(queries), 1.0
         )  # Sanity Floor
+        eval_time = time.perf_counter() - t0_eval
         m_shock = summarize(
             y_true_sel, y_pred_shock / current_N, f"Shock_{shift_pct:.1f}"
         )
 
         m_ft, m_rb = m_shock, m_shock
-        t_ft, t_rb, n_rebuilt = 0.0, 0.0, 0
+        t_ft, t_rb, n_rebuilt, n_finetuned = 0.0, 0.0, 0, 0
 
         if step > 0:
             # ==========================================
             # СТАДИЯ 1: FINETUNE (Быстрая адаптация массы)
             # ==========================================
             t0 = time.perf_counter()
-            hybrid_est.feedback_update(queries, y_true_counts, y_pred_shock, current_N)
+            n_finetuned = hybrid_est.feedback_update(queries, y_true_counts, y_pred_shock, current_N)
             t_ft = time.perf_counter() - t0
 
             y_pred_ft = np.maximum(hybrid_est.predict_batch(queries), 1.0)
@@ -285,7 +287,7 @@ def main():
         # Вывод в консоль
         print(
             f"Shift {shift_pct:>4.0%}: [Shock: {m_shock['QErr_median']:.2f}] -> "
-            f"[FT: {m_ft['QErr_median']:.2f}] -> [RB: {m_rb['QErr_median']:.2f}] | Rebuilt: {n_rebuilt}"
+            f"[FT: {m_ft['QErr_median']:.2f}] -> [RB: {m_rb['QErr_median']:.2f}] | FT: {n_finetuned} | Rebuilt: {n_rebuilt}"
         )
 
         summary_records.append(
@@ -294,9 +296,11 @@ def main():
                 "Shock_Med": m_shock["QErr_median"],
                 "Shock_P95": m_shock["QErr_p95"],
                 "Shock_Avg": m_shock["QErr_avg"],
+                "Evaluation Time": eval_time,
                 "FT_Med": m_ft["QErr_median"],
                 "FT_P95": m_ft["QErr_p95"],
                 "FT_Avg": m_ft["QErr_avg"],
+                "Finetuned_Count": n_finetuned,
                 "RB_Med": m_rb["QErr_median"],
                 "RB_P95": m_rb["QErr_p95"],
                 "RB_Avg": m_rb["QErr_avg"],

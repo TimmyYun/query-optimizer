@@ -74,7 +74,7 @@ class HybridEstimator:
         bad_q_mask = q_errs > error_threshold
 
         if not np.any(bad_q_mask):
-            return
+            return 0
 
         bad_indices = np.where(bad_q_mask)[0]
         b_lo_vals = np.array([b.lo for b in self.buckets])
@@ -142,6 +142,8 @@ class HybridEstimator:
 
         if is_dirty:
             self._bake_vectorized_data()
+            
+        return len(bucket_true_mass)
 
     def train(
         self,
