@@ -68,29 +68,33 @@ def plot_shift_state(true_freq, est_freq, shift_pct, out_dir, init_name, target_
     plt.close()
 
 
-def detect_bad_buckets(
-    hybrid_est, queries, y_true_counts, y_pred_counts, error_threshold=1.2
-):
-    bad_buckets = set()
+def detect_bad_buckets(hybrid_est, queries, y_true_counts, y_pred_counts, error_threshold=1.3):
+    # Словарь: индекс бакета -> список ошибок запросов, которые его задели
+    bucket_errors = {i: [] for i in range(len(hybrid_est.buckets))}
+
     b_lo_vals = np.array([b.lo for b in hybrid_est.buckets])
     b_hi_vals = np.array([b.hi for b in hybrid_est.buckets])
 
-    # Защита от нулей для корректного поиска бакетов
-    y_t = np.maximum(y_true_counts, 1.0)
-    y_p = np.maximum(y_pred_counts, 1.0)
-
+    # 1. Собираем все ошибки
     for idx, q in enumerate(queries):
-        q_err = max(
-            y_t[idx] / y_p[idx],
-            y_p[idx] / y_t[idx],
-        )
-        if q_err > error_threshold:
-            start_idx = np.searchsorted(b_hi_vals, q.low)
-            end_idx = np.searchsorted(b_lo_vals, q.high, side="right")
-            for i in range(start_idx, end_idx):
-                bad_buckets.add(i)
-    return list(bad_buckets)
+        err = max(y_true_counts[idx] / (y_pred_counts[idx] + 1e-9),
+                  y_pred_counts[idx] / (y_true_counts[idx] + 1e-9))
 
+        # Находим бакеты для этого запроса
+        s_idx = np.searchsorted(b_hi_vals, q.low)
+        e_idx = np.searchsorted(b_lo_vals, q.high, side="right")
+
+        for i in range(s_idx, e_idx):
+            bucket_errors[i].append(err)
+
+    # 2. Проверяем медиану для каждого бакета
+    bad_buckets = []
+    for i, errors in bucket_errors.items():
+        if len(errors) > 5:  # Минимум 5 запросов, чтобы статистика была честной
+            if np.median(errors) > error_threshold:
+                bad_buckets.append(i)
+
+    return bad_buckets
 
 def main():
     parser = argparse.ArgumentParser(
@@ -142,7 +146,7 @@ def main():
             dm.base_path
             / "generated"
             / args.dataset
-            / f"shift_{args.init_dist}_to_{args.target_dist}_5%"
+            / f"shift_{args.init_dist}_to_{args.target_dist}_5%_dataset"
     )
 
     if not shift_dir.exists():
