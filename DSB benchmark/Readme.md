@@ -8,55 +8,15 @@ to study how **incremental data updates** affect column-level distributions in a
 data warehouse. We generate base data, apply 1000 refresh streams, capture distribution
 **checkpoints** at every 5% cumulative churn, and compare them statistically.
 
-```
-┌─────────────────┐      ┌───────────────────┐     ┌────────────────────┐
-│  setup.sh       │────▶ │  .dat base data   │────▶│  Python notebook   │
-│  (dsdgen/dsqgen)│      │  update streams   │     │  (analysis)        │
-│                 │      │  query workloads  │     │                    │
-└─────────────────┘      └───────────────────┘     └────────────────────┘
-```
 
----
+setup.sh 
+ |
+ V
+.dat base data
+ |
+ V
+Python notebook (analysis and updates)
 
-## Repository Structure
-
-```
-.
-├── README.md
-├── setup.sh                          # Data & query generation (shell)
-├── DSB_GENERATOR.ipynb               # Analysis notebook (Python)
-│
-├── dsb/                              # Cloned DSB repo (created by setup.sh)
-│   └── code/tools/
-│       ├── dsdgen                    # Data generator binary
-│       ├── dsqgen                    # Query generator binary
-│       ├── data1gb/                  # Base TPC-DS data (1GB scale)
-│       │   ├── catalog_returns.dat
-│       │   ├── web_sales.dat
-│       │   ├── item.dat
-│       │   └── ... (23 tables)
-│       ├── data1gbupdates/           # 1000 refresh streams
-│       │   ├── delete_1.dat ... delete_1000.dat
-│       │   ├── s_catalog_returns_1.dat ... s_catalog_returns_1000.dat
-│       │   ├── s_web_order_1.dat
-│       │   ├── s_web_order_lineitem_1.dat
-│       │   └── ...
-│       ├── query_templates/          # Custom .tpl files
-│       │   ├── custom_cr_item_sk.tpl
-│       │   ├── custom_cr_returned_time_sk.tpl
-│       │   ├── custom_ws_item_sk.tpl
-│       │   └── postgres.tpl
-│       └── deduped_queries/          # Deduplicated SQL workloads
-│           ├── custom_cr_item_sk_initial_deduped.sql
-│           ├── custom_cr_returned_time_sk_initial_deduped.sql
-│           └── custom_ws_item_sk_initial_deduped.sql
-│
-└── checkpoints/                      # Exported checkpoint CSVs (created by notebook)
-    ├── catalog_returns__cr_item_sk__initial.csv
-    ├── catalog_returns__cr_item_sk__churn_5pct.csv
-    ├── ...
-    └── web_sales__ws_item_sk__churn_100pct.csv
-```
 
 ---
 
