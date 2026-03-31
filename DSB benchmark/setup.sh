@@ -3,8 +3,8 @@
 # ============================================================
 
 # --- 0. INITIAL SETUP ---
-WORKLOAD_COUNT=40
-UPDATE_STREAMS=5
+WORKLOAD_COUNT=400000
+UPDATE_STREAMS=1000
 
 
 
