@@ -51,7 +51,7 @@ def generate_shift_sequence(
 
     max_y_freq = np.max(f_init + f_target)
 
-    out_dir = dm.base_path / "generated" / rows / f"shift_{init_dist}_to_{target_dist}_5%_workload"
+    out_dir = dm.base_path / "generated" / rows / f"shift_{init_dist}_to_{target_dist}_5%_dataset"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(
