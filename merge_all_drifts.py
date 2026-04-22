@@ -79,7 +79,7 @@ def merge_results(suffix, output_path):
     print(f'Combined results saved to {output_path}')
     
 if __name__ == '__main__':
-    merge_results('', 'results/combined_all_drifts.csv')
-    merge_results('_5%', 'results/combined_all_drifts_5%.csv')
-    merge_results('_5%_workload', 'results/combined_all_drifts_5%_workload.csv')
-    merge_results('_5%_workload_dataset', 'results/combined_all_drifts_5%_workload_dataset.csv')
+    merge_results('', 'results/drift_synthetic/combined_all_drifts.csv')
+    merge_results('_5%', 'results/drift_synthetic/combined_all_drifts_5%.csv')
+    merge_results('_5%_workload', 'results/drift_synthetic/combined_all_drifts_5%_workload.csv')
+    merge_results('_5%_workload_dataset', 'results/drift_synthetic/combined_all_drifts_5%_workload_dataset.csv')

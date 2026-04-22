@@ -3,8 +3,8 @@ import os
 
 def merge_csvs():
     # Input paths
-    equihist_path = "results/equihist_drift/gradual_normal_to_zipf_EquiHist/equihist_drift_analysis.csv"
-    equiwidth_path = "results/equiwidth_drift/gradual_normal_to_zipf_EquiWidth/equiwidth_drift_analysis.csv"
+    equihist_path = "results/drift_synthetic/equihist_drift/gradual_normal_to_zipf_EquiHist/equihist_drift_analysis.csv"
+    equiwidth_path = "results/drift_synthetic/equiwidth_drift/gradual_normal_to_zipf_EquiWidth/equiwidth_drift_analysis.csv"
     hybrid_path = "results/archive/hybrid_drift/gradual_normal_to_zipf_FT_RB/adaptation_ft_rb.csv"
     
     output_path = "results/merged_drift_analysis.csv"
