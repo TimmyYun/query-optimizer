@@ -40,13 +40,16 @@ def run_logic(args, out_dir, metadata):
     y_true_safe = true_cardinalities / N
 
     y_pred = []
+    infer_times = []
     inf_time_total = 0.0
     update_time_total = 0.0
 
     for q, truth in zip(queries, true_cardinalities):
         t0 = time.perf_counter()
         pred_val = max(eh_learner.predict(q), 1.0)
-        inf_time_total += time.perf_counter() - t0
+        it_val = time.perf_counter() - t0
+        inf_time_total += it_val
+        infer_times.append(it_val)
         y_pred.append(pred_val / N)
 
         t0 = time.perf_counter()
@@ -56,11 +59,19 @@ def run_logic(args, out_dir, metadata):
     y_pred = np.array(y_pred)
     m = summarize(y_true_safe, y_pred, "EquiHist")
 
+    infer_times = np.array(infer_times)
+    median_infer_time = np.median(infer_times)
+    avg_infer_time = np.mean(infer_times)
+    p95_infer_time = np.percentile(infer_times, 95)
+
     metrics = {
         "initial_build_time": initial_build_time,
         "update_time_total": update_time_total,
         "total_train_time": initial_build_time + update_time_total,
         "infer_time": inf_time_total,
+        "median_infer_time": median_infer_time,
+        "avg_infer_time": avg_infer_time,
+        "p95_infer_time": p95_infer_time,
         "median_q_error": m["QErr_median"],
         "p25_q_error": m["QErr_p25"],
         "p75_q_error": m["QErr_p75"],
