@@ -106,6 +106,7 @@ def run_logic(args, out_dir, metadata):
     print(start_msg)
 
     all_pred_counts = []
+    all_infer_times = []
     total_infer_time = 0.0
     total_ft_time = 0.0
 
@@ -123,7 +124,13 @@ def run_logic(args, out_dir, metadata):
 
             # 1. Predict (What the DB sees before execution)
             t0 = time.perf_counter()
-            batch_pred = np.array([hybrid_est.predict(q) for q in batch_q])
+            batch_pred = []
+            for q in batch_q:
+                st = time.perf_counter()
+                pred = hybrid_est.predict(q)
+                all_infer_times.append(time.perf_counter() - st)
+                batch_pred.append(pred)
+            batch_pred = np.array(batch_pred)
             total_infer_time += time.perf_counter() - t0
 
             # --- FIX: SANITY FLOOR (Никогда не предсказываем 0 строк) ---
@@ -185,11 +192,18 @@ def run_logic(args, out_dir, metadata):
     debug_plot_path = out_dir / "finetuned_baseline_debug.png"
     plot_bucket_debug(hybrid_est, queries, y_true_sel, y_pred_sel, debug_plot_path)
 
-    # Summarize Overall Performance (Online Experience)
+    all_infer_times = np.array(all_infer_times)
+    median_infer_time = np.median(all_infer_times)
+    avg_infer_time = np.mean(all_infer_times)
+    p95_infer_time = np.percentile(all_infer_times, 95)
+
     m = summarize(y_true_sel, y_pred_sel, "Hybrid_Online")
     metrics = {
         "train_time": t_train,
         "infer_time": total_infer_time,
+        "median_infer_time": median_infer_time,
+        "avg_infer_time": avg_infer_time,
+        "p95_infer_time": p95_infer_time,
         "ft_time": total_ft_time,
         "median_q_error": m["QErr_median"],
         "p25_q_error": m["QErr_p25"],

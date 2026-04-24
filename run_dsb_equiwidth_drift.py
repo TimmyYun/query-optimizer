@@ -133,10 +133,22 @@ def main():
 
         build_time = time.perf_counter() - t0_build
 
-        # Predict
         t0 = time.perf_counter()
-        y_pred_counts = np.maximum(np.array([ew_hist.predict(q) for q in queries]), 1.0)
+        y_pred_counts = []
+        infer_times = []
+        for q in queries:
+            st = time.perf_counter()
+            pred = ew_hist.predict(q)
+            infer_times.append(time.perf_counter() - st)
+            y_pred_counts.append(pred)
+        
+        y_pred_counts = np.maximum(np.array(y_pred_counts), 1.0)
         infer_time = time.perf_counter() - t0
+        
+        infer_times = np.array(infer_times)
+        median_infer_time = np.median(infer_times)
+        avg_infer_time = np.mean(infer_times)
+        p95_infer_time = np.percentile(infer_times, 95)
 
         m = summarize(y_true_sel, y_pred_counts / current_N, f"EquiWidth_{step_name}")
 
@@ -149,6 +161,9 @@ def main():
             "P95 Q-Error": m["QErr_p95"],
             "Avg Q-Error": m["QErr_avg"],
             "Inference Time": infer_time,
+            "Median Inference Time": median_infer_time,
+            "Avg Inference Time": avg_infer_time,
+            "P95 Inference Time": p95_infer_time,
             "Build Time": build_time,
         })
 
