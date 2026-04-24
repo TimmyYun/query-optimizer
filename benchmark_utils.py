@@ -265,5 +265,5 @@ def aggregate_summaries(results_dir="results"):
             by=["Dataset", "Workload", "Model"]
         )
         output_path = experiment_dir / "summary.csv"
-        df_summary.to_csv(output_path, index=False)
+        df_summary.to_csv(output_path, index=False, float_format="%.9f")
         print(f"  Saved aggregated summary to {output_path}")
