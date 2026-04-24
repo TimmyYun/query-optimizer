@@ -200,7 +200,15 @@ class HybridEstimator:
         for i in range(start_idx, end_idx + 1):
             if self.b_count[i] == 0:
                 continue
-            total += self._get_bucket_overlap_count(i, q.low, q.high)
+                
+            # As requested: if a query spans buckets 1, 2, 3, 4, 5, 
+            # buckets 2, 3, and 4 will be fully enclosed (q.low <= b_lo and q.high >= b_hi).
+            # For these, we skip the model and just sum the counts like usual equiwidth!
+            # The edge buckets (1 and 5) will fail this check and go to the 'else' to use the model.
+            if q.low <= self.b_lo[i] and q.high >= self.b_hi[i]:
+                total += self.b_count[i]
+            else:
+                total += self._get_bucket_overlap_count(i, q.low, q.high)
             
         return total
     def _bake_vectorized_data(self):
@@ -389,8 +397,8 @@ class HybridEstimator:
         models = {}
         t0 = time.perf_counter()
 
-        EARLY_EXIT_THRESHOLD = 1.3
-        COMPLEX_MODEL_THRESHOLD = 1.05
+        EARLY_EXIT_THRESHOLD = 1.5
+        COMPLEX_MODEL_THRESHOLD = 1.5
 
         def train_worker(i):
             train_rows, val_rows = rows_data[i]
@@ -545,13 +553,17 @@ class HybridEstimator:
         if lo > hi:
             return 0.0
         w = b.hi - b.lo + 1
-        cdf_hi = self._predict_local_cdf(self.models.get(b_idx), (hi - b.lo) / w)
+        
+        if hi == b.hi:
+            cdf_hi = 1.0
+        else:
+            cdf_hi = self._predict_local_cdf(self.models.get(b_idx), (hi - b.lo) / w)
+            
         prev = lo - 1
-        cdf_lo = (
-            0.0
-            if prev < b.lo
-            else self._predict_local_cdf(self.models.get(b_idx), (prev - b.lo) / w)
-        )
+        if prev < b.lo:
+            cdf_lo = 0.0
+        else:
+            cdf_lo = self._predict_local_cdf(self.models.get(b_idx), (prev - b.lo) / w)
 
         model_pred = max(0.0, cdf_hi - cdf_lo) * b.count
 
