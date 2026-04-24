@@ -155,17 +155,7 @@ def main():
         print(f"Using dynamic shift workloads with count: {workload_count_str}")
     # --------------------------------------------------------------
 
-    shift_dir = (
-            dm.base_path
-            / "generated"
-            / args.dataset
-            / f"shift_{args.init_dist}_to_{args.target_dist}_5%_dataset"
-    )
 
-    if not shift_dir.exists():
-        raise FileNotFoundError(
-            f"Directory {shift_dir} not found. Run generate_shifts.py first."
-        )
 
     # ЗАГРУЗКА ШАГА 0 (Инициализация)
     with open(shift_dir / "step_0.pkl", "rb") as f:
