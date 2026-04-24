@@ -112,8 +112,21 @@ def run_logic(args, out_dir, metadata):
     queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
 
     t0 = time.perf_counter()
-    y_pred_counts = np.maximum(np.array([hybrid_est.predict(q) for q in queries]), 1.0)
+    y_pred_counts = []
+    infer_times = []
+    for q in queries:
+        st = time.perf_counter()
+        pred = hybrid_est.predict(q)
+        infer_times.append(time.perf_counter() - st)
+        y_pred_counts.append(pred)
+        
+    y_pred_counts = np.maximum(np.array(y_pred_counts), 1.0)
     infer_time = time.perf_counter() - t0
+    
+    infer_times = np.array(infer_times)
+    median_infer_time = np.median(infer_times)
+    avg_infer_time = np.mean(infer_times)
+    p95_infer_time = np.percentile(infer_times, 95)
 
     y_true_counts = np.maximum(y_true_sel * N, 1.0)
     y_pred_safe = y_pred_counts / N
@@ -130,6 +143,9 @@ def run_logic(args, out_dir, metadata):
     metrics = {
         "train_time": t_train,
         "infer_time": infer_time,
+        "median_infer_time": median_infer_time,
+        "avg_infer_time": avg_infer_time,
+        "p95_infer_time": p95_infer_time,
         "median_q_error": m["QErr_median"],
         "p25_q_error": m["QErr_p25"],
         "p75_q_error": m["QErr_p75"],
