@@ -235,16 +235,27 @@ def main():
         # СТАДИЯ 0: SHOCK (Как модель реагирует сразу)
         # ==========================================
         t0_eval = time.perf_counter()
-        y_pred_shock = np.maximum(
-            np.array([hybrid_est.predict(q) for q in queries]), 1.0
-        )  # Sanity Floor
+        infer_times_shock = []
+        preds_shock = []
+        for q in queries:
+            t_start = time.perf_counter()
+            preds_shock.append(hybrid_est.predict(q))
+            infer_times_shock.append(time.perf_counter() - t_start)
+        y_pred_shock = np.maximum(np.array(preds_shock), 1.0)
         eval_time = time.perf_counter() - t0_eval
+        
+        median_infer_shock = float(np.median(infer_times_shock))
+        avg_infer_shock = float(np.mean(infer_times_shock))
+        p95_infer_shock = float(np.percentile(infer_times_shock, 95))
+        
         m_shock = summarize(
             y_true_sel, y_pred_shock / current_N, f"Shock_{shift_pct:.1f}"
         )
 
         m_ft, m_rb = m_shock, m_shock
         t_ft, t_rb, n_rebuilt, n_finetuned = 0.0, 0.0, 0, 0
+        median_infer_ft, avg_infer_ft, p95_infer_ft = median_infer_shock, avg_infer_shock, p95_infer_shock
+        median_infer_rb, avg_infer_rb, p95_infer_rb = median_infer_shock, avg_infer_shock, p95_infer_shock
 
         if step > 0:
             # ==========================================
@@ -254,7 +265,18 @@ def main():
             n_finetuned = hybrid_est.feedback_update(queries, y_true_counts, y_pred_shock, current_N)
             t_ft = time.perf_counter() - t0
 
-            y_pred_ft = np.maximum(np.array([hybrid_est.predict(q) for q in queries]), 1.0)
+            infer_times_ft = []
+            preds_ft = []
+            for q in queries:
+                t_start = time.perf_counter()
+                preds_ft.append(hybrid_est.predict(q))
+                infer_times_ft.append(time.perf_counter() - t_start)
+            y_pred_ft = np.maximum(np.array(preds_ft), 1.0)
+
+            median_infer_ft = float(np.median(infer_times_ft))
+            avg_infer_ft = float(np.mean(infer_times_ft))
+            p95_infer_ft = float(np.percentile(infer_times_ft, 95))
+            
             m_ft = summarize(y_true_sel, y_pred_ft / current_N, f"FT_{shift_pct:.1f}")
 
             # ==========================================
@@ -279,7 +301,18 @@ def main():
                 )
 
                 t_rb = time.perf_counter() - t1
-                y_pred_rb = np.maximum(np.array([hybrid_est.predict(q) for q in queries]), 1.0)
+                infer_times_rb = []
+                preds_rb = []
+                for q in queries:
+                    t_start = time.perf_counter()
+                    preds_rb.append(hybrid_est.predict(q))
+                    infer_times_rb.append(time.perf_counter() - t_start)
+                y_pred_rb = np.maximum(np.array(preds_rb), 1.0)
+
+                median_infer_rb = float(np.median(infer_times_rb))
+                avg_infer_rb = float(np.mean(infer_times_rb))
+                p95_infer_rb = float(np.percentile(infer_times_rb, 95))
+
                 m_rb = summarize(
                     y_true_sel, y_pred_rb / current_N, f"RB_{shift_pct:.1f}"
                 )
@@ -300,14 +333,23 @@ def main():
                 "Shock_Med": m_shock["QErr_median"],
                 "Shock_P95": m_shock["QErr_p95"],
                 "Shock_Avg": m_shock["QErr_avg"],
+                "Shock_Infer_Med": median_infer_shock,
+                "Shock_Infer_Avg": avg_infer_shock,
+                "Shock_Infer_P95": p95_infer_shock,
                 "Evaluation Time": eval_time,
                 "FT_Med": m_ft["QErr_median"],
                 "FT_P95": m_ft["QErr_p95"],
                 "FT_Avg": m_ft["QErr_avg"],
+                "FT_Infer_Med": median_infer_ft,
+                "FT_Infer_Avg": avg_infer_ft,
+                "FT_Infer_P95": p95_infer_ft,
                 "Finetuned_Count": n_finetuned,
                 "RB_Med": m_rb["QErr_median"],
                 "RB_P95": m_rb["QErr_p95"],
                 "RB_Avg": m_rb["QErr_avg"],
+                "RB_Infer_Med": median_infer_rb,
+                "RB_Infer_Avg": avg_infer_rb,
+                "RB_Infer_P95": p95_infer_rb,
                 "Rebuilt_Count": n_rebuilt,
                 "FT_Time": t_ft,
                 "RB_Time": t_rb,
