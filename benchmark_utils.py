@@ -242,6 +242,9 @@ def aggregate_summaries(results_dir="results"):
                             or metrics.get("build_time")
                             or metrics.get("total_train_time"),
                             "Inference Time (s)": metrics.get("infer_time"),
+                            "Median Inference Time (s)": metrics.get("median_infer_time"),
+                            "Avg Inference Time (s)": metrics.get("avg_infer_time"),
+                            "95% Inference Time (s)": metrics.get("p95_infer_time"),
                         }
                     )
             except Exception as e:
