@@ -32,13 +32,19 @@ def main():
     parser.add_argument("--out-dir", type=str, default="results")
     parser.add_argument("--experiment-name", type=str, default=None)
     parser.add_argument("--shift-workload", action="store_true", help="If set, uses step-wise workloads from shift directory instead of static workload.")
+    parser.add_argument("--shift-dir", type=str, required=False, help="Explicit path to shift dataset directory")
+    parser.add_argument("--static-workload-path", type=str, required=False, help="Explicit path to static workload")
     args = parser.parse_args()
 
     ds_out_name = f"gradual_{args.init_dist}_to_{args.target_dist}_EquiHist"
     out_dir = setup_out_dir(args, ds_out_name)
 
     dm = DatasetManager()
-    shift_dir = dm.base_path / "generated" / args.dataset / f"shift_{args.init_dist}_to_{args.target_dist}_5%_dataset"
+    
+    if args.shift_dir:
+        shift_dir = Path(args.shift_dir)
+    else:
+        shift_dir = dm.base_path / "generated" / args.dataset / f"shift_{args.init_dist}_to_{args.target_dist}_5%_dataset"
 
     if not shift_dir.exists():
         raise FileNotFoundError(f"Directory {shift_dir} not found. Run generate_shifts.py first.")
@@ -58,12 +64,15 @@ def main():
             workload_count_str = match.group(0)
 
     # --- Определение статического ворклоада (Fallback) ---
-    static_workload_path = Path(args.workload)
-    if not static_workload_path.exists():
-        init_dist_dir = dm.base_path / "generated" / args.dataset / args.init_dist
-        static_workload_path = init_dist_dir / f"workload_driven_{workload_count_str}.csv"
+    if args.static_workload_path:
+        static_workload_path = Path(args.static_workload_path)
+    else:
+        static_workload_path = Path(args.workload)
         if not static_workload_path.exists():
-            print(f"Warning: Static workload not found at {static_workload_path}")
+            init_dist_dir = dm.base_path / "generated" / args.dataset / args.init_dist
+            static_workload_path = init_dist_dir / f"workload_driven_{workload_count_str}.csv"
+            if not static_workload_path.exists():
+                print(f"Warning: Static workload not found at {static_workload_path}")
     
     if not args.shift_workload:
         print(f"Using static workload: {static_workload_path}")
@@ -81,9 +90,15 @@ def main():
 
     summary_records = []
 
+    step_files = list(shift_dir.glob("step_*.pkl"))
+    num_steps = len(step_files)
+    if num_steps == 0:
+        raise ValueError(f"No step_*.pkl files found in {shift_dir}")
+    divisor = max(1, num_steps - 1)
+
     # ПРОГОН ПО ВСЕМ ШАГАМ ДРИФТА
-    for step in range(21):
-        shift_pct = step / 20.0
+    for step in range(num_steps):
+        shift_pct = step / divisor
         with open(shift_dir / f"step_{step}.pkl", "rb") as f:
             step_mn, step_mx, current_N, current_freq, mixed_sample, step_k = pickle.load(f)
 
