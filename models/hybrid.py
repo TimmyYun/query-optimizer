@@ -192,6 +192,20 @@ class HybridEstimator:
         q_lo = np.array([q.low for q in queries], dtype=np.float64)
         q_hi = np.array([q.high for q in queries], dtype=np.float64)
         total_counts = np.zeros(n_queries)
+        
+        if len(self.buckets) == 0:
+            return total_counts
+
+        n_buckets = len(self.buckets)
+        bw = self.b_width[0]
+        mn = self.b_lo[0]
+        
+        if bw <= 0:
+            bw = 1.0
+
+        # FAST MASKING: O(1) index bounding instead of float coordinate checks inside loop
+        start_idx = np.clip((q_lo - mn) // bw, 0, n_buckets - 1).astype(int)
+        end_idx = np.clip((q_hi - mn) // bw, 0, n_buckets - 1).astype(int)
 
         for i in range(len(self.buckets)):
             b_count = self.b_count[i]
@@ -199,7 +213,9 @@ class HybridEstimator:
                 continue
 
             b_lo, b_hi, b_width = self.b_lo[i], self.b_hi[i], self.b_width[i]
-            mask = (q_hi >= b_lo) & (q_lo <= b_hi)
+            
+            # Rapid integer comparison check
+            mask = (start_idx <= i) & (end_idx >= i)
             if not np.any(mask):
                 continue
 

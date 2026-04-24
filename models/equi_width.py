@@ -20,12 +20,16 @@ class EquiWidthHistogram:
             self.b_hi = np.array([], dtype=np.float64)
             self.b_count = np.array([], dtype=np.float64)
             self.b_width = np.array([], dtype=np.float64)
+            self.prefix_counts = np.array([], dtype=np.float64)
             return
 
         self.b_lo = np.array([b.lo for b in self.buckets], dtype=np.float64)
         self.b_hi = np.array([b.hi for b in self.buckets], dtype=np.float64)
         self.b_count = np.array([b.count for b in self.buckets], dtype=np.float64)
         self.b_width = self.b_hi - self.b_lo + 1
+        
+        self.prefix_counts = np.zeros(len(self.buckets) + 1, dtype=np.float64)
+        self.prefix_counts[1:] = np.cumsum(self.b_count)
 
     @staticmethod
     def build_from_sample(
@@ -76,7 +80,7 @@ class EquiWidthHistogram:
 
     def predict_batch(self, queries: List[RangeQuery]) -> np.ndarray:
         """
-        Vectorized bulk inference for Equi-Width Histogram.
+        Vectorized bulk inference for Equi-Width Histogram using O(1) mathematical lookup.
         """
         if not self.buckets:
             return np.zeros(len(queries))
@@ -86,37 +90,47 @@ class EquiWidthHistogram:
         q_hi = np.array([q.high for q in queries], dtype=np.float64)
         total = np.zeros(n_queries)
 
-        # Iterate over buckets (vectorized over queries)
-        # This is generally faster than iterating over queries if N_Buckets << N_Queries
-        for i in range(len(self.buckets)):
-            b_cnt = self.b_count[i]
-            if b_cnt == 0:
-                continue
+        n_buckets = len(self.buckets)
+        bw = self.b_width[0]
+        mn = self.b_lo[0]
 
-            b_lo = self.b_lo[i]
-            b_hi = self.b_hi[i]
-            b_width = self.b_width[i]
+        if bw <= 0:
+            bw = 1.0
 
-            # Mask: query overlaps with bucket
-            # Overlap if: q.high >= b.lo AND q.low <= b.hi
-            mask = (q_hi >= b_lo) & (q_lo <= b_hi)
+        # O(1) mathematical mapping
+        start_idx = np.clip((q_lo - mn) // bw, 0, n_buckets - 1).astype(int)
+        end_idx = np.clip((q_hi - mn) // bw, 0, n_buckets - 1).astype(int)
 
-            if not np.any(mask):
-                continue
+        mask_same = start_idx == end_idx
+        mask_diff = ~mask_same
 
-            # Vectorized Overlap Calculation
-            # lo = max(q_lo, b_lo)
-            # hi = min(q_hi, b_hi)
+        if np.any(mask_same):
+            idx = start_idx[mask_same]
+            lo = np.maximum(q_lo[mask_same], self.b_lo[idx])
+            hi = np.minimum(q_hi[mask_same], self.b_hi[idx])
+            overlap = np.maximum(0.0, hi - lo + 1)
+            total[mask_same] = (overlap / self.b_width[idx]) * self.b_count[idx]
 
-            lo = np.maximum(q_lo[mask], b_lo)
-            hi = np.minimum(q_hi[mask], b_hi)
+        if np.any(mask_diff):
+            s_idx = start_idx[mask_diff]
+            e_idx = end_idx[mask_diff]
 
-            overlap_width = hi - lo + 1
-            # overlap_width = np.maximum(0, overlap_width) # Implicitly handled by mask?
-            # Actually mask guarantees q_hi >= b_lo and q_lo <= b_hi,
-            # so hi >= lo is guaranteed.
+            # Start bucket overlap
+            s_lo = np.maximum(q_lo[mask_diff], self.b_lo[s_idx])
+            s_hi = self.b_hi[s_idx]
+            s_overlap = np.maximum(0.0, s_hi - s_lo + 1)
+            s_count = (s_overlap / self.b_width[s_idx]) * self.b_count[s_idx]
 
-            total[mask] += (overlap_width / b_width) * b_cnt
+            # End bucket overlap
+            e_lo = self.b_lo[e_idx]
+            e_hi = np.minimum(q_hi[mask_diff], self.b_hi[e_idx])
+            e_overlap = np.maximum(0.0, e_hi - e_lo + 1)
+            e_count = (e_overlap / self.b_width[e_idx]) * self.b_count[e_idx]
+
+            # Middle buckets pure O(1) sum via prefix_counts
+            mid_count = np.maximum(0.0, self.prefix_counts[e_idx] - self.prefix_counts[s_idx + 1])
+
+            total[mask_diff] = s_count + e_count + mid_count
 
         return total
 
