@@ -143,7 +143,7 @@ def main():
 
         # 3. Оценка (Prediction)
         t0 = time.perf_counter()
-        y_pred_counts = np.maximum(ew_hist.predict_batch(queries), 1.0)  # Sanity Floor
+        y_pred_counts = np.maximum(np.array([ew_hist.predict(q) for q in queries]), 1.0)  # Sanity Floor
         infer_time = time.perf_counter() - t0
 
         m = summarize(y_true_sel, y_pred_counts / current_N, f"EquiWidth_{shift_pct:.1f}")

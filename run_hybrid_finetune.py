@@ -123,7 +123,7 @@ def run_logic(args, out_dir, metadata):
 
             # 1. Predict (What the DB sees before execution)
             t0 = time.perf_counter()
-            batch_pred = hybrid_est.predict_batch(batch_q)
+            batch_pred = np.array([hybrid_est.predict(q) for q in batch_q])
             total_infer_time += time.perf_counter() - t0
 
             # --- FIX: SANITY FLOOR (Никогда не предсказываем 0 строк) ---

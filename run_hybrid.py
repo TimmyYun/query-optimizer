@@ -112,7 +112,7 @@ def run_logic(args, out_dir, metadata):
     queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
 
     t0 = time.perf_counter()
-    y_pred_counts = np.maximum(hybrid_est.predict_batch(queries), 1.0)
+    y_pred_counts = np.maximum(np.array([hybrid_est.predict(q) for q in queries]), 1.0)
     infer_time = time.perf_counter() - t0
 
     y_true_counts = np.maximum(y_true_sel * N, 1.0)

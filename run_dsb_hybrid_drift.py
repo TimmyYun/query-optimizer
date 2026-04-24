@@ -168,7 +168,7 @@ def main():
 
         # STAGE 0: SHOCK
         t0_eval = time.perf_counter()
-        y_pred_shock = np.maximum(hybrid_est.predict_batch(queries), 1.0)
+        y_pred_shock = np.maximum(np.array([hybrid_est.predict(q) for q in queries]), 1.0)
         eval_time = time.perf_counter() - t0_eval
         m_shock = summarize(y_true_sel, y_pred_shock / current_N, f"Shock_{step_name}")
 
@@ -181,7 +181,7 @@ def main():
             n_finetuned = hybrid_est.feedback_update(queries, y_true_counts, y_pred_shock, current_N)
             t_ft = time.perf_counter() - t0
 
-            y_pred_ft = np.maximum(hybrid_est.predict_batch(queries), 1.0)
+            y_pred_ft = np.maximum(np.array([hybrid_est.predict(q) for q in queries]), 1.0)
             m_ft = summarize(y_true_sel, y_pred_ft / current_N, f"FT_{step_name}")
 
             # STAGE 2: REBUILD
@@ -197,7 +197,7 @@ def main():
                     bucket_indices=bad_indices,
                 )
                 t_rb = time.perf_counter() - t1
-                y_pred_rb = np.maximum(hybrid_est.predict_batch(queries), 1.0)
+                y_pred_rb = np.maximum(np.array([hybrid_est.predict(q) for q in queries]), 1.0)
                 m_rb = summarize(y_true_sel, y_pred_rb / current_N, f"RB_{step_name}")
 
             hybrid_est.report_models(

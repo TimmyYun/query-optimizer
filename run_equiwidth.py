@@ -41,7 +41,7 @@ def run_logic(args, out_dir, metadata):
 
     # Evaluate
     t0 = time.perf_counter()
-    y_pred_counts = ew_hist.predict_batch(queries)
+    y_pred_counts = np.array([ew_hist.predict(q) for q in queries])
     infer_time = time.perf_counter() - t0
 
     y_pred_counts = np.maximum(y_pred_counts, 1.0)
