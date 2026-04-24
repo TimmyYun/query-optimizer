@@ -177,73 +177,32 @@ class HybridEstimator:
         return self.last_train_time
 
     def predict(self, q: RangeQuery) -> float:
-        total = 0.0
-        for i in range(len(self.buckets)):
-            if self.buckets[i].count == 0:
-                continue
-            total += self._get_bucket_overlap_count(i, q.low, q.high)
-        return total
-
-    def predict_batch(self, queries: List[RangeQuery]) -> np.ndarray:
         if self.b_lo is None or len(self.b_lo) != len(self.buckets):
             self._bake_vectorized_data()
 
-        n_queries = len(queries)
-        q_lo = np.array([q.low for q in queries], dtype=np.float64)
-        q_hi = np.array([q.high for q in queries], dtype=np.float64)
-        total_counts = np.zeros(n_queries)
-        
         if len(self.buckets) == 0:
-            return total_counts
+            return 0.0
 
         n_buckets = len(self.buckets)
         bw = self.b_width[0]
         mn = self.b_lo[0]
-        
+
         if bw <= 0:
             bw = 1.0
 
-        # FAST MASKING: O(1) index bounding instead of float coordinate checks inside loop
-        start_idx = np.clip((q_lo - mn) // bw, 0, n_buckets - 1).astype(int)
-        end_idx = np.clip((q_hi - mn) // bw, 0, n_buckets - 1).astype(int)
+        start_idx = int((q.low - mn) // bw)
+        start_idx = max(0, min(start_idx, n_buckets - 1))
+        
+        end_idx = int((q.high - mn) // bw)
+        end_idx = max(0, min(end_idx, n_buckets - 1))
 
-        for i in range(len(self.buckets)):
-            b_count = self.b_count[i]
-            if b_count == 0:
+        total = 0.0
+        for i in range(start_idx, end_idx + 1):
+            if self.b_count[i] == 0:
                 continue
-
-            b_lo, b_hi, b_width = self.b_lo[i], self.b_hi[i], self.b_width[i]
+            total += self._get_bucket_overlap_count(i, q.low, q.high)
             
-            # Rapid integer comparison check
-            mask = (start_idx <= i) & (end_idx >= i)
-            if not np.any(mask):
-                continue
-
-            lo_clamped = np.maximum(q_lo[mask], b_lo)
-            hi_clamped = np.minimum(q_hi[mask], b_hi)
-
-            x_hi = np.clip((hi_clamped - b_lo) / b_width, 0.0, 1.0)
-            x_lo_prev = (lo_clamped - 1 - b_lo) / b_width
-
-            model = self.models.get(i)
-            cdf_hi = self._predict_local_cdf_vec(model, x_hi, b_idx=i)
-
-            cdf_lo = np.zeros_like(cdf_hi)
-            lo_active = x_lo_prev >= 0
-            if np.any(lo_active):
-                cdf_lo[lo_active] = self._predict_local_cdf_vec(
-                    model, x_lo_prev[lo_active], b_idx=i
-                )
-
-            model_pred = np.maximum(0.0, (cdf_hi - cdf_lo) * b_count)
-            uniform_pred = ((hi_clamped - lo_clamped + 1) / b_width) * b_count
-
-            total_counts[mask] += np.where(
-                model_pred < 1e-3, uniform_pred * 0.05, model_pred
-            )
-
-        return total_counts
-
+        return total
     def _bake_vectorized_data(self):
         n = len(self.buckets)
         self.b_lo = np.array([b.lo for b in self.buckets], dtype=np.float64)
