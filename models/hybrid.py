@@ -398,7 +398,7 @@ class HybridEstimator:
         t0 = time.perf_counter()
 
         EARLY_EXIT_THRESHOLD = 1.5
-        COMPLEX_MODEL_THRESHOLD = 1.5
+        COMPLEX_MODEL_THRESHOLD = 3
 
         def train_worker(i):
             train_rows, val_rows = rows_data[i]

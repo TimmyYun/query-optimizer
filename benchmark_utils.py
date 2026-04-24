@@ -188,8 +188,17 @@ def save_benchmark_results(
     # Save Summary JSON
     summary_path = out_dir / f"summary_{model_name}.json"
     summary_data = {"model": model_name, "wl_name": wl_name, "metrics": metrics}
+    
+    import re
+    def repl_scientific(m):
+        val = float(m.group(0))
+        return f"{val:.9f}"
+        
+    summary_json_str = json.dumps(summary_data, indent=4)
+    summary_json_str = re.sub(r'[-+]?\d+(?:\.\d+)?[eE][-+]?\d+', repl_scientific, summary_json_str)
+    
     with open(summary_path, "w") as f:
-        json.dump(summary_data, f, indent=4)
+        f.write(summary_json_str)
 
     print(f"Results saved to {result_file} and {summary_path}")
 
