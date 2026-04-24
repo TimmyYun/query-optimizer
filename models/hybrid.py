@@ -544,7 +544,31 @@ class HybridEstimator:
         return models, time.perf_counter() - t0
 
     def _predict_local_cdf(self, model, x_norm) -> float:
-        return float(self._predict_local_cdf_vec(model, np.array([x_norm]))[0])
+        if model is None:
+            pred = x_norm
+        elif isinstance(model, tuple):
+            m_type = model[0]
+            if m_type == "linear":
+                pred = x_norm * model[1] + model[2]
+            elif m_type == "poly3":
+                p, inter = model[1], model[2]
+                pred = inter + p[0] * x_norm + p[1] * (x_norm**2) + p[2] * (x_norm**3)
+            elif m_type == "power":
+                pred = model[1] * (x_norm**0.5) + model[2]
+            elif m_type == "poly":
+                p, inter = model[1], model[2]
+                pred = inter + p[0] * x_norm + p[1] * (x_norm**2)
+            elif m_type == "log_linear":
+                import math
+                pred = model[1] * math.log(x_norm + 1e-7) + model[2]
+            else:
+                pred = x_norm
+        else:
+            return float(self._predict_local_cdf_vec(model, np.array([x_norm]))[0])
+            
+        if pred < 0.0: return 0.0
+        if pred > 1.0: return 1.0
+        return pred
 
     def _get_bucket_overlap_count(self, b_idx: int, q_lo: int, q_hi: int) -> float:
         b = self.buckets[b_idx]
