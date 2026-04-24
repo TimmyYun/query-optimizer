@@ -131,15 +131,23 @@ def main():
 
         # Online learning on workload
         y_pred = []
+        infer_times = []
         t0_eval = time.perf_counter()
 
         for q, truth in zip(queries, y_true_counts):
+            st = time.perf_counter()
             pred_val = max(eh_learner.predict(q), 1.0)
+            infer_times.append(time.perf_counter() - st)
             y_pred.append(pred_val / current_N)
             eh_learner.update(q, float(truth), pred=float(pred_val))
 
         total_time = time.perf_counter() - t0_eval
         y_pred = np.array(y_pred)
+        
+        infer_times = np.array(infer_times)
+        median_infer_time = np.median(infer_times)
+        avg_infer_time = np.mean(infer_times)
+        p95_infer_time = np.percentile(infer_times, 95)
 
         m = summarize(y_true_sel, y_pred, f"EquiHist_{step_name}")
         print(f"Step {step_name:>15s} ({shift_pct:>4.0%}): Median QErr = {m['QErr_median']:.2f}")
@@ -151,6 +159,9 @@ def main():
             "P95 Q-Error": m["QErr_p95"],
             "Avg Q-Error": m["QErr_avg"],
             "Time": total_time,
+            "Median Inference Time": median_infer_time,
+            "Avg Inference Time": avg_infer_time,
+            "P95 Inference Time": p95_infer_time,
         })
 
     pd.DataFrame(summary_records).to_csv(out_dir / "equihist_drift_analysis.csv", index=False)

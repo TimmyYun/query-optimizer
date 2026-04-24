@@ -116,11 +116,14 @@ def main():
 
         # 3. Онлайн-обучение на ворклоаде (как в run_equihist.py)
         y_pred = []
+        infer_times = []
         t0_eval = time.perf_counter()
 
         for q, truth in zip(queries, y_true_counts):
+            st = time.perf_counter()
             # Предсказание с защитой от 0
             pred_val = max(eh_learner.predict(q), 1.0)
+            infer_times.append(time.perf_counter() - st)
             y_pred.append(pred_val / current_N)
 
             # Немедленное обновление (Feedback Loop)
@@ -128,6 +131,11 @@ def main():
 
         total_time = time.perf_counter() - t0_eval
         y_pred = np.array(y_pred)
+        
+        infer_times = np.array(infer_times)
+        median_infer_time = np.median(infer_times)
+        avg_infer_time = np.mean(infer_times)
+        p95_infer_time = np.percentile(infer_times, 95)
 
         # Метрики для текущего шага
         m = summarize(y_true_sel, y_pred, f"EquiHist_Step_{step}")
@@ -138,7 +146,10 @@ def main():
             "Median Q-Error": m["QErr_median"],
             "P95 Q-Error": m["QErr_p95"],
             "Avg Q-Error": m["QErr_avg"],
-            "Time": total_time
+            "Time": total_time,
+            "Median Inference Time": median_infer_time,
+            "Avg Inference Time": avg_infer_time,
+            "P95 Inference Time": p95_infer_time,
         })
 
     pd.DataFrame(summary_records).to_csv(out_dir / "equihist_drift_analysis.csv", index=False)
