@@ -19,7 +19,7 @@ def run_logic(args, out_dir, metadata):
     workload_path = Path(args.workload)
     if not workload_path.exists():
         # Если передан не путь, а число (count), ищем внутри папки датасета
-        potential_path = Path(args.dataset) / f"workload_driven_{args.workload}.csv"
+        potential_path = Path(args.dataset) / f"workload_{args.workload}.csv"
         if potential_path.exists():
             workload_path = potential_path
         else:
