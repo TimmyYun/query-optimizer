@@ -400,6 +400,13 @@ class HybridEstimator:
         EARLY_EXIT_THRESHOLD = 1.5
         COMPLEX_MODEL_THRESHOLD = 3
 
+        # rng is shared between the workers below, and they run in threads.
+        # Drawing from it inside a worker makes every bucket's seed depend on
+        # thread scheduling order, so the same input produced different models
+        # run to run. Draw once here instead: each bucket still gets its own
+        # seed (base_seed + i), but now a fixed one.
+        base_seed = int(rng.integers(0, 9999999))
+
         def train_worker(i):
             train_rows, val_rows = rows_data[i]
             bucket = self.buckets[i]
@@ -431,7 +438,7 @@ class HybridEstimator:
             )
             weights = 1.0 + (local_probs[x_indices] / (local_probs.max() + 1e-9)) * 5.0
 
-            local_rng = np.random.default_rng(rng.integers(0, 9999999) + i)
+            local_rng = np.random.default_rng(base_seed + i)
             val_queries = self._generate_bucket_queries(
                 bucket, n_queries=500, rng=local_rng, freq=freq, mn=mn
             )
@@ -499,9 +506,9 @@ class HybridEstimator:
                 return i, best_model
 
             try:
-                dt_mdl = DecisionTreeRegressor(max_depth=4).fit(
-                    X_train, y_train, sample_weight=weights
-                )
+                dt_mdl = DecisionTreeRegressor(
+                    max_depth=4, random_state=base_seed + i
+                ).fit(X_train, y_train, sample_weight=weights)
                 q, p95, _ = check(dt_mdl)
                 if q < best_q:
                     best_q, best_p95, best_model = q, p95, dt_mdl
@@ -523,7 +530,9 @@ class HybridEstimator:
                     mapper = FourierFeatureMapper(num_bands=32, max_freq=1000.0)
                     X_f_train = mapper.transform(X_train)
                     mdl_f_mlp = MLPRegressor(
-                        hidden_layer_sizes=(64, 32), max_iter=500
+                        hidden_layer_sizes=(64, 32),
+                        max_iter=500,
+                        random_state=base_seed + i,
                     ).fit(X_f_train, y_train)
                     mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
                     q, p95, _ = check(mdl_fourier)

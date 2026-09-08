@@ -24,7 +24,16 @@ dependencies = [
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.ruff]
+# Cloned third-party TPC-DS toolkit, not our code
+extend-exclude = ["DSB benchmark/dsb"]
+
+[tool.poetry]
+package-mode = false
+
 [tool.poetry.group.dev.dependencies]
 markdown = "^3.10"
 ruff = "^0.15.3"
+nbconvert = "^7.16.6"
+ipykernel = "^6.30.1"
 
