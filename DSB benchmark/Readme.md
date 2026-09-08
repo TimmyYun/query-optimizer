@@ -64,6 +64,29 @@ WORKLOAD_COUNT=400000   # Number of generated queries per template
 UPDATE_STREAMS=1000     # Number of refresh streams
 ```
 
+### Running on macOS
+
+`setup.sh` above targets Linux. On macOS use the port, which performs the same
+steps plus the source patches the TPC-DS toolkit needs under Apple clang:
+
+```bash
+bash setup_macos.sh                     # 200 streams, ~3.4GB (default)
+UPDATE_STREAMS=1000 bash setup_macos.sh # the original Linux setting, ~17GB
+```
+
+It is idempotent — the clone, the build, the base data and any update stream
+that already exists are skipped, so it is safe to re-run after an interruption.
+
+| Problem on macOS | Fix applied |
+|---|---|
+| `<values.h>` does not exist | `config.h` switched to `<limits.h>`, with `MAXINT` defined as `INT_MAX` — the same value glibc uses, so generated data is byte-identical |
+| `<malloc.h>` does not exist | replaced with `<stdlib.h>` |
+| clang 15+ treats implicit declarations and int conversions as errors | build adds `-Wno-implicit-function-declaration -Wno-int-conversion -Wno-implicit-int -Wno-return-type` |
+| `mkdir ./query_templates` fails; `cd` depends on caller's cwd; no `set -e` | `mkdir -p`, paths resolved relative to the script, `set -e` |
+
+Verified with Apple clang 21 on arm64: both `dsdgen` and `dsqgen` build and
+produce valid TPC-DS output.
+
 ### Custom Query Templates
 
 Each template generates a **range predicate** (`BETWEEN`) with randomized bounds:
@@ -86,6 +109,20 @@ pip install pandas numpy matplotlib seaborn scipy
 ```
 
 ### Configuration (in notebook)
+
+The three paths are read from environment variables, so the notebook can run
+headlessly. Unset, they fall back to the original hardcoded defaults.
+
+| Variable | Meaning |
+|---|---|
+| `DSB_DATA_DIR` | base `.dat` files |
+| `DSB_UPDATES_DIR` | update streams (extracted folder, NOT archive) |
+| `DSB_EXPORT_DIR` | where checkpoint CSVs are written |
+| `DSB_NUM_STREAMS` | how many refresh streams to replay (default 1000) |
+| `DSB_TABLES` | optional comma-separated table allow-list; the pipeline only needs 13 of the 23 tables, and skipping the rest avoids reading ~1GB of `store_sales` / `catalog_sales` / `inventory` |
+
+From the repository root, `./setup_env.sh --dsb-drift` sets all of these and
+executes the notebook via `jupyter nbconvert`, writing to `data/dsb/drift/`.
 
 ```python
 # Path to base .dat files
