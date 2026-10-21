@@ -36,4 +36,5 @@ markdown = "^3.10"
 ruff = "^0.15.3"
 nbconvert = "^7.16.6"
 ipykernel = "^6.30.1"
+pytest = "^9.1.1"
 

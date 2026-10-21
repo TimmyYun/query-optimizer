@@ -51,7 +51,8 @@ Expect `results/smoke/normal/summary_EquiWidth.json` and `results/smoke/summary.
 
 ## 2. Static synthetic benchmarks
 
-Runs Equi-Width, Equi-Hist and Hybrid across all 5 distributions.
+Runs Equi-Width, Hybrid, TKHist, EquiDepth, STHist and EntropyHist-MEA across all 5 distributions.
+Equi-Hist is excluded from the experiment design (too slow); `run_equihist.py` / `run_equihist_drift.py` are kept and can still be run manually.
 
 ```bash
 poetry run python run_experiments.py --scenario simple_wide
@@ -203,7 +204,6 @@ Then, per column:
 ```bash
 for col in ws_item_sk cr_item_sk cr_returned_time_sk; do
     poetry run python run_dsb_equiwidth_drift.py --column $col --experiment-name dsb_drift
-    poetry run python run_dsb_equihist_drift.py  --column $col --experiment-name dsb_drift
     poetry run python run_dsb_hybrid_drift.py    --column $col --experiment-name dsb_drift
 done
 ```

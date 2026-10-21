@@ -68,7 +68,8 @@ execute_suite() {
     }
 
     run_model "run_equiwidth.py" "Equi-Width"
-    run_model "run_equihist.py" "Equi-Hist"
+    # EquiHist исключён из дизайна эксперимента (слишком медленный); реализация сохранена: run_equihist.py / run_equihist_drift.py
+    # run_model "run_equihist.py" "Equi-Hist"
     run_model "run_hybrid.py" "Hybrid"
 }
 

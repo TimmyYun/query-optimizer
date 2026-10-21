@@ -37,7 +37,8 @@ def main():
     # No dynamic generation is needed or allowed.
     args = parser.parse_args()
 
-    models = ["Equi-Width", "Equi-Hist", "Hybrid"]
+    # EquiHist исключён из дизайна эксперимента (слишком медленный); реализация сохранена: run_equihist.py / run_equihist_drift.py
+    models = ["Equi-Width", "Hybrid", "TKHist", "EquiDepth", "STHist", "EntropyHist-MEA"]
     scenarios_to_run = []
     
     if args.scenario == 'all':
@@ -70,7 +71,7 @@ def main():
                     
                 w_file = workload_files[0]
                 
-                for script, model in zip(["run_equiwidth.py", "run_equihist.py", "run_hybrid.py"], models):
+                for script, model in zip(["run_equiwidth.py", "run_hybrid.py", "run_tkhist.py", "run_equidepth.py", "run_sthist.py", "run_entropyhist.py"], models):
                     run_cmd(f"poetry run python {script} --experiment-name {exp_name} --dataset {ds_path} --workload {w_file}")
                 
                 final_report.extend(collect_table(ds, models, f"results/{exp_name}/{ds}"))
@@ -107,7 +108,7 @@ def main():
                 
                 # 3. Run models
                 exp_name = f"synth_{sc}"
-                for script, model in zip(["run_equiwidth.py", "run_equihist.py", "run_hybrid.py"], models):
+                for script, model in zip(["run_equiwidth.py", "run_hybrid.py", "run_tkhist.py", "run_equidepth.py", "run_sthist.py", "run_entropyhist.py"], models):
                     run_cmd(f"poetry run python {script} --experiment-name {exp_name} --dataset {ds_path} --workload {workload_arg}")
                     
                 final_report.extend(collect_table(f"{dist}_{sc}", models, f"results/{exp_name}/{dist}"))

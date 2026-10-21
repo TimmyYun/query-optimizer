@@ -58,7 +58,8 @@ def main():
         }
     }
 
-    models = ["run_equiwidth_drift.py", "run_equihist_drift.py", "run_hybrid_drift.py"]
+    # EquiHist исключён из дизайна эксперимента (слишком медленный); реализация сохранена: run_equihist.py / run_equihist_drift.py
+    models = ["run_equiwidth_drift.py", "run_hybrid_drift.py", "run_tkhist_drift.py", "run_equidepth_drift.py", "run_sthist_drift.py", "run_entropyhist_drift.py"]
 
     for sc in scenarios:
         print("\n" + "="*50)

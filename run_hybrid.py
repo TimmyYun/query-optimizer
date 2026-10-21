@@ -10,6 +10,38 @@ from benchmark_utils import (
     save_benchmark_results,
 )
 import matplotlib.pyplot as plt
+from models.common import Bucket
+
+
+def build_equidepth_buckets(mn, mx, bins, sample, total_rows):
+    """
+    Бакеты равной глубины по квантилям выборки (границы — целые, без дублей),
+    покрывающие весь [mn, mx]. Счётчики — по выборке, масштаб N / len(sample).
+    """
+    sample_sorted = np.sort(sample)
+    scale = total_rows / len(sample)
+    qs = np.quantile(sample_sorted, np.linspace(0, 1, bins + 1)[1:-1])
+    edges = np.unique(np.concatenate([[mn], np.floor(qs).astype(np.int64) + 1]))
+    edges = edges[(edges >= mn) & (edges <= mx)]
+    buckets = []
+    for j, lo in enumerate(edges):
+        hi = int(edges[j + 1]) - 1 if j + 1 < len(edges) else mx
+        cnt = np.searchsorted(sample_sorted, hi, side="right") - np.searchsorted(
+            sample_sorted, lo, side="left"
+        )
+        buckets.append(Bucket(int(lo), int(hi), count=float(cnt * scale)))
+    return buckets
+
+
+def model_name_for(args):
+    name = "Hybrid"
+    if args.partition == "equidepth":
+        name += "-ED"
+    if args.parametric_only:
+        name += "-param"
+    if args.min_sample_points > 0:
+        name += f"-min{args.min_sample_points}"
+    return name
 
 
 def plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, output_path):
@@ -90,23 +122,29 @@ def run_logic(args, out_dir, metadata):
     # --------------------------------------------------
 
     # Build Initial Buckets using the ESTIMATED frequency
-    ew_hist = EquiWidthHistogram.build_from_sample(
-        mn=mn, mx=mx, bins=n_bins, sample=sample, total_rows=N
-    )
+    if args.partition == "equidepth":
+        init_buckets = build_equidepth_buckets(mn, mx, n_bins, sample, N)
+    else:
+        init_buckets = EquiWidthHistogram.build_from_sample(
+            mn=mn, mx=mx, bins=n_bins, sample=sample, total_rows=N
+        ).buckets
+    model_name = model_name_for(args)
 
     # Train Hybrid using the ESTIMATED frequency
     print(f"Training Hybrid Model on 100000 Sample (Bins: {n_bins})...")
     hybrid_est = HybridEstimator(
-        ew_hist.buckets,
+        init_buckets,
         identity_threshold=args.ident,
         mlp_penalty=args.penalty,
         fourier_penalty=args.penalty,
+        min_train_count=args.min_sample_points * scaling_factor,
+        parametric_only=args.parametric_only,
     )
 
     t_train = hybrid_est.train(estimated_freq, mn, args.points, rng)
 
     # Report Model Selections
-    model_report_path = out_dir / "model_selection_Hybrid.txt"
+    model_report_path = out_dir / f"model_selection_{model_name}.txt"
     hybrid_est.report_models(file_path=model_report_path)
 
     queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
@@ -136,10 +174,11 @@ def run_logic(args, out_dir, metadata):
     # --- VISUALIZATION & SUMMARY ---
     debug_plot_path = out_dir / "initial_baseline_debug.png"
     # Передаем безопасные значения
-    plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, debug_plot_path)
+    if not args.no_debug_plot:
+        plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, debug_plot_path)
 
     # Summarize
-    m = summarize(y_true_safe, y_pred_safe, "Hybrid")
+    m = summarize(y_true_safe, y_pred_safe, model_name)
     metrics = {
         "train_time": t_train,
         "infer_time": infer_time,
@@ -151,16 +190,19 @@ def run_logic(args, out_dir, metadata):
         "p75_q_error": m["QErr_p75"],
         "p95_q_error": m["QErr_p95"],
         "avg_q_error": m["QErr_avg"],
+        "n_buckets": len(hybrid_est.buckets),
+        "n_models": sum(1 for v in hybrid_est.models.values() if v is not None),
+        "n_floats": hybrid_est.param_count(),
     }
 
     print(
-        f"Hybrid: Median QErr={metrics['median_q_error']:.4f}, Train={t_train:.4f}s, Inf={infer_time:.4f}s"
+        f"{model_name}: Median QErr={metrics['median_q_error']:.4f}, Train={t_train:.4f}s, Inf={infer_time:.4f}s"
     )
 
     save_benchmark_results(
         out_dir,
         workload_path.stem,
-        "Hybrid",
+        model_name,
         queries,
         y_true_safe,
         y_pred_safe,
@@ -173,6 +215,20 @@ def main():
     parser.add_argument("--points", type=int, default=200, help="Points per bucket")
     parser.add_argument("--ident", type=float, default=1e-4, help="Identity threshold")
     parser.add_argument("--penalty", type=float, default=1.5, help="Model penalty")
+    parser.add_argument(
+        "--min-sample-points",
+        type=int,
+        default=0,
+        help="Train a local model only if the bucket holds at least this many sample points (0 = always)",
+    )
+    parser.add_argument(
+        "--partition",
+        choices=["equiwidth", "equidepth"],
+        default="equiwidth",
+        help="Bucket boundaries: equal width (default) or equal depth by sample quantiles",
+    )
+    parser.add_argument("--parametric-only", action="store_true", help="Only linear/power/log/poly3 local models (2-4 floats each)")
+    parser.add_argument("--no-debug-plot", action="store_true", help="Skip the O(Q x B) per-bucket debug plot")
     args = parser.parse_args()
     run_benchmark_suite(args, run_logic)
 

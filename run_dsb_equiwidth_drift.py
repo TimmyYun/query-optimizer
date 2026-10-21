@@ -130,6 +130,8 @@ def main():
             b_hi_idx = max(0, min(len(ps_est) - 1, b.hi - i_mn))
             new_count = ps_est[b_hi_idx] - (ps_est[b_lo_idx - 1] if b_lo_idx > 0 else 0)
             b.count = max(0.0, new_count)
+        # predict читает закэшированные b_count / prefix_counts — без пересборки оценки идут по шагу 0
+        ew_hist._bake_vectorized_data()
 
         build_time = time.perf_counter() - t0_build
 

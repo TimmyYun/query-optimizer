@@ -41,16 +41,17 @@ poetry run python run_equiwidth_drift.py \
     --target-dist "$TARGET_DIST" \
     --experiment-name "$EXP_NAME"
 
-# 3. Equi-Hist Model (Online continual learning)
-echo "---------------------------------------------"
-echo "3) Equi-Hist Model"
-echo "---------------------------------------------"
-poetry run python run_equihist_drift.py \
-    --dataset "$DATASET" \
-    --workload "$WORKLOAD" \
-    --init-dist "$INIT_DIST" \
-    --target-dist "$TARGET_DIST" \
-    --experiment-name "$EXP_NAME"
+# EquiHist исключён из дизайна эксперимента (слишком медленный); реализация сохранена: run_equihist.py / run_equihist_drift.py
+# # 3. Equi-Hist Model (Online continual learning)
+# echo "---------------------------------------------"
+# echo "3) Equi-Hist Model"
+# echo "---------------------------------------------"
+# poetry run python run_equihist_drift.py \
+#     --dataset "$DATASET" \
+#     --workload "$WORKLOAD" \
+#     --init-dist "$INIT_DIST" \
+#     --target-dist "$TARGET_DIST" \
+#     --experiment-name "$EXP_NAME"
 
 echo "============================================="
 echo "All shift scenarios completed. Results saved under results/$EXP_NAME/"
