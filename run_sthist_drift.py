@@ -20,7 +20,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from models import STHistogram, summarize
-from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries
+from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries, split_adapt_eval
 from data.datasets import DatasetManager, DOMAIN_MAX
 from run_sthist import add_sthist_args, build_config, model_name_for
 
@@ -66,7 +66,7 @@ def main():
     with open(shift_dir / "step_0.pkl", "rb") as f:
         i_mn, i_mx, i_N, i_freq, i_sample, i_k = pickle.load(f)
 
-    GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
+    GLOBAL_MIN = 0
 
     workload_count_str = args.workload
     if workload_count_str.endswith(".csv"):
@@ -87,7 +87,7 @@ def main():
 
     if not args.shift_workload:
         print(f"Using static workload: {static_workload_path}")
-        queries, _ = load_and_filter_workload(str(static_workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
+        queries, _ = load_and_filter_workload(str(static_workload_path), i_mn, i_mx, i_freq)
     else:
         print(f"Using dynamic shift workloads with count: {workload_count_str}")
 
@@ -120,7 +120,7 @@ def main():
             if not step_workload_path.exists():
                 raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
 
-            queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
+            queries, _ = load_and_filter_workload(str(step_workload_path), step_mn, step_mx, current_freq)
 
         if args.refresh_catalog:
             st_hist.update_catalog_metadata(current_N)
@@ -131,23 +131,29 @@ def main():
 
         events_before = st_hist.events.copy()
 
-        # 2. Shock: устаревшая гистограмма, без фидбэка этого шага
-        y_pred_shock, infer_shock = evaluate_frozen(st_hist, queries)
-        m_shock = summarize(y_true_sel, y_pred_shock / current_N, f"Shock_{shift_pct:.2f}")
+        # Фидбэк — только adapt-половина; Shock и Post меряются на eval-половине,
+        # которую модель не видит ни на одном шаге (split_adapt_eval)
+        adapt_idx, eval_idx = split_adapt_eval(len(queries))
+        adapt_queries = [queries[i] for i in adapt_idx]
+        eval_queries = [queries[i] for i in eval_idx]
 
-        # 3. Online: predict -> feedback (prequential, как run_equihist_drift.py)
+        # 2. Shock: устаревшая гистограмма, без фидбэка этого шага
+        y_pred_shock, infer_shock = evaluate_frozen(st_hist, eval_queries)
+        m_shock = summarize(y_true_sel[eval_idx], y_pred_shock / current_N, f"Shock_{shift_pct:.2f}")
+
+        # 3. Online: predict -> feedback по adapt-половине (prequential: оценка до обучения на запросе)
         def feedback(q, actual, pred_count):
             st_hist.observe_feedback(q.low, q.high, actual)
 
         y_pred_online, infer_online, update_time = run_queries(
-            st_hist.predict, queries, actual_counts, feedback
+            st_hist.predict, adapt_queries, actual_counts[adapt_idx], feedback
         )
         y_pred_online = np.maximum(y_pred_online, 1.0)
-        m_online = summarize(y_true_sel, y_pred_online / current_N, f"Online_{shift_pct:.2f}")
+        m_online = summarize(y_true_sel[adapt_idx], y_pred_online / current_N, f"Online_{shift_pct:.2f}")
 
-        # 4. Post: та же нагрузка после адаптации, без обучения
-        y_pred_post, infer_post = evaluate_frozen(st_hist, queries)
-        m_post = summarize(y_true_sel, y_pred_post / current_N, f"Post_{shift_pct:.2f}")
+        # 4. Post: eval-половина после адаптации, без обучения
+        y_pred_post, infer_post = evaluate_frozen(st_hist, eval_queries)
+        m_post = summarize(y_true_sel[eval_idx], y_pred_post / current_N, f"Post_{shift_pct:.2f}")
 
         step_events = st_hist.events - events_before
 

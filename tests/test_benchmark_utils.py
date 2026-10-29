@@ -55,3 +55,14 @@ def test_run_queries_feedback_gets_clipped_estimate():
     )
     assert preds[0] == 0.0       # raw estimate is returned unclipped (EntropyHist RMSE needs it)
     assert seen == [1.0]         # the model learns from the same clipped value that is scored
+
+
+def test_split_adapt_eval_is_disjoint_complete_and_deterministic():
+    from benchmark_utils import split_adapt_eval
+
+    a, e = split_adapt_eval(261)
+    assert len(set(a) & set(e)) == 0
+    assert sorted(set(a) | set(e)) == list(range(261))
+    assert abs(len(a) - len(e)) <= 1
+    a2, e2 = split_adapt_eval(261)
+    assert (a == a2).all() and (e == e2).all()   # same split at every drift step

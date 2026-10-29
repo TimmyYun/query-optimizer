@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from models import EntropyHistogram1D, summarize
-from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries
+from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries, split_adapt_eval
 from data.datasets import DatasetManager
 from run_entropyhist import add_entropyhist_args, build_config, model_name_for
 
@@ -81,7 +81,6 @@ def main():
     ds_out_name = f"gradual_{args.init_dist}_to_{args.target_dist}_{model_name}"
     out_dir = setup_out_dir(args, ds_out_name)
 
-    GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
 
     workload_count_str = args.workload
     if workload_count_str.endswith(".csv"):
@@ -102,7 +101,7 @@ def main():
 
     if not args.shift_workload:
         print(f"Using static workload: {static_workload_path}")
-        queries, _ = load_and_filter_workload(str(static_workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
+        queries, _ = load_and_filter_workload(str(static_workload_path), i_mn, i_mx, i_freq)
     else:
         print(f"Using dynamic shift workloads with count: {workload_count_str}")
 
@@ -130,13 +129,17 @@ def main():
             if not step_workload_path.exists():
                 raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
 
-            queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
+            queries, _ = load_and_filter_workload(str(step_workload_path), step_mn, step_mx, current_freq)
 
         # 1. Считаем реальность (Engine Truth) — без max(1, .), он применяется в stage_record
         y_true_counts = exact_counts(queries, current_freq, step_mn)
+        # Метрики только на eval-половине (split_adapt_eval); ANALYZE-модель фидбэк не использует
+        _, eval_idx = split_adapt_eval(len(queries))
+        eval_queries = [queries[i] for i in eval_idx]
+        y_true_counts = y_true_counts[eval_idx]
 
         # 2. Static: гистограмма шага 0 (замороженная, как в статье)
-        y_pred_static, infer_static = evaluate(static_hist, queries)
+        y_pred_static, infer_static = evaluate(static_hist, eval_queries)
         m_static, rec_static = stage_record(
             "Static", y_true_counts, y_pred_static, infer_static, current_N, f"Static_{shift_pct:.2f}"
         )
@@ -146,7 +149,7 @@ def main():
         rebuilt_hist = EntropyHistogram1D.build_from_sample(mixed_sample, current_N, config)
         rebuild_time = time.perf_counter() - t0_build
 
-        y_pred_rb, infer_rb = evaluate(rebuilt_hist, queries)
+        y_pred_rb, infer_rb = evaluate(rebuilt_hist, eval_queries)
         m_rb, rec_rb = stage_record(
             "Rebuild", y_true_counts, y_pred_rb, infer_rb, current_N, f"Rebuild_{shift_pct:.2f}"
         )

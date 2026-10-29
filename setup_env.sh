@@ -13,7 +13,8 @@
 #   ./setup_env.sh                 # env + synthetic workloads (fast path)
 #   ./setup_env.sh --env           # poetry environment only
 #   ./setup_env.sh --workloads     # synthetic workloads only
-#   ./setup_env.sh --dsb-drift     # DSB checkpoints (needs DSB benchmark/setup_macos.sh first)
+#   ./setup_env.sh --stats-ceb     # download STATS-CEB (pinned commit, ~6 MB) and convert it
+#   ./setup_env.sh --dsb           # DSB queries + checkpoints (needs "DSB benchmark/setup_dsb.sh" first)
 #   ./setup_env.sh --all           # everything
 # ============================================================
 set -e
@@ -26,6 +27,9 @@ DATASET_DIRS=${DATASET_DIRS:-"60000000_hard 60000000_simple"}
 # columns to reach 100% churn (200 leaves both catalog_returns columns at 80%).
 DSB_NUM_STREAMS=${DSB_NUM_STREAMS:-300}
 
+# DSB columns to track through the refresh streams (must match registry.DSB_COLUMNS).
+DSB_TARGET_COLUMNS=${DSB_TARGET_COLUMNS:-"web_sales.ws_wholesale_cost,web_sales.ws_list_price"}
+
 # Tables the drift pipeline actually touches (13 of 23).
 # Skipping the rest avoids loading ~1GB of store_sales/catalog_sales/inventory.
 DSB_TABLES="call_center,catalog_returns,customer,date_dim,item,promotion,reason,ship_mode,time_dim,warehouse,web_page,web_sales,web_site"
@@ -34,22 +38,25 @@ cd "$(dirname "$0")"
 
 DO_ENV=0
 DO_WORKLOADS=0
+DO_STATS=0
 DO_DSB_DRIFT=0
 
 if [ $# -eq 0 ]; then
     DO_ENV=1
     DO_WORKLOADS=1
+    DO_STATS=1
 fi
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --env)        DO_ENV=1; shift ;;
         --workloads)  DO_WORKLOADS=1; shift ;;
-        --dsb-drift)  DO_DSB_DRIFT=1; shift ;;
-        --all)        DO_ENV=1; DO_WORKLOADS=1; DO_DSB_DRIFT=1; shift ;;
+        --stats-ceb)  DO_STATS=1; shift ;;
+        --dsb|--dsb-drift) DO_DSB_DRIFT=1; shift ;;
+        --all)        DO_ENV=1; DO_WORKLOADS=1; DO_STATS=1; DO_DSB_DRIFT=1; shift ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--env] [--workloads] [--dsb-drift] [--all]"
+            echo "Usage: $0 [--env] [--workloads] [--stats-ceb] [--dsb] [--all]"
             exit 1
             ;;
     esac
@@ -112,24 +119,30 @@ if [ "$DO_WORKLOADS" -eq 1 ]; then
     mv "data/workloads/wide_${WORKLOAD_COUNT}.csv"   "workload/$WORKLOAD_COUNT/wide/workload.csv"
     mv "data/workloads/narrow_${WORKLOAD_COUNT}.csv" "workload/$WORKLOAD_COUNT/narrow/workload.csv"
     echo "Moved wide/narrow workloads into workload/$WORKLOAD_COUNT/"
-
-    # DSB workloads come from the committed .sql files; meta.pkl is left untouched.
-    echo -e "\n>>> DSB workloads <<<"
-    poetry run python prepare_dsb.py
 fi
 
 # ============================================================
-# 3. DSB drift checkpoints
+# 3. STATS-CEB (official data + official sub-queries, pinned commit)
+# ============================================================
+if [ "$DO_STATS" -eq 1 ]; then
+    echo "============================================="
+    echo "3) STATS-CEB"
+    echo "============================================="
+    poetry run python prepare_benchmark.py --bench stats-ceb
+fi
+
+# ============================================================
+# 4. DSB: official queries + drift checkpoints
 # ============================================================
 if [ "$DO_DSB_DRIFT" -eq 1 ]; then
     echo "============================================="
-    echo "3) DSB drift checkpoints"
+    echo "4) DSB queries and drift checkpoints"
     echo "============================================="
 
     DSB_TOOLS="DSB benchmark/dsb/code/tools"
     if [ ! -d "$DSB_TOOLS/data1gbupdates" ]; then
         echo "ERROR: $DSB_TOOLS/data1gbupdates not found."
-        echo "       Run 'DSB benchmark/setup_macos.sh' first to build the"
+        echo "       Run 'DSB benchmark/setup_dsb.sh' first to build the"
         echo "       toolkit and generate the base data + update streams."
         exit 1
     fi
@@ -145,6 +158,7 @@ if [ "$DO_DSB_DRIFT" -eq 1 ]; then
       DSB_UPDATES_DIR="./dsb/code/tools/data1gbupdates" \
       DSB_EXPORT_DIR="../data/dsb/drift" \
       DSB_TABLES="$DSB_TABLES" \
+      DSB_TARGET_COLUMNS="$DSB_TARGET_COLUMNS" \
       DSB_NUM_STREAMS="$DSB_NUM_STREAMS" \
       poetry run jupyter nbconvert \
           --to notebook --execute DSB_GENERATOR.ipynb \
@@ -153,16 +167,9 @@ if [ "$DO_DSB_DRIFT" -eq 1 ]; then
 
     echo ">>> Checkpoints exported: $(ls data/dsb/drift/*.csv 2>/dev/null | wc -l | tr -d ' ') files"
 
-    # The "initial" checkpoint of each column doubles as the source column
-    # CSV that prepare_dsb.py reads to rebuild meta.pkl + the workload.
-    cp "data/dsb/drift/web_sales__ws_item_sk__initial.csv"                data/dsb/ws_item_sk.csv
-    cp "data/dsb/drift/catalog_returns__cr_item_sk__initial.csv"          data/dsb/cr_item_sk.csv
-    cp "data/dsb/drift/catalog_returns__cr_returned_time_sk__initial.csv" data/dsb/cr_returned_time_sk.csv
-
-    echo ">>> Rebuilding DSB meta.pkl + workloads..."
-    echo "    NOTE: this overwrites the committed data/dsb/<col>/meta.pkl."
-    echo "    Check 'git diff --stat data/dsb' afterwards."
-    poetry run python prepare_dsb.py --rebuild-meta
+    # Official templates -> dsqgen -> 1-D ranges; checkpoints -> meta.pkl + drift/step_N.pkl
+    echo ">>> Converting DSB (queries from the official templates, data from the checkpoints)..."
+    poetry run python prepare_benchmark.py --bench dsb --generate-queries
 fi
 
 echo "============================================="

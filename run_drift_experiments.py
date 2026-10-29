@@ -43,7 +43,10 @@ def main():
                 "--experiment-name", sc,
                 "--shift-dir", shift_dir,
                 "--workload", cfg['workload_count'],
+                *MODELS[model].get('args', []),
             ]
+            if cfg.get('labels'):
+                cmd += ["--init-dist", cfg['labels'][0], "--target-dist", cfg['labels'][1]]
 
             if cfg['static_workload']:
                 cmd += ["--static-workload-path", cfg['static_workload']]

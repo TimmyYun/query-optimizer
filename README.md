@@ -18,9 +18,9 @@ reported as median / p25 / p75 / p95 / mean, plus build and per-query inference 
 3. [Data and workloads](#3-data-and-workloads)
 4. [Static experiments](#4-static-experiments)
 5. [Drift experiments](#5-drift-experiments)
-6. [DSB (real data)](#6-dsb-real-data)
+6. [Real benchmarks: DSB and STATS-CEB](#6-real-benchmarks-dsb-and-stats-ceb)
 7. [Outputs](#7-outputs)
-8. [Merging and plotting](#8-merging-and-plotting)
+8. [Merging, plotting, exporting](#8-merging-plotting-exporting)
 9. [Methodological guarantees](#9-methodological-guarantees)
 10. [Repository layout](#10-repository-layout)
 
@@ -34,12 +34,21 @@ reported as median / p25 / p75 / p95 / mean, plus build and per-query inference 
 | `EquiDepth` | equal-depth histogram + MCV list, PostgreSQL `ANALYZE` style | `run_equidepth.py` / `run_equidepth_drift.py` | PostgreSQL `selfuncs.c` |
 | `TKHist` | equal-width histogram + top-k exact values per bucket | `run_tkhist.py` / `run_tkhist_drift.py` | DHist-style |
 | `STHist` | self-tuning histogram learned from query feedback | `run_sthist.py` / `run_sthist_drift.py` | Aboulnaga & Chaudhuri, SIGMOD 1999 |
-| `EntropyHist-MEA` | maximum-entropy bucket boundaries | `run_entropyhist.py` / `run_entropyhist_drift.py` | To, Chiang & Shahabi, CIKM 2013 |
+| `EntropyHist-MEA` | maximum-entropy bucket boundaries, the paper's continuous range estimator | `run_entropyhist.py` / `run_entropyhist_drift.py` | To, Chiang & Shahabi, CIKM 2013 |
+| `EntropyHist-MEA-Rng_discrete_linear` | the same histogram, range estimate over integer cells (`--range-estimator discrete_linear`, non-paper extension) | same runners | see below |
 | `Hybrid` | **proposed**: equal-width buckets + local CDF model per bucket | `run_hybrid.py` / `run_hybrid_drift.py` | this work |
 | `Equi-Hist` | online multiplicative bucket rescaling | `run_equihist.py` / `run_equihist_drift.py` | *excluded from the orchestrators (too slow); can be run by hand* |
 
 How each method works, and how each paper's open points were resolved, is
 described in [METHODS_EXPLAINED.md](METHODS_EXPLAINED.md).
+
+Why EntropyHist is reported twice: the paper interpolates linearly over the
+continuous bucket span, `overlap / (max_b − min_b)`. A query that touches only a
+bucket's edge value therefore gets 0 rows. On discrete data with a point mass at
+an edge this fails badly; on DSB, `ws_wholesale_cost BETWEEN 100.00 AND 120.00`
+gets 0 rows for 19 440 true rows. The extension counts integer cells instead,
+`(overlap + 1) / (width + 1)`. Both are reported, so the paper's estimator is not
+silently replaced.
 
 ---
 
@@ -54,13 +63,18 @@ cd query-optimizer
 ./setup_env.sh
 ```
 
-`./setup_env.sh` with no flags does two things:
+`./setup_env.sh` with no flags does three things:
 
 1. **Environment** — `poetry env use <python3.12>` + `poetry install`
    (runtime deps plus `pytest`, `ruff`, `nbconvert`, `ipykernel`).
-2. **Workloads** — generates every query workload CSV. They are not in git
-   (`.gitignore` excludes `*.csv`), so a fresh clone cannot run any experiment
-   before this step.
+2. **Synthetic workloads** — generates every synthetic query workload CSV. They are
+   not in git (`.gitignore` excludes `*.csv`), so a fresh clone cannot run any
+   experiment before this step.
+3. **STATS-CEB** — downloads the official data and queries (pinned commit, ~6 MB)
+   and converts them, see [§6.2](#62-stats-ceb).
+
+DSB is not built by default: it needs the official toolkit to be compiled and run
+once (hours), see [§6.1](#61-dsb).
 
 You do **not** need to regenerate the 60M-row datasets: no runner reads
 `data.csv`. Runners read only `meta.pkl` / `step_N.pkl`, which are committed and
@@ -68,10 +82,11 @@ already contain the ground truth and the sample (see [§9](#9-methodological-gua
 
 | Flag | What it does |
 |---|---|
-| *(none)* | `--env` + `--workloads` |
+| *(none)* | `--env` + `--workloads` + `--stats-ceb` |
 | `--env` | Poetry environment only |
-| `--workloads` | synthetic + DSB workloads only |
-| `--dsb-drift` | DSB drift checkpoints; needs the DSB toolkit first, see [§6](#6-dsb-real-data) |
+| `--workloads` | synthetic workloads only |
+| `--stats-ceb` | download + convert STATS-CEB (needs network) |
+| `--dsb` | DSB official queries + drift checkpoints; needs `DSB benchmark/setup_dsb.sh` first, see [§6.1](#61-dsb) |
 | `--all` | all of the above |
 
 Environment variables (optional):
@@ -81,12 +96,13 @@ Environment variables (optional):
 | `PYTHON_BIN` | first `python3.12`, else `python3` on `PATH` | interpreter Poetry creates the venv from; must be ≥ 3.12 |
 | `WORKLOAD_COUNT` | `1000000` | queries per generated workload |
 | `DATASET_DIRS` | `"60000000_hard 60000000_simple"` | folders under `data/generated/` to build data-driven workloads for |
-| `DSB_NUM_STREAMS` | `300` | DSB refresh streams to replay (`--dsb-drift` only) |
+| `DSB_NUM_STREAMS` | `300` | DSB refresh streams to replay (`--dsb` only) |
+| `DSB_TARGET_COLUMNS` | `web_sales.ws_wholesale_cost,web_sales.ws_list_price` | DSB columns tracked through the refresh streams (`--dsb` only) |
 
 ### Check the installation
 
 ```bash
-poetry run pytest -q        # unit tests for STHist and EntropyHist
+poetry run pytest -q        # unit tests: harness, benchmark adapters, STHist, EntropyHist
 poetry run ruff check .     # lint
 ```
 
@@ -217,7 +233,9 @@ Scenarios, models and their runner scripts are defined in one place,
 | `hard_wide` | `60000000_hard/*` | wide random | `synth_hard_wide` |
 | `hard_narrow` | `60000000_hard/*` | narrow random | `synth_hard_narrow` |
 | `hard_narrow_data_driven` | `60000000_hard/*` | data-driven, per distribution | `synth_hard_narrow_data_driven` |
-| `dsb` | `data/dsb/{ws_item_sk, cr_item_sk, cr_returned_time_sk}` | DSB workload | `dsb_static` |
+| `dsb` | `data/dsb/{ws_wholesale_cost, ws_list_price}` | official DSB queries ([§6.1](#61-dsb)) | `dsb_static` |
+| `stats_ceb` | `data/stats-ceb/<table.Column>` × 9 | official STATS-CEB queries ([§6.2](#62-stats-ceb)) | `stats_ceb_official` |
+| `stats_ceb_driven` | same 9 columns | our data-driven supplement, 100 000 queries | `stats_ceb_driven` |
 | `all` | all of the above, in order | | |
 
 ### 4.2 One model, one dataset
@@ -277,16 +295,27 @@ Run them with `--help` to see their parameters.
 ### 5.1 Protocol
 
 The estimator is built on step 0 and then carried through steps 1…S. At every
-step the step's own data provides the exact truth, and the same workload is
-evaluated in several **stages**. These stages become the column families of the
-per-step CSV:
+step the step's own data provides the exact truth, and the workload is evaluated
+in several **stages**. These stages become the column families of the per-step CSV.
 
-| Model | Stages |
+**Adapt / eval split.** The queries of a step are split once, with seed 42, into
+two halves (`benchmark_utils.split_adapt_eval`):
+
+- *adapt*: the only queries whose feedback a model may learn from (Hybrid FT/RB, STHist, Equi-Hist);
+- *eval*: the queries every stage of every model is scored on.
+
+No model is ever scored on a query it adapted to. With a fixed workload the
+split is the same at every step, so an eval query is never learned at any
+step. All stages of all models share one eval set and can be compared directly.
+The only exception is STHist **Online**, which is prequential over the adapt half:
+each query is scored before the model learns from it.
+
+| Model | Stages (all scored on the eval half unless noted) |
 |---|---|
-| Hybrid | **Shock**: stale model, no adaptation · **FT**: `feedback_update()` rescales bucket mass from query feedback · **RB**: retrain only buckets whose q-error > 1.3 |
-| Equi-Width, EquiDepth, TKHist | simulated `ANALYZE`: bucket counts refreshed from the step's sample, then evaluate |
-| Equi-Hist | `ANALYZE` refresh, then online feedback updates after each query |
-| STHist | **Shock** (stale) · **Online** (prequential: predict, then learn) · **Post** (frozen after the step's feedback). There is no `ANALYZE`, since the model never sees data |
+| Hybrid | **Shock**: bucket counts refreshed from the step's sample (`ANALYZE`), local models stale · **FT**: `feedback_update()` on the adapt half · **RB**: retrain the buckets whose median q-error on the adapt half > 1.3 |
+| Equi-Width, EquiDepth, TKHist | simulated `ANALYZE`: rebuilt / refreshed from the step's sample, then evaluated |
+| Equi-Hist | `ANALYZE` refresh, online feedback on the adapt half, then evaluated frozen |
+| STHist | **Shock** (stale) · **Online** (prequential over the adapt half) · **Post** (frozen after the adapt half's feedback). No `ANALYZE`, since the model never sees data |
 | EntropyHist | **Static** (step-0 histogram, frozen) · **Rebuild** (rebuilt from the step's sample) |
 
 ### 5.2 Full scenarios
@@ -301,7 +330,8 @@ poetry run python run_drift_experiments.py --scenario drift_5_ds_zipf_wl_normal
 | `drift_5_ds_zipf_wl_normal` | `shift_normal_to_zipf_5%` | fixed: `normal/workload_driven_1000000.csv` |
 | `drift_5_ds_zipf_wl_zipf` | `shift_normal_to_zipf_5%` | drifts with the data: `step_N_workload_driven_1000000.csv` |
 | `drift_5_ds_add_zipf_wl_zipf` | `shift_normal_to_zipf_5%_dataset` | drifts with the data |
-| `all` | all four | |
+| `dsb_drift_ws_wholesale_cost`, `dsb_drift_ws_list_price` | `data/dsb/<column>/drift` (official refresh streams) | fixed: official DSB queries ([§6.1](#61-dsb)) |
+| `all` | all of the above | |
 
 `--models` and `--dry-run` work as in [§4.1](#41-full-scenarios).
 Results go to `results/<scenario>/gradual_normal_to_zipf_<Model>/`.
@@ -331,66 +361,125 @@ The model-specific parameters from [§4.2](#42-one-model-one-dataset) apply too
 
 ---
 
-## 6. DSB (real data)
+## 6. Real benchmarks: DSB and STATS-CEB
 
-Three columns from [DSB](https://github.com/microsoft/dsb) (Ding et al., VLDB 2021),
-a TPC-DS derivative with skewed, correlated data:
-`web_sales.ws_item_sk`, `catalog_returns.cr_item_sk`, `catalog_returns.cr_returned_time_sk`.
+Principle: **the data and the queries come from the original benchmark,
+unchanged**. This repository only adds an adapter, `prepare_benchmark.py`, that
+converts them into the same contract as the synthetic data:
 
-### 6.1 Static — works out of the box
+| File | Contents |
+|---|---|
+| `data/<bench>/<column>/meta.pkl` | `(mn, mx, N, freq, sample, k, skew, kurt)`, built by the same code as the synthetic datasets |
+| `data/<bench>/<column>/workload_official.csv` | the 1-D ranges in the benchmark's own queries, one row per distinct range (committed to git) |
+| `data/dsb/<column>/drift/step_<i>.pkl` | DSB only: the column after `5·i` % churn by the official refresh streams |
+| `data/stats-ceb/<column>/workload_driven_100000.csv` | STATS-CEB only: **our** data-driven supplement, not the benchmark's queries |
 
-`data/dsb/<column>/meta.pkl` and the query files `data/dsb/custom_<column>.sql` are committed.
-`./setup_env.sh` turns the `.sql` into `data/dsb/<column>/workload_driven_*.csv`.
-After that:
+Results on `workload_official.csv` and on `workload_driven_*` are written to
+different experiments and must be reported separately.
+
+`prepare_benchmark.py` parameters:
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `--bench` | required | `dsb` or `stats-ceb` |
+| `--source-dir` | `DSB benchmark/dsb` / `data/stats-ceb/source` | DSB toolkit clone / where the STATS files are downloaded |
+| `--out-root` | `data/dsb` / `data/stats-ceb` | output root |
+| `--generate-queries` | off | DSB: run `dsqgen` on the official templates first |
+| `--instances` | `1000` | DSB: query instances per template (`dsqgen -streams`) |
+| `--rngseed` | `42` | DSB: `dsqgen -rngseed` |
+| `--scale` | `1` | DSB: scale factor the data was generated with |
+| `--driven-count` | `100000` | STATS-CEB: size of the data-driven supplement |
+
+### 6.1 DSB
+
+[DSB](https://github.com/microsoft/dsb) (Ding et al., VLDB 2021) is TPC-DS with skewed data and query templates.
+
+| | Value |
+|---|---|
+| Toolkit | `microsoft/dsb` at commit `ec9a156` (2024-11-07), unmodified apart from portability compiler flags |
+| Scale factor | 1 (`SCALE` in `setup_dsb.sh`) |
+| Data seed | `dsdgen` built-in default; the data is deterministic for a given scale factor |
+| Refresh streams | 300 generated (`UPDATE_STREAMS`), replayed until 100 % churn (`DSB_NUM_STREAMS`) |
+| Columns | `web_sales.ws_wholesale_cost`, `web_sales.ws_list_price` (DECIMAL(7,2), stored as integer cents, ×100) |
+| Queries | `dsqgen -streams 1000 -rngseed 42 -dialect postgres` on every official template in `query_templates_pg` that filters the column, as in the official `scripts/generate_workload.py` |
+
+Why these columns: they are the `web_sales` columns that the official templates
+filter with a plain `col BETWEEN a AND b`. Examples: 8 templates use
+`ws_wholesale_cost BETWEEN [WHOLESALE_COST.begin] AND [WHOLESALE_COST.end]` with
+`range(random(0, 100, uniform), 5…30)`, and 9 templates use `ws_list_price`.
+The official refresh streams also modify `web_sales`. Ratio predicates such as
+`ws_sales_price / ws_list_price BETWEEN …` are not 1-D and are skipped.
+
+Run once (long: toolkit build, ~1.3 GB base data, ~5 GB refresh streams):
+
+```bash
+"DSB benchmark/setup_dsb.sh"     # Linux or macOS: clone at the pinned commit, build, dsdgen data + streams
+./setup_env.sh --dsb             # replay streams (notebook), dsqgen queries, convert to meta.pkl / step_N.pkl
+```
+
+| `setup_dsb.sh` variable | Default | Meaning |
+|---|---|---|
+| `DSB_COMMIT` | `ec9a156…` | `microsoft/dsb` commit to check out |
+| `SCALE` | `1` | scale factor in GB |
+| `UPDATE_STREAMS` | `300` | refresh streams to generate |
+
+`--dsb` runs `DSB benchmark/DSB_GENERATOR.ipynb` headlessly. The notebook applies
+the official refresh streams (deletes by date range, inserts from the staging
+files with the TPC-DS view logic: `ws_wholesale_cost = i_wholesale_cost`,
+`ws_list_price = i_current_price`) and saves each column at 0, 5, …, 100 %
+cumulative churn to `data/dsb/drift/`. The adapter then turns these checkpoints
+into `step_0.pkl … step_20.pkl`.
+
+The adapter prints how many distinct ranges each column gets. After a successful
+run, commit `data/dsb/<column>/meta.pkl` and `workload_official.csv`, so that
+`--scenario dsb` works for others without the toolkit.
+
+Static and drift runs:
 
 ```bash
 poetry run python run_experiments.py --scenario dsb
+poetry run python run_drift_experiments.py --scenario dsb_drift_ws_wholesale_cost
+poetry run python run_drift_experiments.py --scenario dsb_drift_ws_list_price
+poetry run python merge_drift.py --experiment-name dsb_drift_ws_wholesale_cost dsb_drift_ws_list_price
+poetry run python plot_drift.py  --experiment-name dsb_drift_ws_wholesale_cost dsb_drift_ws_list_price
 ```
 
-To rebuild only the workloads: `poetry run python prepare_dsb.py`.
-`prepare_dsb.py --rebuild-meta` also rebuilds `meta.pkl` from `data/dsb/<column>.csv`.
-Those CSVs exist only after the DSB generation below, and the rebuild overwrites
-the committed file, so check `git diff --stat data/dsb` afterwards.
+DSB drift goes through the same `run_<model>_drift.py` runners as the synthetic
+drift. A step is a churn checkpoint, and the official queries are evaluated at every step.
 
-### 6.2 Data generation and drift (long-running)
+### 6.2 STATS-CEB
 
-```bash
-"DSB benchmark/setup_macos.sh"      # macOS; "DSB benchmark/setup.sh" is the original Linux script
-./setup_env.sh --dsb-drift          # replays refresh streams, exports 63 checkpoints to data/dsb/drift/
-```
+[STATS-CEB](https://github.com/Nathaniel-Han/End-to-End-CardEst-Benchmark)
+(Han et al., VLDB 2022): the Stack Exchange STATS database and its CEB workload.
 
-The setup script clones microsoft/dsb, builds `dsdgen`/`dsqgen`, and generates
-SF=1 base data (~1.3 GB) plus 300 refresh streams (~5.1 GB).
-`--dsb-drift` runs `DSB benchmark/DSB_GENERATOR.ipynb` headlessly. The notebook
-replays the official refresh streams and saves each column at 0, 5, …, 100 % churn.
-300 streams is the verified minimum: with 200, both `catalog_returns` columns stop at 80 % churn.
-
-Then, per column:
-
-```bash
-for col in ws_item_sk cr_item_sk cr_returned_time_sk; do
-    poetry run python run_dsb_equiwidth_drift.py --column $col --experiment-name dsb_drift
-    poetry run python run_dsb_hybrid_drift.py    --column $col --experiment-name dsb_drift
-    for m in tkhist equidepth sthist entropyhist; do
-        poetry run python run_dsb_baselines_drift.py --model $m --column $col --experiment-name dsb_drift
-    done
-done
-```
-
-Then merge and plot all models:
-
-```bash
-poetry run python merge_drift.py --experiment-name dsb_drift   # -> results/dsb_drift/combined_dsb_<column>.csv
-poetry run python plot_drift.py  --experiment-name dsb_drift
-```
-
-| Parameter | Meaning |
+| | Value |
 |---|---|
-| `--column` | `ws_item_sk`, `cr_item_sk` or `cr_returned_time_sk` |
-| `--model` | (`run_dsb_baselines_drift.py`) `tkhist`, `equidepth`, `sthist` or `entropyhist` |
-| `--data-dir` | default `data/dsb`; root holding `<column>/meta.pkl` and `drift/` |
+| Source | `Nathaniel-Han/End-to-End-CardEst-Benchmark` at commit `670cb8d` (2023-03-14), downloaded automatically |
+| Data | `datasets/stats_simplified/posts.csv`, `users.csv`; NULLs dropped (no range predicate selects NULL) |
+| Sample | 30 000 rows, as PostgreSQL `ANALYZE` (300 × `default_statistics_target` = 100). The tables have 40 k–92 k rows, so the 100 k sample used elsewhere would contain the whole column (`--sample-size`) |
+| Queries | `workloads/stats_CEB/sub_plan_queries/stats_CEB_single_table_sub_query.sql` |
+| Columns | `posts.{Score, ViewCount, CommentCount, AnswerCount, FavoriteCount}`, `users.{Reputation, Views, UpVotes, DownVotes}`: every integer column with ≥ 8 distinct 1-D ranges. Timestamp columns are excluded, since second resolution does not fit a dense `freq` array |
 
-Details of the DSB pipeline: [DSB benchmark/Readme.md](DSB%20benchmark/Readme.md).
+How a query is taken: in every official single-table sub-query, the predicates on
+one column (`>=, <=, =, >, <`) are intersected into one range `[lo, hi]`. An open
+end becomes the column's min or max. Duplicates are removed. Sub-queries that
+filter exactly one column also carry the benchmark's own cardinality; the adapter
+checks that its truth equals it (48 / 48 match).
+
+**Caveat:** the official workload has only 8–33 distinct ranges per column.
+That is what the benchmark contains, but p95 over ~20 queries is not a stable
+statistic. For statistical power, `stats_ceb_driven` evaluates the same official
+data with 100 000 data-driven queries from our generator (width up to 5 % of the
+domain). Report it as a separate, non-benchmark workload.
+
+```bash
+./setup_env.sh --stats-ceb                                          # or: poetry run python prepare_benchmark.py --bench stats-ceb
+poetry run python run_experiments.py --scenario stats_ceb           # official queries  -> results/stats_ceb_official
+poetry run python run_experiments.py --scenario stats_ceb_driven    # our supplement    -> results/stats_ceb_driven
+```
+
+`run_experiments.py` runs the adapter itself if the workloads are missing,
+so the two `run_experiments.py` commands also work on a fresh clone with network access.
 
 ---
 
@@ -404,7 +493,6 @@ results/<experiment-name>/
 │   └── <workload-stem>_<Model>.csv              # per query: Query_ID, Model, Prediction, Truth, Q_Error (selectivities)
 ├── gradual_<init>_to_<target>_<Model>/          # synthetic drift run
 │   └── <model>_drift_analysis.csv               # one row per step (Hybrid: adaptation_ft_rb.csv)
-├── dsb_<column>_<Model>/                        # DSB drift run, same CSV
 └── combined_<prefix>.csv, drift_chart_<prefix>.png   # written by merge_drift.py / plot_drift.py
 ```
 
@@ -426,7 +514,24 @@ results/<experiment-name>/
 
 ---
 
-## 8. Merging and plotting
+## 8. Merging, plotting, exporting
+
+All results in one Excel workbook, one sheet per logical benchmark:
+
+```bash
+poetry run python export_results.py                # -> results/all_results.xlsx
+```
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `--out` | `results/all_results.xlsx` | output file |
+| `--results-dir` | `results` | where to look |
+| `--all` | off | also export folders that are not scenarios in `registry.py`, e.g. `smoke` |
+
+The first sheet, `index`, lists each sheet: whether it is static or drift, its
+data, its workload, the row count and the models. A static sheet has one row per
+dataset × model with every metric. A drift sheet has one row per step × model × stage.
+To the right of each table there is a pivot of the median q-error.
 
 Drift runs, synthetic or DSB, any set of models:
 
@@ -437,7 +542,7 @@ poetry run python plot_drift.py  --experiment-name drift_5_ds_zipf_wl_normal
 
 | Script | Parameter | Meaning |
 |---|---|---|
-| `merge_drift.py` | `--experiment-name E [E ...]` | folders under `results/` to merge. Every `<prefix>_<Model>/` folder inside is read, and one `combined_<prefix>.csv` is written per prefix (e.g. `gradual_normal_to_zipf`, `dsb_cr_item_sk`) |
+| `merge_drift.py` | `--experiment-name E [E ...]` | folders under `results/` to merge. Every `<prefix>_<Model>/` folder inside is read, and one `combined_<prefix>.csv` is written per prefix (e.g. `gradual_normal_to_zipf`, `gradual_ws_list_price_to_refresh`) |
 | | `--out-dir` | root of the results tree, default `results` |
 | `plot_drift.py` | `--experiment-name E [E ...]` | plots every `combined_*.csv` of these experiments: median / p95 / mean q-error against drift % |
 | | `--labels L [L ...]` | only these lines. A line is `<Model>` for single-stage models and `<Model>_<Stage>` otherwise, e.g. `--labels EquiWidth Hybrid_RB STHist_Online` |
@@ -461,7 +566,7 @@ poetry run python plot/plot_comparison.py \
   `(mn, mx, N, freq, sample, k, skew, kurt)`. A shift step `step_N.pkl` is
   `(mn, mx, N, freq, sample, k)`. `freq` is the exact per-value count and is
   used **only** to compute the true answer. Models are built from `sample`
-  (a 100k reservoir sample), scaled by `N / len(sample)`. The only other input
+  (100 k rows for synthetic data and DSB; 30 k for STATS-CEB, see §6.2), scaled by `N / len(sample)`. The only other input
   is query feedback, for the feedback-driven methods. Code that lets a model
   read `freq` invalidates the results.
 - **Same budget.** By default EquiWidth, TKHist, STHist, EntropyHist, Equi-Hist and Hybrid
@@ -497,21 +602,20 @@ registry.py             models + static/drift scenarios: the single list the orc
 benchmark_utils.py      shared CLI, dataset loop, truth, evaluation loop, result writing
 run_<model>.py          static runner per model
 run_<model>_drift.py    synthetic drift runner per model
-run_dsb_*_drift.py      DSB drift runners
 run_experiments.py      static orchestrator (§4)
 run_drift_experiments.py drift orchestrator (§5)
 merge_drift.py, plot_drift.py  drift result tables and charts (§8)
+export_results.py       every result -> one xlsx, one sheet per benchmark (§8)
 data/datasets.py        synthetic dataset generator
 data/generate_shifts.py drift sequence generator
 workload/workload.py    workload generator
-prepare_dsb.py          DSB adapter: .sql -> workload csv, column csv -> meta.pkl
-DSB benchmark/          DSB toolkit setup scripts + drift notebook
+prepare_benchmark.py    adapter: DSB / STATS-CEB -> meta.pkl, workload_official.csv, drift/step_N.pkl
+DSB benchmark/          setup_dsb.sh (official toolkit build + data), DSB_GENERATOR.ipynb (refresh replay)
 tests/                  pytest unit tests
 setup_env.sh            one-shot setup
 ```
 
 Other documents:
 
-- [METHODS_EXPLAINED.md](METHODS_EXPLAINED.md): how each method works.
-- [EXPERIMENT_RESULTS.md](EXPERIMENT_RESULTS.md) and [RESULTS_REPORT.md](RESULTS_REPORT.md):
-  results and their interpretation, in Russian.
+- [PROJECT_GUIDE.md](PROJECT_GUIDE.md): what the benchmark does, why each design decision was made, and how to run and read it (in Russian).
+- [METHODS_EXPLAINED.md](METHODS_EXPLAINED.md): how each method works (in Russian).

@@ -66,7 +66,8 @@ def to_long(df, model):
     return rows
 
 
-def merge_experiment(exp_dir: Path):
+def collect_drift_rows(exp_dir: Path):
+    """{prefix: [long-format rows]} for every <prefix>_<Model>/ drift run in exp_dir."""
     groups = {}
     for run_dir in sorted(p for p in exp_dir.iterdir() if p.is_dir()):
         m = MODEL_DIR_RE.match(run_dir.name)
@@ -78,7 +79,11 @@ def merge_experiment(exp_dir: Path):
             continue
         df = pd.read_csv(csvs[0])
         groups.setdefault(m["prefix"], []).extend(to_long(df, m["model"]))
+    return groups
 
+
+def merge_experiment(exp_dir: Path):
+    groups = collect_drift_rows(exp_dir)
     if not groups:
         print(f"No drift runs found in {exp_dir}")
         return []

@@ -14,6 +14,7 @@ from benchmark_utils import (
     exact_counts,
     run_queries,
     timing_stats,
+    split_adapt_eval,
 )
 from data.datasets import DatasetManager
 
@@ -79,7 +80,6 @@ def main():
     with open(shift_dir / "step_0.pkl", "rb") as f:
         i_mn, i_mx, i_N, i_freq, i_sample, i_k = pickle.load(f)
 
-    GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
 
     # Ожидаем count в args.workload
     workload_count_str = args.workload
@@ -107,7 +107,7 @@ def main():
     # --------------------------------------------------------------
 
     if not args.shift_workload:
-        queries, _ = load_and_filter_workload(str(static_workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
+        queries, _ = load_and_filter_workload(str(static_workload_path), i_mn, i_mx, i_freq)
 
     # Строим начальную гистограмму
     print(f"\n>>> PHASE 1: Initial Building on {args.init_dist} <<<")
@@ -133,11 +133,15 @@ def main():
             if not step_workload_path.exists():
                 raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
             
-            queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
+            queries, _ = load_and_filter_workload(str(step_workload_path), step_mn, step_mx, current_freq)
 
         # 1. Считаем реальность (Engine Truth)
         y_true_counts = np.maximum(exact_counts(queries, current_freq, step_mn), 1.0)
         y_true_sel = y_true_counts / current_N
+        # Метрики только на eval-половине (split_adapt_eval); ANALYZE-модель фидбэк не использует
+        _, eval_idx = split_adapt_eval(len(queries))
+        eval_queries = [queries[i] for i in eval_idx]
+        y_true_counts, y_true_sel = y_true_counts[eval_idx], y_true_sel[eval_idx]
 
         # 2. Обновляем массу бакетов (Симуляция ANALYZE в БД)
         t0_build = time.perf_counter()
@@ -157,7 +161,7 @@ def main():
         plot_shift_state(current_freq, current_est_freq, shift_pct, out_dir, args.init_dist, args.target_dist)
 
         # 3. Оценка (Prediction)
-        y_pred_counts, infer_times, _ = run_queries(ew_hist.predict, queries, y_true_counts)
+        y_pred_counts, infer_times, _ = run_queries(ew_hist.predict, eval_queries, y_true_counts)
         y_pred_counts = np.maximum(y_pred_counts, 1.0)
         t = timing_stats(infer_times)
         infer_time, median_infer_time = t["infer_time"], t["median_infer_time"]

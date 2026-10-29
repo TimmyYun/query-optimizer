@@ -23,12 +23,12 @@ poetry run pytest -q             # unit tests in tests/ (pythonpath configured i
 
 # Static benchmarks (orchestrator; loops distributions x models)
 poetry run python run_experiments.py --scenario hard_narrow
-# scenarios: simple_wide simple_narrow hard_wide hard_narrow hard_narrow_data_driven dsb all
+# scenarios: simple_wide simple_narrow hard_wide hard_narrow hard_narrow_data_driven dsb stats_ceb stats_ceb_driven all
 
 # Drift benchmarks (orchestrator; loops steps x models)
 poetry run python run_drift_experiments.py --scenario drift_5_ds_zipf_wl_normal
 # scenarios: drift_10_ds_zipf_wl_normal drift_5_ds_zipf_wl_normal
-#            drift_5_ds_zipf_wl_zipf drift_5_ds_add_zipf_wl_zipf all
+#            drift_5_ds_zipf_wl_zipf drift_5_ds_add_zipf_wl_zipf dsb_drift_ws_wholesale_cost dsb_drift_ws_list_price all
 
 # Single model, single dataset (what the orchestrators shell out to)
 poetry run python run_hybrid.py --experiment-name my_exp \
@@ -51,14 +51,15 @@ poetry run python data/datasets.py --rows 60000000 --dist normal      # -> 60000
 poetry run python data/generate_shifts.py --rows 60000000_hard --init normal --target zipf --steps 20 --mode replace  # -> shift_normal_to_zipf_5% (--mode add -> ..._5%_dataset)
 poetry run python workload/workload.py --count 1000000 --rows 60000000_hard  # data-driven workloads, batch over all subdirs
 poetry run python workload/workload.py --count 1000000 --wide         # random workload -> data/workloads/wide_1000000.csv
-poetry run python prepare_dsb.py                                       # DSB: .sql -> workload csv (--rebuild-meta: .csv -> meta.pkl, overwrites committed)
+poetry run python prepare_benchmark.py --bench stats-ceb              # STATS-CEB: download (pinned commit) + convert
+poetry run python prepare_benchmark.py --bench dsb --generate-queries  # DSB: needs "DSB benchmark/setup_dsb.sh" + ./setup_env.sh --dsb
 ```
 
 Models and scenarios for both orchestrators live in `registry.py` (`MODELS`, `STATIC_SCENARIOS`, `DRIFT_SCENARIOS`); the `MODELS` key must equal the name the runner writes to `summary_<Model>.json`. Both orchestrators accept `--models` and `--dry-run`.
 
 Careful with workload paths: `registry.py` points to `workload/1000000/{wide,narrow}/workload.csv`, while `workload.py`'s random mode writes to `data/workloads/{mode}_{count}.csv`. The files must be placed/renamed to match.
 
-`docker-compose.yml` (Postgres 16.3, mounts `./data`) is only for producing the DSB source tables; nothing in the Python code connects to it.
+Real benchmarks (`prepare_benchmark.py`): data and queries are taken from the original benchmark unchanged; the script is only an adapter into `meta.pkl` + `workload_official.csv` (+ `drift/step_N.pkl` for DSB). DSB uses `web_sales.ws_wholesale_cost` / `ws_list_price` (the columns official templates filter with BETWEEN), stored as integer cents; queries come from `dsqgen` on the unmodified official templates. STATS-CEB uses the official `stats_simplified` CSVs and `stats_CEB_single_table_sub_query.sql`; the adapter checks its truth against the cardinalities in that file. `workload_driven_*` for STATS-CEB is our supplement and goes to a separate experiment (`stats_ceb_driven`) — never mix it with the official workload. DSB drift reuses the synthetic `run_<model>_drift.py` runners via `DRIFT_SCENARIOS` (`dsb_drift_<column>`).
 
 ## Architecture
 
@@ -81,7 +82,7 @@ Almost every script consumes one of two pickled tuples. Getting the arity wrong 
 - `evaluate_and_save` / `run_queries` — the one evaluation loop: static runners only build a model and pass `predict` (+ `feedback` for feedback methods, scored prequentially). Drift runners reuse `run_queries`, `timing_stats` and `exact_counts` (the only truth computation). Do not reintroduce per-runner timing loops.
 - `save_benchmark_results` / `aggregate_summaries` — per-model `summary_<Model>.json` plus a rolled-up `results/<exp>/summary.csv`. Scientific notation is regex-rewritten to 9 decimals so timings stay readable.
 
-The drift scripts (`run_*_drift.py`, `run_dsb_*_drift.py`) deliberately **do not** use `run_benchmark_suite`; they own their step loop and only borrow `setup_out_dir` / `load_and_filter_workload`.
+The drift scripts (`run_*_drift.py`) deliberately **do not** use `run_benchmark_suite`; they own their step loop and only borrow `setup_out_dir` / `load_and_filter_workload`.
 
 ### Hybrid estimator
 
@@ -94,21 +95,20 @@ The drift scripts (`run_*_drift.py`, `run_dsb_*_drift.py`) deliberately **do not
 
 ### Drift protocol
 
-Each drift step evaluates three stages against the same step's data, which is why the output CSV has `Shock_*`, `FT_*`, `RB_*` column families:
+Each drift step evaluates three stages against the same step's data, which is why the output CSV has `Shock_*`, `FT_*`, `RB_*` column families. A step's queries are split by `benchmark_utils.split_adapt_eval` (seed 42): feedback-driven adaptation (FT, RB bad-bucket detection, STHist, Equi-Hist) may use only the adapt half; every stage of every model is scored on the eval half. Never score on queries a model adapted to.
 
 1. **Shock** — predict with the stale model, no adaptation.
-2. **FT (finetune)** — `feedback_update()` rescales bucket mass, re-predict.
-3. **RB (rebuild)** — `detect_bad_buckets` (q-error > 1.3) selects bucket indices, `train(..., bucket_indices=...)` retrains only those, re-predict.
+2. **FT (finetune)** — `feedback_update()` on the adapt half rescales bucket mass, re-predict.
+3. **RB (rebuild)** — `detect_bad_buckets` on the adapt half (median q-error > 1.3) selects bucket indices, `train(..., bucket_indices=...)` retrains only those, re-predict.
 
 `--shift-workload` switches from a fixed workload to per-step `step_N_workload_driven_<count>.csv` (workload drifts with the data); otherwise `--static-workload-path` is reused at every step.
 
 ### Output layout
 
-`results/<experiment-name>/<dataset-name>/` where dataset-name is `<dist>` for static runs and `gradual_<init>_to_<target>_<Model>` (synthetic) / `dsb_<column>_<Model>` (DSB) for drift runs. Hybrid drift writes `adaptation_ft_rb.csv`; the histogram baselines write `<model>_drift_analysis.csv`. `merge_drift.py --experiment-name X` globs these into `combined_<prefix>.csv`; `plot_drift.py` charts them.
+`results/<experiment-name>/<dataset-name>/` where dataset-name is `<dist>` for static runs and `gradual_<init>_to_<target>_<Model>` (synthetic) / `dsb_<column>_<Model>` (DSB) for drift runs. Hybrid drift writes `adaptation_ft_rb.csv`; the histogram baselines write `<model>_drift_analysis.csv`. `merge_drift.py --experiment-name X` globs these into `combined_<prefix>.csv`; `plot_drift.py` charts them; `export_results.py` writes every experiment to one xlsx (one sheet per benchmark).
 
 ## Conventions
 
 - Comments and print statements are a mix of English and Russian; match the surrounding file rather than translating.
-- `patch_benchmark.py` and `patch_dataset_path.py` are one-shot regex migrations already applied to the tree. Do not re-run them.
 - Random seeds are fixed at 42 throughout (dataset generation, workload generation, model training) — keep new code seeded the same way for reproducibility.
 - Per-query inference is timed inside the loop (`time.perf_counter()` per `predict`), so `predict` stays scalar and Python-level on purpose; the numpy work is in the bake step, not the hot loop.

@@ -12,6 +12,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 
 METRICS = ["Median", "P95", "Avg"]
+# One colour per model, one line style per stage, so 11+ lines stay distinguishable
+STAGE_STYLE = {"": "-", "RB": "-", "Rebuild": "-", "Online": "-",
+               "FT": "--", "Post": "--", "Shock": ":", "Static": ":"}
 
 
 def plot_combined(csv_path: Path, labels=None):
@@ -26,10 +29,15 @@ def plot_combined(csv_path: Path, labels=None):
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
     fig.suptitle(f"Drift Analysis: {prefix}", fontsize=15, fontweight="bold", y=1.02)
 
+    df["stage"] = df["stage"].fillna("")
+    models = sorted(df["model"].unique())
+    colors = {m: plt.cm.tab10(i % 10) for i, m in enumerate(models)}
+
     for ax, metric in zip(axes, METRICS):
-        for label, sub in df.groupby("label", sort=True):
+        for (model, stage, label), sub in df.groupby(["model", "stage", "label"], sort=True):
             sub = sub.sort_values("drift")
-            ax.plot(sub["drift"], sub[metric], marker="o", markersize=4, linewidth=2, label=label)
+            ax.plot(sub["drift"], sub[metric], marker="o", markersize=3, linewidth=1.8,
+                    color=colors[model], linestyle=STAGE_STYLE.get(stage, "-."), label=label)
         ax.set_title(f"{metric} Q-Error", fontsize=13)
         ax.set_xlabel("Drift %", fontsize=11)
         ax.set_ylabel("Q-Error", fontsize=11)

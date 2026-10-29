@@ -13,6 +13,7 @@ from benchmark_utils import (
     exact_counts,
     run_queries,
     timing_stats,
+    split_adapt_eval,
 )
 from data.datasets import DatasetManager
 
@@ -55,7 +56,6 @@ def main():
     with open(shift_dir / "step_0.pkl", "rb") as f:
         i_mn, i_mx, i_N, i_freq, i_sample, i_k = pickle.load(f)
 
-    GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
 
     # Ожидаем count в args.workload (например '1000')
     workload_count_str = args.workload
@@ -83,7 +83,7 @@ def main():
     # --------------------------------------------------------------
 
     if not args.shift_workload:
-        queries, _ = load_and_filter_workload(str(static_workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
+        queries, _ = load_and_filter_workload(str(static_workload_path), i_mn, i_mx, i_freq)
 
     # Строим начальную гистограмму и инициализируем Learner
     print(f"\n>>> PHASE 1: Initial Building on {args.init_dist} <<<")
@@ -110,7 +110,7 @@ def main():
             if not step_workload_path.exists():
                 raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
             
-            queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
+            queries, _ = load_and_filter_workload(str(step_workload_path), step_mn, step_mx, current_freq)
 
         # 1. Считаем реальность (Engine Truth)
         y_true_counts = np.maximum(exact_counts(queries, current_freq, step_mn), 1.0)
@@ -128,13 +128,19 @@ def main():
         # predict читает закэшированные b_count / prefix_counts — без пересборки первый запрос шага идёт по старым счётчикам
         eh_learner._bake_vectorized_data()
 
-        # 3. Онлайн-обучение на ворклоаде (как в run_equihist.py)
+        # 3. Онлайн-обучение только на adapt-половине (split_adapt_eval), затем
+        #    оценка eval-половины без обучения — модель не учится на запросах, по которым её мерят
+        adapt_idx, eval_idx = split_adapt_eval(len(queries))
+
         def feedback(q, true_count, pred_count):
             # Немедленное обновление (Feedback Loop)
             eh_learner.update(q, true_count, pred=pred_count)
 
-        y_pred_counts, infer_times, update_time = run_queries(
-            eh_learner.predict, queries, y_true_counts, feedback
+        _, _, update_time = run_queries(
+            eh_learner.predict, [queries[i] for i in adapt_idx], y_true_counts[adapt_idx], feedback
+        )
+        y_pred_counts, infer_times, _ = run_queries(
+            eh_learner.predict, [queries[i] for i in eval_idx], y_true_counts[eval_idx]
         )
         y_pred = np.maximum(y_pred_counts, 1.0) / current_N
         t = timing_stats(infer_times)
@@ -143,8 +149,8 @@ def main():
             t["median_infer_time"], t["avg_infer_time"], t["p95_infer_time"]
         )
 
-        # Метрики для текущего шага
-        m = summarize(y_true_sel, y_pred, f"EquiHist_Step_{step}")
+        # Метрики для текущего шага (eval-половина)
+        m = summarize(y_true_sel[eval_idx], y_pred, f"EquiHist_Step_{step}")
         print(f"Shift {shift_pct:>4.0%}: Median QErr = {m['QErr_median']:.2f}")
 
         summary_records.append({

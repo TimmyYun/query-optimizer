@@ -138,6 +138,19 @@ def exact_counts(queries, freq, mn):
     return np.maximum(ps[hi] - ps[lo], 0).astype(np.float64)
 
 
+def split_adapt_eval(n_queries, seed=42):
+    """
+    Drift protocol: a step's queries are split once, deterministically, into two halves.
+    adapt_idx — the only queries whose feedback a model may learn from (Hybrid FT/RB,
+                STHist, Equi-Hist);
+    eval_idx  — the queries every stage of every model is scored on.
+    A model is therefore never scored on a query it adapted to. With a static workload
+    the split is the same at every step, so an eval query is never learned at any step.
+    """
+    perm = np.random.default_rng(seed).permutation(n_queries)
+    return np.sort(perm[: n_queries // 2]), np.sort(perm[n_queries // 2 :])
+
+
 def timing_stats(infer_times):
     """Per-query inference time statistics; total is the sum of predict() calls only."""
     infer_times = np.asarray(infer_times)

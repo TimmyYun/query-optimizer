@@ -83,7 +83,8 @@ def main():
                 run_cmd([sys.executable, MODELS[model]['static'],
                          "--experiment-name", exp_name,
                          "--dataset", ds_path,
-                         "--workload", workload], args.dry_run)
+                         "--workload", workload,
+                         *MODELS[model].get('args', [])], args.dry_run)
 
             ds_name = Path(ds_path).name
             final_report.extend(collect_table(f"{ds_name}_{sc}", args.models, f"results/{exp_name}/{ds_name}"))

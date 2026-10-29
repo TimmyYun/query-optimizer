@@ -13,6 +13,7 @@ from benchmark_utils import (
     setup_out_dir,
     exact_counts,
     run_queries,
+    split_adapt_eval,
 )
 from data.datasets import DatasetManager
 
@@ -163,10 +164,9 @@ def main():
     with open(shift_dir / "step_0.pkl", "rb") as f:
         i_mn, i_mx, i_N, i_freq, i_sample, i_k = pickle.load(f)
 
-    GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
 
     if not args.shift_workload:
-        queries, _ = load_and_filter_workload(str(static_workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
+        queries, _ = load_and_filter_workload(str(static_workload_path), i_mn, i_mx, i_freq)
     
     i_est_freq = get_sampled_freq(i_sample, i_mn, i_N, len(i_freq))
     print(f"\n>>> PHASE 1: Initial Training on {args.init_dist} <<<")
@@ -201,7 +201,7 @@ def main():
             if not step_workload_path.exists():
                 raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
             
-            queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
+            queries, _ = load_and_filter_workload(str(step_workload_path), step_mn, step_mx, current_freq)
 
         # 1. Считаем реальную массу запросов (Engine Truth)
         y_true_counts = np.maximum(exact_counts(queries, current_freq, step_mn), 1.0)
@@ -209,6 +209,10 @@ def main():
         # --- SANITY FLOOR: Реальность не может быть 0 ---
         y_true_counts = np.maximum(y_true_counts, 1.0)
         y_true_sel = y_true_counts / current_N
+
+        # FT/RB учатся только на adapt-половине; все стадии меряются на eval-половине (split_adapt_eval)
+        adapt_idx, eval_idx = split_adapt_eval(len(queries))
+        adapt_queries = [queries[i] for i in adapt_idx]
 
         current_est_freq = get_sampled_freq(
             mixed_sample, step_mn, current_N, len(current_freq)
@@ -240,12 +244,12 @@ def main():
         y_pred_shock = np.maximum(preds_shock, 1.0)
         eval_time = time.perf_counter() - t0_eval
         
-        median_infer_shock = float(np.median(infer_times_shock))
-        avg_infer_shock = float(np.mean(infer_times_shock))
-        p95_infer_shock = float(np.percentile(infer_times_shock, 95))
-        
+        median_infer_shock = float(np.median(infer_times_shock[eval_idx]))
+        avg_infer_shock = float(np.mean(infer_times_shock[eval_idx]))
+        p95_infer_shock = float(np.percentile(infer_times_shock[eval_idx], 95))
+
         m_shock = summarize(
-            y_true_sel, y_pred_shock / current_N, f"Shock_{shift_pct:.1f}"
+            y_true_sel[eval_idx], y_pred_shock[eval_idx] / current_N, f"Shock_{shift_pct:.1f}"
         )
 
         m_ft, m_rb = m_shock, m_shock
@@ -258,23 +262,25 @@ def main():
             # СТАДИЯ 1: FINETUNE (Быстрая адаптация массы)
             # ==========================================
             t0 = time.perf_counter()
-            n_finetuned = hybrid_est.feedback_update(queries, y_true_counts, y_pred_shock, current_N)
+            n_finetuned = hybrid_est.feedback_update(
+                adapt_queries, y_true_counts[adapt_idx], y_pred_shock[adapt_idx], current_N
+            )
             t_ft = time.perf_counter() - t0
 
             preds_ft, infer_times_ft, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
             y_pred_ft = np.maximum(preds_ft, 1.0)
 
-            median_infer_ft = float(np.median(infer_times_ft))
-            avg_infer_ft = float(np.mean(infer_times_ft))
-            p95_infer_ft = float(np.percentile(infer_times_ft, 95))
-            
-            m_ft = summarize(y_true_sel, y_pred_ft / current_N, f"FT_{shift_pct:.1f}")
+            median_infer_ft = float(np.median(infer_times_ft[eval_idx]))
+            avg_infer_ft = float(np.mean(infer_times_ft[eval_idx]))
+            p95_infer_ft = float(np.percentile(infer_times_ft[eval_idx], 95))
+
+            m_ft = summarize(y_true_sel[eval_idx], y_pred_ft[eval_idx] / current_N, f"FT_{shift_pct:.1f}")
 
             # ==========================================
             # СТАДИЯ 2: REBUILD (Фоновое переобучение сломанных бакетов)
             # ==========================================
             bad_indices = detect_bad_buckets(
-                hybrid_est, queries, y_true_counts, y_pred_ft
+                hybrid_est, adapt_queries, y_true_counts[adapt_idx], y_pred_ft[adapt_idx]
             )
             n_rebuilt = len(bad_indices)
 
@@ -295,12 +301,12 @@ def main():
                 preds_rb, infer_times_rb, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
                 y_pred_rb = np.maximum(preds_rb, 1.0)
 
-                median_infer_rb = float(np.median(infer_times_rb))
-                avg_infer_rb = float(np.mean(infer_times_rb))
-                p95_infer_rb = float(np.percentile(infer_times_rb, 95))
+                median_infer_rb = float(np.median(infer_times_rb[eval_idx]))
+                avg_infer_rb = float(np.mean(infer_times_rb[eval_idx]))
+                p95_infer_rb = float(np.percentile(infer_times_rb[eval_idx], 95))
 
                 m_rb = summarize(
-                    y_true_sel, y_pred_rb / current_N, f"RB_{shift_pct:.1f}"
+                    y_true_sel[eval_idx], y_pred_rb[eval_idx] / current_N, f"RB_{shift_pct:.1f}"
                 )
 
             hybrid_est.report_models(
