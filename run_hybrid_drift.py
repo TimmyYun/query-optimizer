@@ -11,6 +11,8 @@ from benchmark_utils import (
     load_and_filter_workload,
     save_benchmark_results,
     setup_out_dir,
+    exact_counts,
+    run_queries,
 )
 from data.datasets import DatasetManager
 
@@ -112,7 +114,7 @@ def main():
     parser.add_argument("--static-workload-path", type=str, required=False, help="Explicit path to static workload")
     args = parser.parse_args()
 
-    ds_out_name = f"gradual_{args.init_dist}_to_{args.target_dist}_FT_RB"
+    ds_out_name = f"gradual_{args.init_dist}_to_{args.target_dist}_Hybrid"
     out_dir = setup_out_dir(args, ds_out_name)
     rng = np.random.default_rng(42)
 
@@ -202,17 +204,7 @@ def main():
             queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
 
         # 1. Считаем реальную массу запросов (Engine Truth)
-        ps = np.cumsum(current_freq)
-        y_true_counts = np.array(
-            [
-                max(
-                    1.0,
-                    ps[min(len(current_freq) - 1, max(0, q.high - step_mn))]
-                    - (ps[max(0, q.low - 1 - step_mn)] if q.low > step_mn else 0),
-                )
-                for q in queries
-            ]
-        )
+        y_true_counts = np.maximum(exact_counts(queries, current_freq, step_mn), 1.0)
 
         # --- SANITY FLOOR: Реальность не может быть 0 ---
         y_true_counts = np.maximum(y_true_counts, 1.0)
@@ -244,13 +236,8 @@ def main():
         # СТАДИЯ 0: SHOCK (Как модель реагирует сразу)
         # ==========================================
         t0_eval = time.perf_counter()
-        infer_times_shock = []
-        preds_shock = []
-        for q in queries:
-            t_start = time.perf_counter()
-            preds_shock.append(hybrid_est.predict(q))
-            infer_times_shock.append(time.perf_counter() - t_start)
-        y_pred_shock = np.maximum(np.array(preds_shock), 1.0)
+        preds_shock, infer_times_shock, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
+        y_pred_shock = np.maximum(preds_shock, 1.0)
         eval_time = time.perf_counter() - t0_eval
         
         median_infer_shock = float(np.median(infer_times_shock))
@@ -274,13 +261,8 @@ def main():
             n_finetuned = hybrid_est.feedback_update(queries, y_true_counts, y_pred_shock, current_N)
             t_ft = time.perf_counter() - t0
 
-            infer_times_ft = []
-            preds_ft = []
-            for q in queries:
-                t_start = time.perf_counter()
-                preds_ft.append(hybrid_est.predict(q))
-                infer_times_ft.append(time.perf_counter() - t_start)
-            y_pred_ft = np.maximum(np.array(preds_ft), 1.0)
+            preds_ft, infer_times_ft, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
+            y_pred_ft = np.maximum(preds_ft, 1.0)
 
             median_infer_ft = float(np.median(infer_times_ft))
             avg_infer_ft = float(np.mean(infer_times_ft))
@@ -310,13 +292,8 @@ def main():
                 )
 
                 t_rb = time.perf_counter() - t1
-                infer_times_rb = []
-                preds_rb = []
-                for q in queries:
-                    t_start = time.perf_counter()
-                    preds_rb.append(hybrid_est.predict(q))
-                    infer_times_rb.append(time.perf_counter() - t_start)
-                y_pred_rb = np.maximum(np.array(preds_rb), 1.0)
+                preds_rb, infer_times_rb, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
+                y_pred_rb = np.maximum(preds_rb, 1.0)
 
                 median_infer_rb = float(np.median(infer_times_rb))
                 avg_infer_rb = float(np.mean(infer_times_rb))

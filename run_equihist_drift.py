@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import time
 import pickle
 import argparse
 import numpy as np
@@ -11,6 +10,9 @@ from benchmark_utils import (
     load_and_filter_workload,
     save_benchmark_results,
     setup_out_dir,
+    exact_counts,
+    run_queries,
+    timing_stats,
 )
 from data.datasets import DatasetManager
 
@@ -111,12 +113,7 @@ def main():
             queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
 
         # 1. Считаем реальность (Engine Truth)
-        ps = np.cumsum(current_freq)
-        y_true_counts = np.array([
-            max(1.0, ps[min(len(current_freq) - 1, max(0, q.high - step_mn))] -
-                (ps[max(0, q.low - 1 - step_mn)] if q.low > step_mn else 0))
-            for q in queries
-        ])
+        y_true_counts = np.maximum(exact_counts(queries, current_freq, step_mn), 1.0)
         y_true_sel = y_true_counts / current_N
 
         # 2. Обновляем массу бакетов из сэмпла (Симуляция ANALYZE)
@@ -132,27 +129,19 @@ def main():
         eh_learner._bake_vectorized_data()
 
         # 3. Онлайн-обучение на ворклоаде (как в run_equihist.py)
-        y_pred = []
-        infer_times = []
-        t0_eval = time.perf_counter()
-
-        for q, truth in zip(queries, y_true_counts):
-            st = time.perf_counter()
-            # Предсказание с защитой от 0
-            pred_val = max(eh_learner.predict(q), 1.0)
-            infer_times.append(time.perf_counter() - st)
-            y_pred.append(pred_val / current_N)
-
+        def feedback(q, true_count, pred_count):
             # Немедленное обновление (Feedback Loop)
-            eh_learner.update(q, float(truth), pred=float(pred_val))
+            eh_learner.update(q, true_count, pred=pred_count)
 
-        total_time = time.perf_counter() - t0_eval
-        y_pred = np.array(y_pred)
-        
-        infer_times = np.array(infer_times)
-        median_infer_time = np.median(infer_times)
-        avg_infer_time = np.mean(infer_times)
-        p95_infer_time = np.percentile(infer_times, 95)
+        y_pred_counts, infer_times, update_time = run_queries(
+            eh_learner.predict, queries, y_true_counts, feedback
+        )
+        y_pred = np.maximum(y_pred_counts, 1.0) / current_N
+        t = timing_stats(infer_times)
+        total_time = t["infer_time"] + update_time
+        median_infer_time, avg_infer_time, p95_infer_time = (
+            t["median_infer_time"], t["avg_infer_time"], t["p95_infer_time"]
+        )
 
         # Метрики для текущего шага
         m = summarize(y_true_sel, y_pred, f"EquiHist_Step_{step}")
@@ -164,6 +153,8 @@ def main():
             "P95 Q-Error": m["QErr_p95"],
             "Avg Q-Error": m["QErr_avg"],
             "Time": total_time,
+            "Inference Time": t["infer_time"],
+            "Update Time": update_time,
             "Median Inference Time": median_infer_time,
             "Avg Inference Time": avg_infer_time,
             "P95 Inference Time": p95_infer_time,

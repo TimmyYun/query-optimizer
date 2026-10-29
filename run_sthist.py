@@ -7,14 +7,13 @@ predict, затем observe_feedback с точным ответом. Модел�
 метаданных (N, mn, mx) — sample и freq ей не передаются.
 """
 import time
-from pathlib import Path
-import numpy as np
-from models import STHistogram, STHistogramConfig, summarize
+from models import STHistogram, STHistogramConfig
 from benchmark_utils import (
     get_common_parser,
     run_benchmark_suite,
+    resolve_workload_path,
     load_and_filter_workload,
-    save_benchmark_results,
+    evaluate_and_save,
 )
 
 
@@ -61,81 +60,32 @@ def run_logic(args, out_dir, metadata):
     # Тот же бюджет бакетов, что у EquiWidth/EquiHist (FD), если не задан явно
     n_bins = args.buckets if args.buckets is not None else n_bins_data
     model_name = model_name_for(args)
-
-    workload_path = Path(args.workload)
-    if not workload_path.exists():
-        potential_path = Path(args.dataset) / f"workload_{args.workload}.csv"
-        if potential_path.exists():
-            workload_path = potential_path
-        else:
-            raise FileNotFoundError(
-                f"Workload not found at {args.workload} or {potential_path}"
-            )
+    workload_path = resolve_workload_path(args)
 
     # Build: только метаданные каталога, без данных (§3.1)
     t0 = time.perf_counter()
     st_hist = STHistogram(build_config(args, n_bins), total_rows=N, min_value=mn, max_value=mx)
     build_time = time.perf_counter() - t0
 
-    queries, y_true_raw = load_and_filter_workload(str(workload_path), mn, mx, freq)
-    # Точная кардинальность — фидбэк исполнителя (целое число строк)
-    actual_counts = np.rint(y_true_raw * N)
-    y_true_safe = np.maximum(actual_counts, 1.0) / N
+    queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
 
-    y_pred = []
-    infer_times = []
-    inf_time_total = 0.0
-    update_time_total = 0.0
+    # Фидбэк (Fig. 2) + реструктуризация каждые R запросов (Fig. 3) — после оценки запроса.
+    # true_count — точная кардинальность от исполнителя (целое число строк)
+    def feedback(q, true_count, pred_count):
+        st_hist.observe_feedback(q.low, q.high, true_count)
 
-    for q, actual in zip(queries, actual_counts):
-        # 1. Оценка ДО обучения на этом запросе
-        t0 = time.perf_counter()
-        pred_val = st_hist.predict(q)
-        it_val = time.perf_counter() - t0
-        inf_time_total += it_val
-        infer_times.append(it_val)
-        y_pred.append(max(pred_val, 1.0) / N)
-
-        # 2. Фидбэк (Fig. 2) + реструктуризация каждые R запросов (Fig. 3)
-        t0 = time.perf_counter()
-        st_hist.observe_feedback(q.low, q.high, float(actual))
-        update_time_total += time.perf_counter() - t0
-
-    y_pred = np.array(y_pred)
-    m = summarize(y_true_safe, y_pred, model_name)
-
-    infer_times = np.array(infer_times)
-    events = dict(st_hist.events)
-
-    metrics = {
-        "initial_build_time": build_time,
-        "update_time_total": update_time_total,
-        "total_train_time": build_time + update_time_total,
-        "infer_time": inf_time_total,
-        "median_infer_time": np.median(infer_times),
-        "avg_infer_time": np.mean(infer_times),
-        "p95_infer_time": np.percentile(infer_times, 95),
-        "median_q_error": m["QErr_median"],
-        "p25_q_error": m["QErr_p25"],
-        "p75_q_error": m["QErr_p75"],
-        "p95_q_error": m["QErr_p95"],
-        "avg_q_error": m["QErr_avg"],
-        "n_buckets": len(st_hist.buckets),
-        "config": st_hist.get_state()["config"],
-        # Fig. 2 не нормирует массу — фиксируем, насколько она ушла от N
-        "final_mass_ratio": st_hist.total_mass / N,
-        "events": events,
-    }
-
-    print(
-        f"{model_name}: Median QErr={metrics['median_q_error']:.4f}, "
-        f"Train={metrics['total_train_time']:.4f}s, Inf={inf_time_total:.4f}s"
+    evaluate_and_save(
+        out_dir, workload_path, model_name, st_hist.predict, queries, y_true_sel, N, build_time,
+        feedback=feedback,
+        extra_metrics=lambda true_counts, pred_counts: {
+            "n_buckets": len(st_hist.buckets),
+            "config": st_hist.get_state()["config"],
+            # Fig. 2 не нормирует массу — фиксируем, насколько она ушла от N
+            "final_mass_ratio": st_hist.total_mass / N,
+            "events": dict(st_hist.events),
+        },
     )
-    print(f"  Events: {events}")
-
-    save_benchmark_results(
-        out_dir, workload_path.stem, model_name, queries, y_true_safe, y_pred, metrics
-    )
+    print(f"  Events: {dict(st_hist.events)}")
 
 
 def main():

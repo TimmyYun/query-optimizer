@@ -17,19 +17,15 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from models import EntropyHistogram1D, summarize
-from benchmark_utils import load_and_filter_workload, setup_out_dir
+from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries
 from data.datasets import DatasetManager
 from run_entropyhist import add_entropyhist_args, build_config, model_name_for
 
 
 def evaluate(e_hist, queries):
     """Оценки (в строках, со сглаживанием max(., 1)) + время на запрос."""
-    y_pred, infer_times = [], []
-    for q in queries:
-        st = time.perf_counter()
-        y_pred.append(e_hist.predict(q))
-        infer_times.append(time.perf_counter() - st)
-    return np.array(y_pred), np.array(infer_times)
+    y_pred, infer_times, _ = run_queries(e_hist.predict, queries, np.zeros(len(queries)))
+    return y_pred, infer_times
 
 
 def stage_record(prefix, y_true_counts, y_pred_counts, infer_times, current_N, label):
@@ -137,12 +133,7 @@ def main():
             queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
 
         # 1. Считаем реальность (Engine Truth) — без max(1, .), он применяется в stage_record
-        ps = np.cumsum(current_freq)
-        y_true_counts = np.array([
-            ps[min(len(current_freq) - 1, max(0, q.high - step_mn))] -
-            (ps[max(0, q.low - 1 - step_mn)] if q.low > step_mn else 0)
-            for q in queries
-        ], dtype=np.float64)
+        y_true_counts = exact_counts(queries, current_freq, step_mn)
 
         # 2. Static: гистограмма шага 0 (замороженная, как в статье)
         y_pred_static, infer_static = evaluate(static_hist, queries)

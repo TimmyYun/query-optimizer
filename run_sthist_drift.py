@@ -20,19 +20,15 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from models import STHistogram, summarize
-from benchmark_utils import load_and_filter_workload, setup_out_dir
+from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries
 from data.datasets import DatasetManager, DOMAIN_MAX
 from run_sthist import add_sthist_args, build_config, model_name_for
 
 
 def evaluate_frozen(st_hist, queries):
     """Оценки без обучения + время на запрос."""
-    y_pred, infer_times = [], []
-    for q in queries:
-        st = time.perf_counter()
-        y_pred.append(st_hist.predict(q))
-        infer_times.append(time.perf_counter() - st)
-    return np.maximum(np.array(y_pred), 1.0), np.array(infer_times)
+    y_pred, infer_times, _ = run_queries(st_hist.predict, queries, np.zeros(len(queries)))
+    return np.maximum(y_pred, 1.0), infer_times
 
 
 def main():
@@ -130,12 +126,7 @@ def main():
             st_hist.update_catalog_metadata(current_N)
 
         # 1. Считаем реальность (Engine Truth) — точный фидбэк, без max(1, .)
-        ps = np.cumsum(current_freq)
-        actual_counts = np.array([
-            ps[min(len(current_freq) - 1, max(0, q.high - step_mn))] -
-            (ps[max(0, q.low - 1 - step_mn)] if q.low > step_mn else 0)
-            for q in queries
-        ], dtype=np.float64)
+        actual_counts = exact_counts(queries, current_freq, step_mn)
         y_true_sel = np.maximum(actual_counts, 1.0) / current_N
 
         events_before = st_hist.events.copy()
@@ -145,20 +136,13 @@ def main():
         m_shock = summarize(y_true_sel, y_pred_shock / current_N, f"Shock_{shift_pct:.2f}")
 
         # 3. Online: predict -> feedback (prequential, как run_equihist_drift.py)
-        y_pred_online, infer_online = [], []
-        update_time = 0.0
-        for q, actual in zip(queries, actual_counts):
-            st = time.perf_counter()
-            pred_val = st_hist.predict(q)
-            infer_online.append(time.perf_counter() - st)
-            y_pred_online.append(max(pred_val, 1.0))
+        def feedback(q, actual, pred_count):
+            st_hist.observe_feedback(q.low, q.high, actual)
 
-            st = time.perf_counter()
-            st_hist.observe_feedback(q.low, q.high, float(actual))
-            update_time += time.perf_counter() - st
-
-        y_pred_online = np.array(y_pred_online)
-        infer_online = np.array(infer_online)
+        y_pred_online, infer_online, update_time = run_queries(
+            st_hist.predict, queries, actual_counts, feedback
+        )
+        y_pred_online = np.maximum(y_pred_online, 1.0)
         m_online = summarize(y_true_sel, y_pred_online / current_N, f"Online_{shift_pct:.2f}")
 
         # 4. Post: та же нагрузка после адаптации, без обучения

@@ -199,7 +199,16 @@ poetry run python run_experiments.py --scenario hard_narrow
 ```
 
 Each scenario runs every model in [§1](#1-methods) except Equi-Hist on every
-distribution of its dataset, then prints one results table.
+dataset of the scenario, then prints one results table.
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `--scenario` | required | one row of the table below, or `all` |
+| `--models M [M ...]` | all except `EquiHist` | run only these models, e.g. `--models EquiWidth Hybrid`; names as in [§1](#1-methods) |
+| `--dry-run` | off | print every command the scenario would run, without running anything |
+
+Scenarios, models and their runner scripts are defined in one place,
+[registry.py](registry.py). The orchestrators only read it.
 
 | `--scenario` | Data | Workload | Experiment name in `results/` |
 |---|---|---|---|
@@ -294,6 +303,9 @@ poetry run python run_drift_experiments.py --scenario drift_5_ds_zipf_wl_normal
 | `drift_5_ds_add_zipf_wl_zipf` | `shift_normal_to_zipf_5%_dataset` | drifts with the data |
 | `all` | all four | |
 
+`--models` and `--dry-run` work as in [§4.1](#41-full-scenarios).
+Results go to `results/<scenario>/gradual_normal_to_zipf_<Model>/`.
+
 **Long-running:** 11–21 steps × 1M queries × 6 models per scenario.
 
 ### 5.3 One model
@@ -365,6 +377,13 @@ for col in ws_item_sk cr_item_sk cr_returned_time_sk; do
 done
 ```
 
+Then merge and plot all models:
+
+```bash
+poetry run python merge_drift.py --experiment-name dsb_drift   # -> results/dsb_drift/combined_dsb_<column>.csv
+poetry run python plot_drift.py  --experiment-name dsb_drift
+```
+
 | Parameter | Meaning |
 |---|---|
 | `--column` | `ws_item_sk`, `cr_item_sk` or `cr_returned_time_sk` |
@@ -383,15 +402,24 @@ results/<experiment-name>/
 ├── <dataset>/                                   # static run
 │   ├── summary_<Model>.json                     # metrics: median/p25/p75/p95/avg q-error, timings
 │   └── <workload-stem>_<Model>.csv              # per query: Query_ID, Model, Prediction, Truth, Q_Error (selectivities)
-└── gradual_<init>_to_<target>_<Model>/          # drift run
-    └── <model>_drift_analysis.csv               # one row per step (Hybrid: adaptation_ft_rb.csv)
+├── gradual_<init>_to_<target>_<Model>/          # synthetic drift run
+│   └── <model>_drift_analysis.csv               # one row per step (Hybrid: adaptation_ft_rb.csv)
+├── dsb_<column>_<Model>/                        # DSB drift run, same CSV
+└── combined_<prefix>.csv, drift_chart_<prefix>.png   # written by merge_drift.py / plot_drift.py
 ```
 
 - **Zero-truth queries are dropped** before scoring, since q-error is undefined for them.
   The query count can therefore differ between datasets and is logged.
-- `train_time` is the build time in seconds. `infer_time` is the wall time of
-  the whole query loop. `avg_infer_time`, `median_infer_time` and `p95_infer_time`
-  are statistics of the time of one scalar `predict()` call.
+- Timing fields in `summary_<Model>.json`, the same for every method:
+
+  | Field | Meaning |
+  |---|---|
+  | `build_time` | seconds to build the model before the first query |
+  | `update_time_total` | seconds spent learning from query feedback (STHist, Equi-Hist; 0 otherwise) |
+  | `train_time` | `build_time + update_time_total` |
+  | `infer_time` | sum over queries of the time of one `predict()` call; feedback is not included |
+  | `avg_infer_time`, `median_infer_time`, `p95_infer_time` | statistics of one `predict()` call |
+
 - Small floats are written with 9 decimals instead of scientific notation.
 - A runner that gets a parent `--dataset` folder catches each dataset's error,
   prints it and continues. **Check the log**: a run can finish with some outputs missing.
@@ -400,19 +428,30 @@ results/<experiment-name>/
 
 ## 8. Merging and plotting
 
+Drift runs, synthetic or DSB, any set of models:
+
 ```bash
-poetry run python merge_dsb_drifts.py     # -> results/dsb_drift/combined_<column>.csv
-poetry run python plot_dsb_drift.py       # median / p95 / mean q-error per churn level
-poetry run python merge_all_drifts.py     # synthetic drift, four scenarios
+poetry run python merge_drift.py --experiment-name drift_5_ds_zipf_wl_normal
+poetry run python plot_drift.py  --experiment-name drift_5_ds_zipf_wl_normal
+```
+
+| Script | Parameter | Meaning |
+|---|---|---|
+| `merge_drift.py` | `--experiment-name E [E ...]` | folders under `results/` to merge. Every `<prefix>_<Model>/` folder inside is read, and one `combined_<prefix>.csv` is written per prefix (e.g. `gradual_normal_to_zipf`, `dsb_cr_item_sk`) |
+| | `--out-dir` | root of the results tree, default `results` |
+| `plot_drift.py` | `--experiment-name E [E ...]` | plots every `combined_*.csv` of these experiments: median / p95 / mean q-error against drift % |
+| | `--labels L [L ...]` | only these lines. A line is `<Model>` for single-stage models and `<Model>_<Stage>` otherwise, e.g. `--labels EquiWidth Hybrid_RB STHist_Online` |
+
+`combined_<prefix>.csv` is a long table: `drift, step, model, stage, label, Median, P95, Avg, Infer_Med, Infer_Avg`.
+
+Static runs: box plots of the per-query q-error of several models:
+
+```bash
 poetry run python plot/plot_comparison.py \
     --experiments results/synth_hard_narrow/normal/*_*.csv \
     --output results/synth_hard_narrow/normal/comparison.png \
     --title "Q-Error: normal"
 ```
-
-> These scripts currently have **hard-coded result paths**
-> (`results/dsb_drift`, `results/equihist_drift_5%/…`).
-> For the DSB ones, keep `--experiment-name dsb_drift`.
 
 ---
 
@@ -425,13 +464,28 @@ poetry run python plot/plot_comparison.py \
   (a 100k reservoir sample), scaled by `N / len(sample)`. The only other input
   is query feedback, for the feedback-driven methods. Code that lets a model
   read `freq` invalidates the results.
-- **Same budget.** By default every method gets the same bucket count `k`
-  (the Freedman–Diaconis rule on the sample). Use `--buckets` to set another shared value.
+- **Same budget.** By default EquiWidth, TKHist, STHist, EntropyHist, Equi-Hist and Hybrid
+  get the same bucket count `k` (the Freedman–Diaconis rule on the sample).
+  EquiDepth follows PostgreSQL and uses `--statistics-target` (100) instead.
+  Pass the same `--buckets B` to every runner to compare all of them at one budget.
+  Buckets alone are not memory: TKHist also stores top-k values, and Hybrid stores
+  a local model per bucket (`n_floats` in its summary).
 - **Fixed seeds.** Data, samples, workloads and model training all use seed 42.
   Hybrid seeds each bucket's models from a fixed per-bucket seed, so results
   do not depend on thread scheduling.
-- **Same timing method.** Every method is timed per query with `time.perf_counter()`
-  around a scalar `predict()` call.
+- **One evaluation loop.** Every static runner only builds its model and passes
+  `predict` (plus `feedback`, for feedback methods) to `benchmark_utils.evaluate_and_save`.
+  Truth, clipping, timing and metrics are therefore computed by the same code for
+  every method. Feedback methods are scored **prequentially**: the estimate of a
+  query is recorded before the model learns from that query. Truth for static and
+  drift runs comes from one function, `benchmark_utils.exact_counts`.
+
+### Adding a method
+
+1. `models/<name>.py`: build only from `sample`, `predict(q)` returns a row count. Export it in `models/__init__.py`.
+2. `run_<name>.py`: copy [run_tkhist.py](run_tkhist.py). `run_logic` builds the model and calls `evaluate_and_save`.
+3. `run_<name>_drift.py`: copy [run_tkhist_drift.py](run_tkhist_drift.py). If you change bucket counts, call `_bake_vectorized_data()` afterwards.
+4. One line in `MODELS` in [registry.py](registry.py). Both orchestrators pick it up.
 
 ---
 
@@ -439,12 +493,14 @@ poetry run python plot/plot_comparison.py \
 
 ```text
 models/                 estimators (one file per method) + common.py (Bucket, RangeQuery, q-error)
-benchmark_utils.py      shared CLI, dataset loop, truth computation, result writing
+registry.py             models + static/drift scenarios: the single list the orchestrators read
+benchmark_utils.py      shared CLI, dataset loop, truth, evaluation loop, result writing
 run_<model>.py          static runner per model
 run_<model>_drift.py    synthetic drift runner per model
 run_dsb_*_drift.py      DSB drift runners
 run_experiments.py      static orchestrator (§4)
 run_drift_experiments.py drift orchestrator (§5)
+merge_drift.py, plot_drift.py  drift result tables and charts (§8)
 data/datasets.py        synthetic dataset generator
 data/generate_shifts.py drift sequence generator
 workload/workload.py    workload generator

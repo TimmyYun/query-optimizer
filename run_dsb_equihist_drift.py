@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """EquiHist drift experiment on DSB (CSV-based) data."""
-import time
 import pickle
 import argparse
 import numpy as np
 import pandas as pd
 from pathlib import Path
 from models import EquiWidthHistogram, EquiHistLearner, summarize
-from benchmark_utils import load_and_filter_workload, setup_out_dir
+from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries, timing_stats
 
 # Column → table mapping
 COLUMN_TABLE = {
@@ -112,12 +111,7 @@ def main():
         current_N, current_freq, current_sample = build_meta_from_values(values, i_mn, i_mx)
 
         # Compute ground truth
-        ps = np.cumsum(current_freq)
-        y_true_counts = np.array([
-            max(1.0, ps[min(len(current_freq) - 1, max(0, q.high - i_mn))] -
-                (ps[max(0, q.low - 1 - i_mn)] if q.low > i_mn else 0))
-            for q in queries
-        ])
+        y_true_counts = np.maximum(exact_counts(queries, current_freq, i_mn), 1.0)
         y_true_sel = y_true_counts / current_N
 
         # Update bucket counts from sample (simulates ANALYZE)
@@ -132,24 +126,19 @@ def main():
         eh_learner._bake_vectorized_data()
 
         # Online learning on workload
-        y_pred = []
-        infer_times = []
-        t0_eval = time.perf_counter()
+        def feedback(q, true_count, pred_count):
+            # Немедленное обновление (Feedback Loop)
+            eh_learner.update(q, true_count, pred=pred_count)
 
-        for q, truth in zip(queries, y_true_counts):
-            st = time.perf_counter()
-            pred_val = max(eh_learner.predict(q), 1.0)
-            infer_times.append(time.perf_counter() - st)
-            y_pred.append(pred_val / current_N)
-            eh_learner.update(q, float(truth), pred=float(pred_val))
-
-        total_time = time.perf_counter() - t0_eval
-        y_pred = np.array(y_pred)
-        
-        infer_times = np.array(infer_times)
-        median_infer_time = np.median(infer_times)
-        avg_infer_time = np.mean(infer_times)
-        p95_infer_time = np.percentile(infer_times, 95)
+        y_pred_counts, infer_times, update_time = run_queries(
+            eh_learner.predict, queries, y_true_counts, feedback
+        )
+        y_pred = np.maximum(y_pred_counts, 1.0) / current_N
+        t = timing_stats(infer_times)
+        total_time = t["infer_time"] + update_time
+        median_infer_time, avg_infer_time, p95_infer_time = (
+            t["median_infer_time"], t["avg_infer_time"], t["p95_infer_time"]
+        )
 
         m = summarize(y_true_sel, y_pred, f"EquiHist_{step_name}")
         print(f"Step {step_name:>15s} ({shift_pct:>4.0%}): Median QErr = {m['QErr_median']:.2f}")
@@ -161,6 +150,8 @@ def main():
             "P95 Q-Error": m["QErr_p95"],
             "Avg Q-Error": m["QErr_avg"],
             "Time": total_time,
+            "Inference Time": t["infer_time"],
+            "Update Time": update_time,
             "Median Inference Time": median_infer_time,
             "Avg Inference Time": avg_infer_time,
             "P95 Inference Time": p95_infer_time,

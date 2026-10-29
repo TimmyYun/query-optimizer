@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from models import EquiWidthHistogram, summarize
-from benchmark_utils import load_and_filter_workload, setup_out_dir
+from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries, timing_stats
 from data.datasets import build_frequency_and_sample, scan_min_max_count
 
 # Column → table mapping
@@ -112,12 +112,7 @@ def main():
         current_N, current_freq, current_sample = build_meta_from_values(values, i_mn, i_mx)
 
         # Compute ground truth
-        ps = np.cumsum(current_freq)
-        y_true_counts = np.array([
-            max(1.0, ps[min(len(current_freq) - 1, max(0, q.high - i_mn))] -
-                (ps[max(0, q.low - 1 - i_mn)] if q.low > i_mn else 0))
-            for q in queries
-        ])
+        y_true_counts = np.maximum(exact_counts(queries, current_freq, i_mn), 1.0)
         y_true_sel = y_true_counts / current_N
 
         # Update bucket counts from sample (simulates ANALYZE)
@@ -135,22 +130,11 @@ def main():
 
         build_time = time.perf_counter() - t0_build
 
-        t0 = time.perf_counter()
-        y_pred_counts = []
-        infer_times = []
-        for q in queries:
-            st = time.perf_counter()
-            pred = ew_hist.predict(q)
-            infer_times.append(time.perf_counter() - st)
-            y_pred_counts.append(pred)
-        
-        y_pred_counts = np.maximum(np.array(y_pred_counts), 1.0)
-        infer_time = time.perf_counter() - t0
-        
-        infer_times = np.array(infer_times)
-        median_infer_time = np.median(infer_times)
-        avg_infer_time = np.mean(infer_times)
-        p95_infer_time = np.percentile(infer_times, 95)
+        y_pred_counts, infer_times, _ = run_queries(ew_hist.predict, queries, y_true_counts)
+        y_pred_counts = np.maximum(y_pred_counts, 1.0)
+        t = timing_stats(infer_times)
+        infer_time, median_infer_time = t["infer_time"], t["median_infer_time"]
+        avg_infer_time, p95_infer_time = t["avg_infer_time"], t["p95_infer_time"]
 
         m = summarize(y_true_sel, y_pred_counts / current_N, f"EquiWidth_{step_name}")
 

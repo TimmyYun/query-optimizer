@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-import time
 import numpy as np
-from pathlib import Path
-from models import EquiWidthHistogram, HybridEstimator, summarize
+from models import EquiWidthHistogram, HybridEstimator
 from benchmark_utils import (
     get_common_parser,
     run_benchmark_suite,
+    resolve_workload_path,
     load_and_filter_workload,
-    save_benchmark_results,
+    evaluate_and_save,
 )
 import matplotlib.pyplot as plt
 from models.common import Bucket
@@ -101,25 +100,14 @@ def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
     n_bins = args.buckets if args.buckets is not None else n_bins_data
     rng = np.random.default_rng(42)
+    workload_path = resolve_workload_path(args)
 
-    # --- NEW: Автоматическое определение пути к ворклоаду ---
-    workload_path = Path(args.workload)
-    if not workload_path.exists():
-        potential_path = Path(args.dataset) / f"workload_{args.workload}.csv"
-        if potential_path.exists():
-            workload_path = potential_path
-        else:
-            raise FileNotFoundError(
-                f"Workload not found at {args.workload} or {potential_path}"
-            )
-    # -------------------------------------------------------
-
-    obs_freq = np.bincount(sample - mn, minlength=len(freq))
+    # Плотность строится только из выборки; длина домена = mx - mn + 1 (freq не читаем)
+    obs_freq = np.bincount(sample - mn, minlength=mx - mn + 1)
 
     # Scale the sample back up to N (Crucial for Cardinality Estimation)
     scaling_factor = N / len(sample)
     estimated_freq = obs_freq * scaling_factor
-    # --------------------------------------------------
 
     # Build Initial Buckets using the ESTIMATED frequency
     if args.partition == "equidepth":
@@ -131,7 +119,7 @@ def run_logic(args, out_dir, metadata):
     model_name = model_name_for(args)
 
     # Train Hybrid using the ESTIMATED frequency
-    print(f"Training Hybrid Model on 100000 Sample (Bins: {n_bins})...")
+    print(f"Training Hybrid Model on {len(sample)} Sample (Bins: {n_bins})...")
     hybrid_est = HybridEstimator(
         init_buckets,
         identity_threshold=args.ident,
@@ -148,66 +136,17 @@ def run_logic(args, out_dir, metadata):
     hybrid_est.report_models(file_path=model_report_path)
 
     queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
+    _, y_true_safe, y_pred_safe = evaluate_and_save(
+        out_dir, workload_path, model_name, hybrid_est.predict, queries, y_true_sel, N, t_train,
+        extra_metrics={
+            "n_buckets": len(hybrid_est.buckets),
+            "n_models": sum(1 for v in hybrid_est.models.values() if v is not None),
+            "n_floats": hybrid_est.param_count(),
+        },
+    )
 
-    t0 = time.perf_counter()
-    y_pred_counts = []
-    infer_times = []
-    for q in queries:
-        st = time.perf_counter()
-        pred = hybrid_est.predict(q)
-        infer_times.append(time.perf_counter() - st)
-        y_pred_counts.append(pred)
-        
-    y_pred_counts = np.maximum(np.array(y_pred_counts), 1.0)
-    infer_time = time.perf_counter() - t0
-    
-    infer_times = np.array(infer_times)
-    median_infer_time = np.median(infer_times)
-    avg_infer_time = np.mean(infer_times)
-    p95_infer_time = np.percentile(infer_times, 95)
-
-    y_true_counts = np.maximum(y_true_sel * N, 1.0)
-    y_pred_safe = y_pred_counts / N
-    y_true_safe = y_true_counts / N
-    # -------------------------------------------
-
-    # --- VISUALIZATION & SUMMARY ---
-    debug_plot_path = out_dir / "initial_baseline_debug.png"
-    # Передаем безопасные значения
     if not args.no_debug_plot:
-        plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, debug_plot_path)
-
-    # Summarize
-    m = summarize(y_true_safe, y_pred_safe, model_name)
-    metrics = {
-        "train_time": t_train,
-        "infer_time": infer_time,
-        "median_infer_time": median_infer_time,
-        "avg_infer_time": avg_infer_time,
-        "p95_infer_time": p95_infer_time,
-        "median_q_error": m["QErr_median"],
-        "p25_q_error": m["QErr_p25"],
-        "p75_q_error": m["QErr_p75"],
-        "p95_q_error": m["QErr_p95"],
-        "avg_q_error": m["QErr_avg"],
-        "n_buckets": len(hybrid_est.buckets),
-        "n_models": sum(1 for v in hybrid_est.models.values() if v is not None),
-        "n_floats": hybrid_est.param_count(),
-    }
-
-    print(
-        f"{model_name}: Median QErr={metrics['median_q_error']:.4f}, Train={t_train:.4f}s, Inf={infer_time:.4f}s"
-    )
-
-    save_benchmark_results(
-        out_dir,
-        workload_path.stem,
-        model_name,
-        queries,
-        y_true_safe,
-        y_pred_safe,
-        metrics,
-    )
+        plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, out_dir / "initial_baseline_debug.png")
 
 
 def main():

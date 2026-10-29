@@ -1,30 +1,19 @@
 #!/usr/bin/env python3
 import time
-import numpy as np
-from pathlib import Path
-from models import TKHistogram, summarize
+from models import TKHistogram
 from benchmark_utils import (
     get_common_parser,
     run_benchmark_suite,
+    resolve_workload_path,
     load_and_filter_workload,
-    save_benchmark_results,
+    evaluate_and_save,
 )
 
 
 def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
     n_bins = args.buckets if args.buckets is not None else n_bins_data
-
-    # Автоматическое определение пути к ворклоаду (как в run_equiwidth.py)
-    workload_path = Path(args.workload)
-    if not workload_path.exists():
-        potential_path = Path(args.dataset) / f"workload_{args.workload}.csv"
-        if potential_path.exists():
-            workload_path = potential_path
-        else:
-            raise FileNotFoundError(
-                f"Workload not found at {args.workload} or {potential_path}"
-            )
+    workload_path = resolve_workload_path(args)
 
     # Build Histogram
     t0 = time.perf_counter()
@@ -39,57 +28,14 @@ def run_logic(args, out_dir, metadata):
     )
     build_time = time.perf_counter() - t0
 
-    # Load Workload
     queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
-    y_true_counts = y_true_sel * N
-
-    # Evaluate
-    t0 = time.perf_counter()
-    y_pred_counts = []
-    infer_times = []
-    for q in queries:
-        st = time.perf_counter()
-        pred = tk_hist.predict(q)
-        infer_times.append(time.perf_counter() - st)
-        y_pred_counts.append(pred)
-
-    y_pred_counts = np.array(y_pred_counts)
-    infer_time = time.perf_counter() - t0
-
-    infer_times = np.array(infer_times)
-    median_infer_time = np.median(infer_times)
-    avg_infer_time = np.mean(infer_times)
-    p95_infer_time = np.percentile(infer_times, 95)
-
-    y_pred_counts = np.maximum(y_pred_counts, 1.0)
-    y_true_counts = np.maximum(y_true_counts, 1.0)
-
-    y_pred = y_pred_counts / N
-    y_true_safe = y_true_counts / N
-
-    m = summarize(y_true_safe, y_pred, "TKHist")
-    metrics = {
-        "build_time": build_time,
-        "infer_time": infer_time,
-        "median_infer_time": median_infer_time,
-        "avg_infer_time": avg_infer_time,
-        "p95_infer_time": p95_infer_time,
-        "median_q_error": m["QErr_median"],
-        "p25_q_error": m["QErr_p25"],
-        "p75_q_error": m["QErr_p75"],
-        "p95_q_error": m["QErr_p95"],
-        "avg_q_error": m["QErr_avg"],
-        "topk": args.topk,
-        "n_buckets": len(tk_hist.buckets),
-        "n_topk_entries": tk_hist.n_topk_entries,
-    }
-
-    print(
-        f"TKHist (k={args.topk}): Median QErr={metrics['median_q_error']:.4f}, Build={build_time:.4f}s"
-    )
-
-    save_benchmark_results(
-        out_dir, workload_path.stem, "TKHist", queries, y_true_safe, y_pred, metrics
+    evaluate_and_save(
+        out_dir, workload_path, "TKHist", tk_hist.predict, queries, y_true_sel, N, build_time,
+        extra_metrics={
+            "topk": args.topk,
+            "n_buckets": len(tk_hist.buckets),
+            "n_topk_entries": tk_hist.n_topk_entries,
+        },
     )
 
 

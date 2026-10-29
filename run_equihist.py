@@ -1,90 +1,37 @@
 #!/usr/bin/env python3
 import time
-from pathlib import Path
-import numpy as np
-from models import EquiWidthHistogram, EquiHistLearner, summarize
+from models import EquiWidthHistogram, EquiHistLearner
 from benchmark_utils import (
     get_common_parser,
     run_benchmark_suite,
+    resolve_workload_path,
     load_and_filter_workload,
-    save_benchmark_results,
+    evaluate_and_save,
 )
 
 
 def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
     n_bins = args.buckets if args.buckets is not None else n_bins_data
-
-    # --- NEW: Автоматическое определение пути к ворклоаду ---
-    workload_path = Path(args.workload)
-    if not workload_path.exists():
-        potential_path = Path(args.dataset) / f"workload_{args.workload}.csv"
-        if potential_path.exists():
-            workload_path = potential_path
-        else:
-            raise FileNotFoundError(
-                f"Workload not found at {args.workload} or {potential_path}"
-            )
-    # -------------------------------------------------------
+    workload_path = resolve_workload_path(args)
 
     t0 = time.perf_counter()
     ew_hist = EquiWidthHistogram.build_from_sample(
         mn=mn, mx=mx, bins=n_bins, sample=sample, total_rows=N
     )
+    eh_learner = EquiHistLearner(ew_hist.buckets, learning_rate=args.lr)
     initial_build_time = time.perf_counter() - t0
 
-    eh_learner = EquiHistLearner(ew_hist.buckets, learning_rate=args.lr)
+    queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
 
-    queries, y_true_raw = load_and_filter_workload(str(workload_path), mn, mx, freq)
-    true_cardinalities = np.maximum(y_true_raw * N, 1.0)
-    y_true_safe = true_cardinalities / N
+    # Немедленное обновление по фидбэку после каждой оценки
+    def feedback(q, true_count, pred_count):
+        eh_learner.update(q, true_count, pred=pred_count)
 
-    y_pred = []
-    infer_times = []
-    inf_time_total = 0.0
-    update_time_total = 0.0
-
-    for q, truth in zip(queries, true_cardinalities):
-        t0 = time.perf_counter()
-        pred_val = max(eh_learner.predict(q), 1.0)
-        it_val = time.perf_counter() - t0
-        inf_time_total += it_val
-        infer_times.append(it_val)
-        y_pred.append(pred_val / N)
-
-        t0 = time.perf_counter()
-        eh_learner.update(q, float(truth), pred=float(pred_val))
-        update_time_total += time.perf_counter() - t0
-
-    y_pred = np.array(y_pred)
-    m = summarize(y_true_safe, y_pred, "EquiHist")
-
-    infer_times = np.array(infer_times)
-    median_infer_time = np.median(infer_times)
-    avg_infer_time = np.mean(infer_times)
-    p95_infer_time = np.percentile(infer_times, 95)
-
-    metrics = {
-        "initial_build_time": initial_build_time,
-        "update_time_total": update_time_total,
-        "total_train_time": initial_build_time + update_time_total,
-        "infer_time": inf_time_total,
-        "median_infer_time": median_infer_time,
-        "avg_infer_time": avg_infer_time,
-        "p95_infer_time": p95_infer_time,
-        "median_q_error": m["QErr_median"],
-        "p25_q_error": m["QErr_p25"],
-        "p75_q_error": m["QErr_p75"],
-        "p95_q_error": m["QErr_p95"],
-        "avg_q_error": m["QErr_avg"],
-    }
-
-    print(
-        f"EquiHist: Median QErr={metrics['median_q_error']:.4f}, Train={metrics['total_train_time']:.4f}s, Inf={inf_time_total:.4f}s"
-    )
-
-    save_benchmark_results(
-        out_dir, workload_path.stem, "EquiHist", queries, y_true_safe, y_pred, metrics
+    evaluate_and_save(
+        out_dir, workload_path, "EquiHist", eh_learner.predict, queries, y_true_sel, N, initial_build_time,
+        feedback=feedback,
+        extra_metrics={"n_buckets": len(eh_learner.buckets), "lr": args.lr},
     )
 
 

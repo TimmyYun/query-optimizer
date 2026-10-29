@@ -1,9 +1,11 @@
 import argparse
 import json
 import pickle
+import time
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from models import summarize
 from workload import load_workload_csv
 
 
@@ -95,7 +97,7 @@ def run_benchmark_suite(args, approach_fn):
             traceback.print_exc()
 
     # Aggregate summaries at the end
-    aggregate_summaries(args.out_dir)
+    aggregate_summaries(args.out_dir, only=args.experiment_name)
 
 
 def setup_out_dir(args, dataset_name):
@@ -124,6 +126,29 @@ def load_data_and_metadata(dataset_path):
     return meta
 
 
+def exact_counts(queries, freq, mn):
+    """
+    Exact row count of every inclusive range [q.low, q.high].
+    freq is the dense per-value count over [mn, mn + len(freq) - 1]; ranges
+    outside it (fully or partly) contribute 0 rows. This is the only place truth is computed.
+    """
+    ps = np.concatenate([[0], np.cumsum(freq)])
+    lo = np.clip(np.fromiter((q.low for q in queries), np.int64, len(queries)) - mn, 0, len(freq))
+    hi = np.clip(np.fromiter((q.high for q in queries), np.int64, len(queries)) - mn + 1, 0, len(freq))
+    return np.maximum(ps[hi] - ps[lo], 0).astype(np.float64)
+
+
+def timing_stats(infer_times):
+    """Per-query inference time statistics; total is the sum of predict() calls only."""
+    infer_times = np.asarray(infer_times)
+    return {
+        "infer_time": float(np.sum(infer_times)),
+        "median_infer_time": float(np.median(infer_times)),
+        "avg_infer_time": float(np.mean(infer_times)),
+        "p95_infer_time": float(np.percentile(infer_times, 95)),
+    }
+
+
 def load_and_filter_workload(workload_path, mn, mx, freq):
     workload_path = Path(workload_path)
     if workload_path.is_dir():
@@ -133,33 +158,111 @@ def load_and_filter_workload(workload_path, mn, mx, freq):
         raise FileNotFoundError(f"Workload not found at {workload_path}.")
 
     all_queries = load_workload_csv(workload_path)
-    ps = np.cumsum(freq)
-    N = ps[-1]
+    N = np.sum(freq)
+    truth = exact_counts(all_queries, freq, mn)
 
-    queries = []
-    y_true = []
+    # Zero-truth queries are dropped: q-error is undefined for them
+    keep = truth > 0
+    queries = [q for q, k in zip(all_queries, keep) if k]
+    return queries, truth[keep] / N
 
-    for q in all_queries:
-        li = int(q.low - mn)
-        ri = int(q.high - mn)
 
-        if ri < 0 or li >= len(ps):
-            truth = 0
-        else:
-            if li < 0:
-                li = 0
-            if ri >= len(ps):
-                ri = len(ps) - 1
-            if li > ri:
-                truth = 0
-            else:
-                truth = int(ps[ri] - (ps[li - 1] if li > 0 else 0))
+def resolve_workload_path(args):
+    """--workload is a CSV path, or a count N resolved to <dataset>/workload_N.csv."""
+    workload_path = Path(args.workload)
+    if workload_path.exists():
+        return workload_path
+    potential_path = Path(args.dataset) / f"workload_{args.workload}.csv"
+    if potential_path.exists():
+        return potential_path
+    raise FileNotFoundError(f"Workload not found at {args.workload} or {potential_path}")
 
-        if truth > 0:
-            queries.append(q)
-            y_true.append(truth / N)
 
-    return queries, np.array(y_true)
+def run_queries(predict, queries, true_counts, feedback=None):
+    """
+    The one evaluation loop every method goes through, so timings are comparable.
+
+    predict(q) -> estimated row count. Only this call is timed as inference.
+    feedback(q, true_count, pred_count), if given, is called after each predict
+    (prequential: the model is scored before it learns from the query); its time
+    is accumulated separately as update time.
+
+    Returns (raw pred_counts, per-query inference times, total update time).
+    feedback receives the estimate clipped to >= 1, the same value that is scored.
+    """
+    pred_counts = np.empty(len(queries), dtype=np.float64)
+    infer_times = np.empty(len(queries), dtype=np.float64)
+    update_time = 0.0
+
+    for i, (q, truth) in enumerate(zip(queries, true_counts)):
+        st = time.perf_counter()
+        pred = predict(q)
+        infer_times[i] = time.perf_counter() - st
+        pred_counts[i] = pred
+
+        if feedback is not None:
+            st = time.perf_counter()
+            feedback(q, float(truth), max(float(pred), 1.0))
+            update_time += time.perf_counter() - st
+
+    return pred_counts, infer_times, update_time
+
+
+def evaluate_and_save(
+    out_dir,
+    workload_path,
+    model_name,
+    predict,
+    queries,
+    y_true_sel,
+    N,
+    build_time,
+    feedback=None,
+    extra_metrics=None,
+):
+    """
+    Static run: evaluate `predict` on the workload, compute metrics, save results.
+
+    y_true_sel comes from load_and_filter_workload (exact, zero-truth dropped).
+    Both truth and estimate are clipped to >= 1 row before q-error.
+    `extra_metrics` is a dict or a callable(true_counts, raw_pred_counts) -> dict for
+    model-specific fields (bucket counts, memory, paper metrics).
+    Returns (metrics, y_true_safe, y_pred_safe).
+    """
+    true_counts = np.maximum(np.rint(y_true_sel * N), 1.0)
+    pred_counts, infer_times, update_time = run_queries(
+        predict, queries, true_counts, feedback
+    )
+
+    y_true_safe = true_counts / N
+    y_pred_safe = np.maximum(pred_counts, 1.0) / N
+    m = summarize(y_true_safe, y_pred_safe, model_name)
+
+    metrics = {
+        "n_queries": len(queries),
+        "build_time": build_time,
+        "update_time_total": update_time,
+        "train_time": build_time + update_time,
+        **timing_stats(infer_times),
+        "median_q_error": m["QErr_median"],
+        "p25_q_error": m["QErr_p25"],
+        "p75_q_error": m["QErr_p75"],
+        "p95_q_error": m["QErr_p95"],
+        "avg_q_error": m["QErr_avg"],
+    }
+    if callable(extra_metrics):
+        extra_metrics = extra_metrics(true_counts, pred_counts)
+    metrics.update(extra_metrics or {})
+
+    print(
+        f"[{model_name}] Train={metrics['train_time']:.4f}s, "
+        f"Infer={metrics['infer_time']:.4f}s ({metrics['avg_infer_time'] * 1e6:.2f} us/query)"
+    )
+
+    save_benchmark_results(
+        out_dir, Path(workload_path).stem, model_name, queries, y_true_safe, y_pred_safe, metrics
+    )
+    return metrics, y_true_safe, y_pred_safe
 
 
 def save_benchmark_results(
@@ -203,7 +306,8 @@ def save_benchmark_results(
     print(f"Results saved to {result_file} and {summary_path}")
 
 
-def aggregate_summaries(results_dir="results"):
+def aggregate_summaries(results_dir="results", only=None):
+    """Roll summary_*.json up into results/<exp>/summary.csv; `only` limits it to one experiment."""
     root = Path(results_dir)
     if not root.exists():
         print(f"Results directory '{results_dir}' does not exist.")
@@ -211,6 +315,8 @@ def aggregate_summaries(results_dir="results"):
 
     for experiment_dir in root.iterdir():
         if not experiment_dir.is_dir() or experiment_dir.name.startswith("."):
+            continue
+        if only is not None and experiment_dir.name != only:
             continue
 
         experiment_id = experiment_dir.name

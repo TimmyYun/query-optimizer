@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 from models import EquiWidthHistogram, HybridEstimator, summarize
-from benchmark_utils import load_and_filter_workload, setup_out_dir
+from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries
 
 # Column → table mapping
 COLUMN_TABLE = {
@@ -146,12 +146,7 @@ def main():
         current_N, current_freq, current_sample = build_meta_from_values(values, i_mn, i_mx)
 
         # Compute ground truth
-        ps = np.cumsum(current_freq)
-        y_true_counts = np.array([
-            max(1.0, ps[min(len(current_freq) - 1, max(0, q.high - i_mn))] -
-                (ps[max(0, q.low - 1 - i_mn)] if q.low > i_mn else 0))
-            for q in queries
-        ])
+        y_true_counts = np.maximum(exact_counts(queries, current_freq, i_mn), 1.0)
         y_true_counts = np.maximum(y_true_counts, 1.0)
         y_true_sel = y_true_counts / current_N
 
@@ -168,13 +163,8 @@ def main():
 
         # STAGE 0: SHOCK
         t0_eval = time.perf_counter()
-        infer_times_shock = []
-        preds_shock = []
-        for q in queries:
-            t_start = time.perf_counter()
-            preds_shock.append(hybrid_est.predict(q))
-            infer_times_shock.append(time.perf_counter() - t_start)
-        y_pred_shock = np.maximum(np.array(preds_shock), 1.0)
+        preds_shock, infer_times_shock, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
+        y_pred_shock = np.maximum(preds_shock, 1.0)
         eval_time = time.perf_counter() - t0_eval
         
         median_infer_shock = float(np.median(infer_times_shock))
@@ -194,13 +184,8 @@ def main():
             n_finetuned = hybrid_est.feedback_update(queries, y_true_counts, y_pred_shock, current_N)
             t_ft = time.perf_counter() - t0
 
-            infer_times_ft = []
-            preds_ft = []
-            for q in queries:
-                t_start = time.perf_counter()
-                preds_ft.append(hybrid_est.predict(q))
-                infer_times_ft.append(time.perf_counter() - t_start)
-            y_pred_ft = np.maximum(np.array(preds_ft), 1.0)
+            preds_ft, infer_times_ft, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
+            y_pred_ft = np.maximum(preds_ft, 1.0)
 
             median_infer_ft = float(np.median(infer_times_ft))
             avg_infer_ft = float(np.mean(infer_times_ft))
@@ -221,13 +206,8 @@ def main():
                     bucket_indices=bad_indices,
                 )
                 t_rb = time.perf_counter() - t1
-                infer_times_rb = []
-                preds_rb = []
-                for q in queries:
-                    t_start = time.perf_counter()
-                    preds_rb.append(hybrid_est.predict(q))
-                    infer_times_rb.append(time.perf_counter() - t_start)
-                y_pred_rb = np.maximum(np.array(preds_rb), 1.0)
+                preds_rb, infer_times_rb, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
+                y_pred_rb = np.maximum(preds_rb, 1.0)
 
                 median_infer_rb = float(np.median(infer_times_rb))
                 avg_infer_rb = float(np.mean(infer_times_rb))

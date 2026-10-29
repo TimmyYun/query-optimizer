@@ -54,7 +54,9 @@ poetry run python workload/workload.py --count 1000000 --wide         # random w
 poetry run python prepare_dsb.py                                       # DSB: .sql -> workload csv (--rebuild-meta: .csv -> meta.pkl, overwrites committed)
 ```
 
-Careful with workload paths: `run_experiments.py` hardcodes `workload/1000000/{wide,narrow}/workload.csv`, while `workload.py`'s random mode writes to `data/workloads/{mode}_{count}.csv`. The files must be placed/renamed to match.
+Models and scenarios for both orchestrators live in `registry.py` (`MODELS`, `STATIC_SCENARIOS`, `DRIFT_SCENARIOS`); the `MODELS` key must equal the name the runner writes to `summary_<Model>.json`. Both orchestrators accept `--models` and `--dry-run`.
+
+Careful with workload paths: `registry.py` points to `workload/1000000/{wide,narrow}/workload.csv`, while `workload.py`'s random mode writes to `data/workloads/{mode}_{count}.csv`. The files must be placed/renamed to match.
 
 `docker-compose.yml` (Postgres 16.3, mounts `./data`) is only for producing the DSB source tables; nothing in the Python code connects to it.
 
@@ -76,6 +78,7 @@ Almost every script consumes one of two pickled tuples. Getting the arity wrong 
 - `get_common_parser` — the `--dataset / --workload / --out-dir / --experiment-name / --buckets` contract every `run_*.py` inherits.
 - `run_benchmark_suite(args, approach_fn)` — auto-detects whether `--dataset` is one dataset (has `meta.pkl`) or a directory of distributions, loops, and calls the script's `run_logic(args, out_dir, metadata)`. Per-dataset exceptions are caught and printed, not raised, so a run can "succeed" with missing outputs — check the log.
 - `load_and_filter_workload` — computes exact truth from the `freq` prefix sum and **drops zero-truth queries**, so query counts differ per dataset.
+- `evaluate_and_save` / `run_queries` — the one evaluation loop: static runners only build a model and pass `predict` (+ `feedback` for feedback methods, scored prequentially). Drift runners reuse `run_queries`, `timing_stats` and `exact_counts` (the only truth computation). Do not reintroduce per-runner timing loops.
 - `save_benchmark_results` / `aggregate_summaries` — per-model `summary_<Model>.json` plus a rolled-up `results/<exp>/summary.csv`. Scientific notation is regex-rewritten to 9 decimals so timings stay readable.
 
 The drift scripts (`run_*_drift.py`, `run_dsb_*_drift.py`) deliberately **do not** use `run_benchmark_suite`; they own their step loop and only borrow `setup_out_dir` / `load_and_filter_workload`.
@@ -101,7 +104,7 @@ Each drift step evaluates three stages against the same step's data, which is wh
 
 ### Output layout
 
-`results/<experiment-name>/<dataset-name>/` where dataset-name is `<dist>` for static runs and `gradual_<init>_to_<target>_FT_RB` / `<dist>_EquiWidth` / `<dist>_EquiHist` for drift runs. Hybrid drift writes `adaptation_ft_rb.csv`; the histogram baselines write `<model>_drift_analysis.csv`. `merge_*.py` and `plot_dsb_drift.py` join these per-model CSVs into combined tables — they contain **hardcoded result paths** and will need editing when experiment names change.
+`results/<experiment-name>/<dataset-name>/` where dataset-name is `<dist>` for static runs and `gradual_<init>_to_<target>_<Model>` (synthetic) / `dsb_<column>_<Model>` (DSB) for drift runs. Hybrid drift writes `adaptation_ft_rb.csv`; the histogram baselines write `<model>_drift_analysis.csv`. `merge_drift.py --experiment-name X` globs these into `combined_<prefix>.csv`; `plot_drift.py` charts them.
 
 ## Conventions
 

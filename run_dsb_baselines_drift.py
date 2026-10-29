@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from benchmark_utils import load_and_filter_workload, setup_out_dir
+from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries
 from models import (
     EntropyHistogram1D,
     EquiDepthHistogram,
@@ -44,12 +44,8 @@ MODEL_NAMES = {
 
 
 def evaluate(model, queries):
-    preds, times = [], []
-    for q in queries:
-        st = time.perf_counter()
-        preds.append(model.predict(q))
-        times.append(time.perf_counter() - st)
-    return np.maximum(np.array(preds), 1.0), np.array(times)
+    preds, times, _ = run_queries(model.predict, queries, np.zeros(len(queries)))
+    return np.maximum(preds, 1.0), times
 
 
 def stage_record(prefix, m, infer_times):
@@ -101,32 +97,20 @@ def main():
         values = load_csv_data(csv_file)
         current_N, current_freq, current_sample = build_meta_from_values(values, i_mn, i_mx)
 
-        ps = np.cumsum(current_freq)
-        actual_counts = np.array(
-            [
-                ps[min(len(current_freq) - 1, max(0, q.high - i_mn))]
-                - (ps[max(0, q.low - 1 - i_mn)] if q.low > i_mn else 0)
-                for q in queries
-            ],
-            dtype=np.float64,
-        )
+        actual_counts = exact_counts(queries, current_freq, i_mn)
         y_true_sel = np.maximum(actual_counts, 1.0) / current_N
         rec = {"Shift %": f"{shift_pct:.0%}", "Step": step_name}
 
         if args.model == "sthist":
             y_shock, t_shock = evaluate(st_hist, queries)
             m_shock = summarize(y_true_sel, y_shock / current_N, f"Shock_{step_name}")
-            preds, times = [], []
-            t0 = time.perf_counter()
-            for q, actual in zip(queries, actual_counts):
-                st = time.perf_counter()
-                preds.append(max(st_hist.predict(q), 1.0))
-                times.append(time.perf_counter() - st)
-                st_hist.observe_feedback(q.low, q.high, float(actual))
-            update_time = time.perf_counter() - t0
-            m = summarize(y_true_sel, np.array(preds) / current_N, f"Online_{step_name}")
+            def feedback(q, actual, pred_count):
+                st_hist.observe_feedback(q.low, q.high, actual)
+
+            preds, times, update_time = run_queries(st_hist.predict, queries, actual_counts, feedback)
+            m = summarize(y_true_sel, np.maximum(preds, 1.0) / current_N, f"Online_{step_name}")
             rec.update(stage_record("Shock", m_shock, t_shock))
-            rec.update(stage_record("Online", m, np.array(times)))
+            rec.update(stage_record("Online", m, times))
             rec["Update_Time"] = update_time
         else:
             t0 = time.perf_counter()
