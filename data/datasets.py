@@ -710,7 +710,9 @@ class DatasetManager:
         force_regeneration: bool = False,
         use_micro_dist: bool = True,
     ):
-        ds_dir = self.get_dataset_dir(rows, dist)
+        # Каталог совпадает с тем, что читают раннеры: data/generated/<rows>_{hard,simple}/<dist>
+        variant = "hard" if use_micro_dist else "simple"
+        ds_dir = self.get_dataset_dir(f"{rows}_{variant}", dist)
         ds_dir.mkdir(parents=True, exist_ok=True)
 
         data_path = ds_dir / "data.csv"

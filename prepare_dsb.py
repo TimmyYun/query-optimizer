@@ -1,4 +1,4 @@
-import os
+import argparse
 import re
 import pickle
 import numpy as np
@@ -9,7 +9,7 @@ from data.datasets import (
     build_frequency_and_sample, freedman_diaconis_bins, DOMAIN_MAX
 )
 
-def process_table(name, csv_file, sql_file):
+def process_table(name, csv_file, sql_file, rebuild_meta):
     print(f"Processing {name}...")
     out_dir = Path("data/dsb") / name
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -43,8 +43,16 @@ def process_table(name, csv_file, sql_file):
             f.write(f"{q[0]},{q[1]}\n")
             
     print(f"Saved {count} workload queries to {workload_path}")
-    
+
     # 2. Process data.csv to create meta.pkl
+    # meta.pkl закоммичен; пересобираем только по явному --rebuild-meta,
+    # чтобы workload можно было восстановить на чистом клоне без исходных CSV DSB
+    if not rebuild_meta:
+        return
+    if not Path(csv_file).exists():
+        raise FileNotFoundError(
+            f"{csv_file} not found. Run './setup_env.sh --dsb-drift' to export DSB columns first."
+        )
     data_path = out_dir / "data.csv"
     # To use existing functions like scan_min_max_count without header issues, 
     # we should copy the data to expected format if needed. 
@@ -67,8 +75,16 @@ def process_table(name, csv_file, sql_file):
         
     print(f"Created meta.pkl for {name}. N={N}, mn={mn}, mx={mx}, k={k}")
 
-process_table("ws_item_sk", "data/dsb/ws_item_sk.csv", "data/dsb/custom_ws_item_sk.sql")
-process_table("cr_item_sk", "data/dsb/cr_item_sk.csv", "data/dsb/custom_cr_item_sk.sql")
-process_table("cr_returned_time_sk", "data/dsb/cr_returned_time_sk.csv", "data/dsb/custom_cr_returned_time_sk.sql")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="DSB adapter: .sql -> workload csv, column .csv -> meta.pkl")
+    parser.add_argument(
+        "--rebuild-meta",
+        action="store_true",
+        help="Also rebuild data/dsb/<col>/meta.pkl from data/dsb/<col>.csv (overwrites the committed file).",
+    )
+    args = parser.parse_args()
 
-print("Done processing DSB dataset.")
+    for col in ["ws_item_sk", "cr_item_sk", "cr_returned_time_sk"]:
+        process_table(col, f"data/dsb/{col}.csv", f"data/dsb/custom_{col}.sql", args.rebuild_meta)
+
+    print("Done processing DSB dataset.")

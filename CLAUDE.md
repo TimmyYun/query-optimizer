@@ -18,7 +18,8 @@ Python ≥3.12, dependencies via Poetry. All entry points are run as `poetry run
 
 ```bash
 poetry install
-poetry run ruff check .          # ruff is the only dev tool configured; there is no test suite
+poetry run ruff check .          # lint
+poetry run pytest -q             # unit tests in tests/ (pythonpath configured in pyproject)
 
 # Static benchmarks (orchestrator; loops distributions x models)
 poetry run python run_experiments.py --scenario hard_narrow
@@ -41,18 +42,16 @@ poetry run python run_hybrid_drift.py --experiment-name my_drift \
     --static-workload-path data/generated/60000000_hard/normal/workload_driven_1000000.csv
 ```
 
-Note: README documents the static scenario as `hard_narrow_datadriven`, but `run_experiments.py` accepts `hard_narrow_data_driven`.
-
 ### Regenerating inputs (usually necessary)
 
 `.gitignore` excludes `*.csv` and `/results/`. A fresh clone has `meta.pkl` / `step_*.pkl` / `stats.json` / plots committed, but **no `data.csv` and no workload CSVs** — so every run that touches a workload path will fail until they are regenerated:
 
 ```bash
-poetry run python data/datasets.py --rows 60000000 --dist normal      # writes data.csv, meta.pkl, stats.json, plots
-poetry run python data/generate_shifts.py --rows 60000000_hard --init normal --target zipf  # writes step_*.pkl
+poetry run python data/datasets.py --rows 60000000 --dist normal      # -> 60000000_hard/normal (--simple -> 60000000_simple)
+poetry run python data/generate_shifts.py --rows 60000000_hard --init normal --target zipf --steps 20 --mode replace  # -> shift_normal_to_zipf_5% (--mode add -> ..._5%_dataset)
 poetry run python workload/workload.py --count 1000000 --rows 60000000_hard  # data-driven workloads, batch over all subdirs
 poetry run python workload/workload.py --count 1000000 --wide         # random workload -> data/workloads/wide_1000000.csv
-poetry run python prepare_dsb.py                                       # DSB: .sql -> workload csv, .csv -> meta.pkl
+poetry run python prepare_dsb.py                                       # DSB: .sql -> workload csv (--rebuild-meta: .csv -> meta.pkl, overwrites committed)
 ```
 
 Careful with workload paths: `run_experiments.py` hardcodes `workload/1000000/{wide,narrow}/workload.csv`, while `workload.py`'s random mode writes to `data/workloads/{mode}_{count}.csv`. The files must be placed/renamed to match.

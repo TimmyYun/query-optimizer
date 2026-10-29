@@ -18,7 +18,7 @@
 # ============================================================
 set -e
 
-PYTHON_BIN=${PYTHON_BIN:-/opt/homebrew/bin/python3.12}
+PYTHON_BIN=${PYTHON_BIN:-$(command -v python3.12 || command -v python3)}
 WORKLOAD_COUNT=${WORKLOAD_COUNT:-1000000}
 DATASET_DIRS=${DATASET_DIRS:-"60000000_hard 60000000_simple"}
 
@@ -65,8 +65,9 @@ if [ "$DO_ENV" -eq 1 ]; then
 
     # Pinned to 3.12: pyproject requires >=3.12, and the DSB notebook uses
     # PEP 701 nested-quote f-strings which only parse on 3.12+.
-    if [ ! -x "$PYTHON_BIN" ]; then
-        echo "ERROR: $PYTHON_BIN not found. Install it with: brew install python@3.12"
+    if [ -z "$PYTHON_BIN" ] || ! "$PYTHON_BIN" -c 'import sys; sys.exit(sys.version_info < (3, 12))'; then
+        echo "ERROR: Python 3.12+ not found (PYTHON_BIN='$PYTHON_BIN')."
+        echo "       macOS: brew install python@3.12   Ubuntu: sudo apt install python3.12 python3.12-venv"
         echo "       (or set PYTHON_BIN to another 3.12+ interpreter)"
         exit 1
     fi
@@ -111,6 +112,10 @@ if [ "$DO_WORKLOADS" -eq 1 ]; then
     mv "data/workloads/wide_${WORKLOAD_COUNT}.csv"   "workload/$WORKLOAD_COUNT/wide/workload.csv"
     mv "data/workloads/narrow_${WORKLOAD_COUNT}.csv" "workload/$WORKLOAD_COUNT/narrow/workload.csv"
     echo "Moved wide/narrow workloads into workload/$WORKLOAD_COUNT/"
+
+    # DSB workloads come from the committed .sql files; meta.pkl is left untouched.
+    echo -e "\n>>> DSB workloads <<<"
+    poetry run python prepare_dsb.py
 fi
 
 # ============================================================
@@ -157,9 +162,9 @@ if [ "$DO_DSB_DRIFT" -eq 1 ]; then
     echo ">>> Rebuilding DSB meta.pkl + workloads..."
     echo "    NOTE: this overwrites the committed data/dsb/<col>/meta.pkl."
     echo "    Check 'git diff --stat data/dsb' afterwards."
-    poetry run python prepare_dsb.py
+    poetry run python prepare_dsb.py --rebuild-meta
 fi
 
 echo "============================================="
-echo "Setup complete. See RUN_TESTS.md for the commands."
+echo "Setup complete. See README.md for the commands."
 echo "============================================="

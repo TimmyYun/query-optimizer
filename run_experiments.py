@@ -38,7 +38,8 @@ def main():
     args = parser.parse_args()
 
     # EquiHist исключён из дизайна эксперимента (слишком медленный); реализация сохранена: run_equihist.py / run_equihist_drift.py
-    models = ["Equi-Width", "Hybrid", "TKHist", "EquiDepth", "STHist", "EntropyHist-MEA"]
+    # Имена должны совпадать с теми, что раннеры пишут в summary_<Model>.json
+    models = ["EquiWidth", "Hybrid", "TKHist", "EquiDepth", "STHist", "EntropyHist-MEA"]
     scenarios_to_run = []
     
     if args.scenario == 'all':
@@ -56,8 +57,8 @@ def main():
             print("="*50)
             datasets = ["ws_item_sk", "cr_item_sk", "cr_returned_time_sk"]
             
-            # Ensure DSB data is prepared
-            if not os.path.exists("data/dsb/ws_item_sk/meta.pkl"):
+            # Ensure DSB workloads are prepared (meta.pkl is committed, workload csv is gitignored)
+            if not all(any(Path(f"data/dsb/{ds}").glob("workload_driven_*.csv")) for ds in datasets):
                 run_cmd("poetry run python prepare_dsb.py")
                 
             for ds in datasets:

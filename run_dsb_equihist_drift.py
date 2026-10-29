@@ -128,6 +128,8 @@ def main():
             b_hi_idx = max(0, min(len(ps_est) - 1, b.hi - i_mn))
             new_count = ps_est[b_hi_idx] - (ps_est[b_lo_idx - 1] if b_lo_idx > 0 else 0)
             b.count = max(0.0, new_count)
+        # predict читает закэшированные b_count / prefix_counts — без пересборки первый запрос шага идёт по старым счётчикам
+        eh_learner._bake_vectorized_data()
 
         # Online learning on workload
         y_pred = []
