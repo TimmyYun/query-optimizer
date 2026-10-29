@@ -82,7 +82,6 @@ q_error = max(pred / true, true / pred),   pred и true прижимаются �
 
 ## Что написать
 
-0. `poetry add --group dev pytest` (см. README, «Подготовка»).
 1. `estimators/__init__.py` — пустой.
 2. `estimators/common.py`:
    - `RangeQuery(low, high)` — frozen dataclass;
@@ -108,21 +107,12 @@ q_error = max(pred / true, true / pred),   pred и true прижимаются �
 
 ```bash
 poetry run python -m pytest tests/lessons/test_00_common.py -v      # 4 теста
-poetry run python lessons/check/check_static.py trivial
+poetry run python lessons/check/check_static.py trivial               # эталона нет — смотри сами числа
 ```
 
-Чего ждать (эталон, медиана / P95):
-
-| uniform | normal | sparse_cluster | zipf | zipf@random | dsb/cr_item_sk |
-|---|---|---|---|---|---|
-| **1.004 / 1.02** | 2.33 / 5.0 | 36 / 182 | 1 768 / 13 929 | 884 / 2 910 | 1.95 / 2.19 |
-
-Обрати внимание на `uniform`: тривиальная оценка **лучше любой гистограммы** из следующих
-уроков (у них ~1.04). Данные и правда равномерны, а у `trivial` нет шума выборки — она знает
-точное `N` и не делит его по 100k случайным точкам. Запомни: **1.04 на uniform — это шум выборки,
-а не ошибка метода.** Это нижняя граница, которую сэмпловые методы не пробьют.
-
-На `zipf` — ошибка в тысячи раз: вот цена отсутствия статистики.
+Чего ждать от `trivial`: на `uniform` — около 1.05 (данные и правда равномерные),
+на `normal` — заметно хуже, на `zipf` и `sparse_cluster` — ошибки в десятки и сотни раз.
+Это и есть «цена отсутствия статистики».
 
 ## Поиграть
 

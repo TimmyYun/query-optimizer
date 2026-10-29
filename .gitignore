@@ -226,3 +226,10 @@ report.html
 *.meta.pkl
 *.DS_Store
 /results/
+DSB benchmark/work/
+DSB benchmark/dsb/
+data/dsb/sf*/*
+!data/dsb/sf*/manifest.json
+!data/dsb/sf*/summary.csv
+!data/dsb/sf*/rank.csv
+!data/dsb/sf*/streams.csv
