@@ -618,4 +618,6 @@ setup_env.sh            one-shot setup
 Other documents:
 
 - [PROJECT_GUIDE.md](PROJECT_GUIDE.md): what the benchmark does, why each design decision was made, and how to run and read it (in Russian).
+- [RESULTS_GUIDE.md](RESULTS_GUIDE.md): how to read `results/all_results.xlsx` — every sheet, column, method and the reasons behind the data and query choices (in Russian).
+- [RESULTS_REPORT.md](RESULTS_REPORT.md): the current results, why each method wins or loses on each benchmark, threats to validity and anticipated reviewer questions (in Russian).
 - [METHODS_EXPLAINED.md](METHODS_EXPLAINED.md): how each method works (in Russian).

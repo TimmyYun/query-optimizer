@@ -248,3 +248,6 @@ data/stats-ceb/source/
 
 # IDE settings
 .idea/
+
+# overnight run logs
+logs/

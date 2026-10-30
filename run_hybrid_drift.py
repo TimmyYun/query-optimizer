@@ -214,6 +214,8 @@ def main():
         adapt_idx, eval_idx = split_adapt_eval(len(queries))
         adapt_queries = [queries[i] for i in adapt_idx]
 
+        # Стоимость обновления масс по сэмплу (аналог ANALYZE) — входит в стоимость стадии Shock
+        t0_refresh = time.perf_counter()
         current_est_freq = get_sampled_freq(
             mixed_sample, step_mn, current_N, len(current_freq)
         )
@@ -226,6 +228,7 @@ def main():
             new_count = ps_est[b_hi_idx] - (ps_est[b_lo_idx - 1] if b_lo_idx > 0 else 0)
             b.count = max(0.0, new_count)
         hybrid_est._bake_vectorized_data()
+        t_refresh = time.perf_counter() - t0_refresh
 
         plot_shift_state(
             current_freq,
@@ -343,6 +346,7 @@ def main():
                 "RB_Infer_Avg": avg_infer_rb,
                 "RB_Infer_P95": p95_infer_rb,
                 "Rebuilt_Count": n_rebuilt,
+                "Refresh_Time": t_refresh,
                 "FT_Time": t_ft,
                 "RB_Time": t_rb,
                 "Build_Time": build_time if step == 0 else 0.0,

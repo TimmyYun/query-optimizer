@@ -740,9 +740,12 @@ class DatasetManager:
             ndv = calculate_ndv(data_path)
             skew, kurt = calculate_skew_kurt(data_path)
 
-            # Pass the 100k target to the build function
+            # Pass the 100k target to the build function.
+            # Сэмпл берёт отдельный поток [42, 1]: с тем же default_rng(42), что и генерация,
+            # маска rng.random() < p повторяет uniform-ы генерации и выбирает строки по значению
+            # (simple zipf: в сэмпл попадали только значения < 1000)
             freq, sample = build_frequency_and_sample(
-                data_path, mn, mx, N, TARGET_SAMPLE_SIZE, 42
+                data_path, mn, mx, N, TARGET_SAMPLE_SIZE, [42, 1]
             )
 
             # Freedman-Diaconis calculation now relies on the 100k sample

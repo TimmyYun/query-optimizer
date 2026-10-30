@@ -7,7 +7,10 @@ gradual_<init>_to_<target> (synthetic) or dsb_<column> (DSB), and writes one
 results/<experiment>/combined_<prefix>.csv per prefix with one row per
 (step, model, stage):
 
-    drift, step, model, stage, label, Median, P95, Avg, Infer_Med, Infer_Avg
+    drift, step, model, stage, label, Median, P95, Avg, Infer_Med, Infer_Avg, Adapt_Time, Rebuilt_Buckets, Initial_Build
+
+Adapt_Time = seconds the model spent at this step to reach this stage, cumulative
+within the step (e.g. Hybrid_RB = sample refresh + FT + bucket retraining).
 
 Single-stage CSVs ("Median Q-Error", ...) get stage "" and label = model.
 Multi-stage CSVs (<Stage>_Med, <Stage>_P95, ...) get one row per stage and
@@ -26,6 +29,23 @@ MODEL_DIR_RE = re.compile(
 DRIFT_CSV_GLOBS = ["*_drift_analysis.csv", "adaptation_ft_rb.csv"]
 
 
+def stage_cost(r, stage):
+    """Adapt_Time of one stage; the source column names differ per runner."""
+    def g(key):
+        return float(r[key]) if key in r.index and pd.notna(r[key]) else 0.0
+    if stage == "":  # single-stage: ANALYZE rebuild (histograms) or feedback (Equi-Hist)
+        return g("Build Time") + g("Update Time")
+    return {
+        "Static": 0.0,                                              # EntropyHist: never updated
+        "Rebuild": g("Rebuild_Time"),                               # EntropyHist: rebuilt from the step's sample
+        "Shock": g("Refresh_Time"),                                 # Hybrid: bucket masses from the sample; STHist: 0
+        "FT": g("Refresh_Time") + g("FT_Time"),
+        "RB": g("Refresh_Time") + g("FT_Time") + g("RB_Time"),
+        "Online": g("Update_Time"),                                 # STHist: feedback on the adapt half
+        "Post": g("Update_Time"),
+    }.get(stage)
+
+
 def stage_names(columns):
     """Stages are the prefixes of <Stage>_Med columns (Shock, FT, RB, Online, Post, Static, Rebuild)."""
     return [c[: -len("_Med")] for c in columns if c.endswith("_Med") and not c.endswith("_Infer_Med")]
@@ -35,10 +55,13 @@ def to_long(df, model):
     rows = []
     stages = stage_names(df.columns)
     for _, r in df.iterrows():
+        drift = int(str(r["Shift %"]).rstrip("%"))
         base = {
-            "drift": int(str(r["Shift %"]).rstrip("%")),
+            "drift": drift,
             "step": r.get("Step", ""),
             "model": model,
+            # Building the model on step 0 (Hybrid: training every bucket's model); not part of any stage
+            "Initial_Build": (r.get("Build_Time", r.get("Build Time")) if drift == 0 else None),
         }
         if stages:
             for st in stages:
@@ -51,6 +74,8 @@ def to_long(df, model):
                     "Avg": r.get(f"{st}_Avg"),
                     "Infer_Med": r.get(f"{st}_Infer_Med"),
                     "Infer_Avg": r.get(f"{st}_Infer_Avg"),
+                    "Adapt_Time": stage_cost(r, st),
+                    "Rebuilt_Buckets": r.get("Rebuilt_Count") if st == "RB" else None,
                 })
         else:
             rows.append({
@@ -62,6 +87,8 @@ def to_long(df, model):
                 "Avg": r.get("Avg Q-Error"),
                 "Infer_Med": r.get("Median Inference Time"),
                 "Infer_Avg": r.get("Avg Inference Time"),
+                "Adapt_Time": stage_cost(r, ""),
+                "Rebuilt_Buckets": None,
             })
     return rows
 
