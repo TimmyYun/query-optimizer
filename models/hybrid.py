@@ -44,9 +44,18 @@ class HybridEstimator:
         identity_threshold: float = 1e-4,
         mlp_penalty: float = 1.5,
         fourier_penalty: float = 1.5,
+        min_train_count: float = 0.0,
+        parametric_only: bool = False,
     ):
         self.buckets = buckets
         self.models = models if models is not None else {}
+        # Бакеты с оценкой меньше min_train_count строк остаются Uniform:
+        # в них слишком мало точек выборки, модель выучила бы шум сэмпла
+        self.min_train_count = min_train_count
+        # Только модели с 2-4 параметрами (linear/power/log/poly3): без дерева,
+        # изотонической и MLP, которые хранят сотни чисел на бакет
+        self.parametric_only = parametric_only
+        self.uniform_grid = True
         self.b_lo = None
         self.b_hi = None
         self.b_count = None
@@ -190,10 +199,14 @@ class HybridEstimator:
         if bw <= 0:
             bw = 1.0
 
-        start_idx = int((q.low - mn) // bw)
+        if self.uniform_grid:
+            start_idx = int((q.low - mn) // bw)
+            end_idx = int((q.high - mn) // bw)
+        else:
+            # Бакеты разной ширины (например, equi-depth) — бинарный поиск
+            start_idx = int(np.searchsorted(self.b_hi, q.low, side="left"))
+            end_idx = int(np.searchsorted(self.b_lo, q.high, side="right")) - 1
         start_idx = max(0, min(start_idx, n_buckets - 1))
-        
-        end_idx = int((q.high - mn) // bw)
         end_idx = max(0, min(end_idx, n_buckets - 1))
 
         total = 0.0
@@ -217,6 +230,8 @@ class HybridEstimator:
         self.b_hi = np.array([b.hi for b in self.buckets], dtype=np.float64)
         self.b_count = np.array([b.count for b in self.buckets], dtype=np.float64)
         self.b_width = self.b_hi - self.b_lo + 1
+        # Последний бакет equi-width может быть уже остальных — его не проверяем
+        self.uniform_grid = bool(n <= 1 or np.all(self.b_width[:-1] == self.b_width[0]))
 
         self.mod_types = np.zeros(n, dtype=np.int8)
         self.lin_params = np.zeros((n, 2))
@@ -400,10 +415,19 @@ class HybridEstimator:
         EARLY_EXIT_THRESHOLD = 1.5
         COMPLEX_MODEL_THRESHOLD = 3
 
+        # rng is shared between the workers below, and they run in threads.
+        # Drawing from it inside a worker makes every bucket's seed depend on
+        # thread scheduling order, so the same input produced different models
+        # run to run. Draw once here instead: each bucket still gets its own
+        # seed (base_seed + i), but now a fixed one.
+        base_seed = int(rng.integers(0, 9999999))
+
         def train_worker(i):
             train_rows, val_rows = rows_data[i]
             bucket = self.buckets[i]
             if not train_rows or bucket.count == 0:
+                return i, None
+            if bucket.count < self.min_train_count:
                 return i, None
 
             X_train = np.array([r.x_norm for r in train_rows]).reshape(-1, 1)
@@ -431,7 +455,7 @@ class HybridEstimator:
             )
             weights = 1.0 + (local_probs[x_indices] / (local_probs.max() + 1e-9)) * 5.0
 
-            local_rng = np.random.default_rng(rng.integers(0, 9999999) + i)
+            local_rng = np.random.default_rng(base_seed + i)
             val_queries = self._generate_bucket_queries(
                 bucket, n_queries=500, rng=local_rng, freq=freq, mn=mn
             )
@@ -495,13 +519,13 @@ class HybridEstimator:
             except:
                 pass
 
-            if best_q < EARLY_EXIT_THRESHOLD:
+            if best_q < EARLY_EXIT_THRESHOLD or self.parametric_only:
                 return i, best_model
 
             try:
-                dt_mdl = DecisionTreeRegressor(max_depth=4).fit(
-                    X_train, y_train, sample_weight=weights
-                )
+                dt_mdl = DecisionTreeRegressor(
+                    max_depth=4, random_state=base_seed + i
+                ).fit(X_train, y_train, sample_weight=weights)
                 q, p95, _ = check(dt_mdl)
                 if q < best_q:
                     best_q, best_p95, best_model = q, p95, dt_mdl
@@ -523,7 +547,9 @@ class HybridEstimator:
                     mapper = FourierFeatureMapper(num_bands=32, max_freq=1000.0)
                     X_f_train = mapper.transform(X_train)
                     mdl_f_mlp = MLPRegressor(
-                        hidden_layer_sizes=(64, 32), max_iter=500
+                        hidden_layer_sizes=(64, 32),
+                        max_iter=500,
+                        random_state=base_seed + i,
                     ).fit(X_f_train, y_train)
                     mdl_fourier = FourierModelWrapper(mdl_f_mlp, mapper)
                     q, p95, _ = check(mdl_fourier)
@@ -596,6 +622,32 @@ class HybridEstimator:
             return max(model_pred, uniform_pred * 0.05)
 
         return model_pred
+
+    @staticmethod
+    def _model_param_count(model) -> int:
+        if model is None:
+            return 0
+        if isinstance(model, tuple):
+            return 4 if model[0] == "poly3" else 2
+        name = type(model).__name__
+        if name == "IsotonicRegression":
+            return 2 * len(model.X_thresholds_)
+        if name == "DecisionTreeRegressor":
+            return 3 * model.tree_.node_count  # порог, значение, ссылка на ребёнка
+        mlp = model.model  # FourierModelWrapper
+        return int(sum(c.size for c in mlp.coefs_) + sum(b.size for b in mlp.intercepts_))
+
+    def param_count(self) -> int:
+        """
+        Сколько чисел хранит модель: счётчик на бакет (+ граница, если бакеты
+        разной ширины; equi-width сетку задают mn и ширина) + параметры моделей.
+        """
+        if self.b_lo is None:
+            self._bake_vectorized_data()
+        per_bucket = 1 if self.uniform_grid else 2
+        return len(self.buckets) * per_bucket + sum(
+            self._model_param_count(m) for m in self.models.values()
+        )
 
     def report_models(self, file_path=None):
         output = []

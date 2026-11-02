@@ -710,7 +710,9 @@ class DatasetManager:
         force_regeneration: bool = False,
         use_micro_dist: bool = True,
     ):
-        ds_dir = self.get_dataset_dir(rows, dist)
+        # Каталог совпадает с тем, что читают раннеры: data/generated/<rows>_{hard,simple}/<dist>
+        variant = "hard" if use_micro_dist else "simple"
+        ds_dir = self.get_dataset_dir(f"{rows}_{variant}", dist)
         ds_dir.mkdir(parents=True, exist_ok=True)
 
         data_path = ds_dir / "data.csv"
@@ -738,9 +740,12 @@ class DatasetManager:
             ndv = calculate_ndv(data_path)
             skew, kurt = calculate_skew_kurt(data_path)
 
-            # Pass the 100k target to the build function
+            # Pass the 100k target to the build function.
+            # Сэмпл берёт отдельный поток [42, 1]: с тем же default_rng(42), что и генерация,
+            # маска rng.random() < p повторяет uniform-ы генерации и выбирает строки по значению
+            # (simple zipf: в сэмпл попадали только значения < 1000)
             freq, sample = build_frequency_and_sample(
-                data_path, mn, mx, N, TARGET_SAMPLE_SIZE, 42
+                data_path, mn, mx, N, TARGET_SAMPLE_SIZE, [42, 1]
             )
 
             # Freedman-Diaconis calculation now relies on the 100k sample
@@ -842,7 +847,7 @@ def main():
             start = time.time()
             try:
                 # 1. Generate Data
-                ds_dir = dm.prepare_dataset(rows, dist, use_micro_dist=not args.simple)
+                dm.prepare_dataset(rows, dist, use_micro_dist=not args.simple)
 
             except Exception as e:
                 print(f"Failed to generate {rows} / {dist}: {e}")

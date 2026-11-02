@@ -1,7 +1,7 @@
 [project]
 name = "thesis"
 version = "0.1.0"
-description = ""
+description = "Reproducible benchmark for 1-D range-query selectivity estimation: a Hybrid histogram + per-bucket CDF estimator against classical and self-tuning histograms, static and under data drift"
 authors = [
     {name = "timmyyun",email = "timurunaspekov@gmail.com"}
 ]
@@ -12,9 +12,6 @@ dependencies = [
     "matplotlib (>=3.10.7,<4.0.0)",
     "pandas (>=2.3.3,<3.0.0)",
     "scikit-learn (>=1.7.2,<2.0.0)",
-    "joblib (>=1.5.2,<2.0.0)",
-    "xgboost (>=3.1.1,<4.0.0)",
-    "lightgbm (>=4.6.0,<5.0.0)",
     "openpyxl (>=3.1.5,<4.0.0)",
     "seaborn (>=0.13.2,<0.14.0)"
 ]
@@ -24,7 +21,33 @@ dependencies = [
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.poetry.group.dev.dependencies]
-markdown = "^3.10"
-ruff = "^0.15.3"
+[tool.ruff]
+# Cloned third-party TPC-DS toolkit, not our code
+extend-exclude = ["DSB benchmark/dsb"]
 
+[tool.ruff.lint.per-file-ignores]
+# Package re-exports
+"__init__.py" = ["F401", "F403"]
+# Scripts put the repository root on sys.path before importing project modules
+"data/*.py" = ["E402"]
+# Method code is kept exactly as evaluated in the reported results
+"models/hybrid.py" = ["E701", "E722", "F841"]
+# Workload generator kept unchanged: it defines the reported workloads
+"workload/workload.py" = ["E741"]
+# DSB refresh-replay notebook kept unchanged: it produced the committed DSB inputs
+"DSB benchmark/*.ipynb" = ["E722", "E741", "F401", "F541", "F811", "F841"]
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.15.3"
+nbconvert = "^7.16.6"
+ipykernel = "^6.30.1"
+pytest = "^9.1.1"
+
+
+[tool.pytest.ini_options]
+# package-mode = false: корень репозитория не установлен как пакет, поэтому `models` берём из корня
+pythonpath = ["."]
+testpaths = ["tests"]

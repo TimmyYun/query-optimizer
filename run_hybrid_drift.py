@@ -9,8 +9,10 @@ from pathlib import Path
 from models import EquiWidthHistogram, HybridEstimator, summarize
 from benchmark_utils import (
     load_and_filter_workload,
-    save_benchmark_results,
     setup_out_dir,
+    exact_counts,
+    run_queries,
+    split_adapt_eval,
 )
 from data.datasets import DatasetManager
 
@@ -112,7 +114,7 @@ def main():
     parser.add_argument("--static-workload-path", type=str, required=False, help="Explicit path to static workload")
     args = parser.parse_args()
 
-    ds_out_name = f"gradual_{args.init_dist}_to_{args.target_dist}_FT_RB"
+    ds_out_name = f"gradual_{args.init_dist}_to_{args.target_dist}_Hybrid"
     out_dir = setup_out_dir(args, ds_out_name)
     rng = np.random.default_rng(42)
 
@@ -161,10 +163,9 @@ def main():
     with open(shift_dir / "step_0.pkl", "rb") as f:
         i_mn, i_mx, i_N, i_freq, i_sample, i_k = pickle.load(f)
 
-    GLOBAL_MIN, GLOBAL_MAX = 0, 1_000_000
 
     if not args.shift_workload:
-        queries, _ = load_and_filter_workload(str(static_workload_path), GLOBAL_MIN, GLOBAL_MAX, i_freq)
+        queries, _ = load_and_filter_workload(str(static_workload_path), i_mn, i_mx, i_freq)
     
     i_est_freq = get_sampled_freq(i_sample, i_mn, i_N, len(i_freq))
     print(f"\n>>> PHASE 1: Initial Training on {args.init_dist} <<<")
@@ -199,25 +200,21 @@ def main():
             if not step_workload_path.exists():
                 raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
             
-            queries, _ = load_and_filter_workload(str(step_workload_path), GLOBAL_MIN, GLOBAL_MAX, current_freq)
+            queries, _ = load_and_filter_workload(str(step_workload_path), step_mn, step_mx, current_freq)
 
         # 1. Считаем реальную массу запросов (Engine Truth)
-        ps = np.cumsum(current_freq)
-        y_true_counts = np.array(
-            [
-                max(
-                    1.0,
-                    ps[min(len(current_freq) - 1, max(0, q.high - step_mn))]
-                    - (ps[max(0, q.low - 1 - step_mn)] if q.low > step_mn else 0),
-                )
-                for q in queries
-            ]
-        )
+        y_true_counts = np.maximum(exact_counts(queries, current_freq, step_mn), 1.0)
 
         # --- SANITY FLOOR: Реальность не может быть 0 ---
         y_true_counts = np.maximum(y_true_counts, 1.0)
         y_true_sel = y_true_counts / current_N
 
+        # FT/RB учатся только на adapt-половине; все стадии меряются на eval-половине (split_adapt_eval)
+        adapt_idx, eval_idx = split_adapt_eval(len(queries))
+        adapt_queries = [queries[i] for i in adapt_idx]
+
+        # Стоимость обновления масс по сэмплу (аналог ANALYZE) — входит в стоимость стадии Shock
+        t0_refresh = time.perf_counter()
         current_est_freq = get_sampled_freq(
             mixed_sample, step_mn, current_N, len(current_freq)
         )
@@ -230,6 +227,7 @@ def main():
             new_count = ps_est[b_hi_idx] - (ps_est[b_lo_idx - 1] if b_lo_idx > 0 else 0)
             b.count = max(0.0, new_count)
         hybrid_est._bake_vectorized_data()
+        t_refresh = time.perf_counter() - t0_refresh
 
         plot_shift_state(
             current_freq,
@@ -244,21 +242,16 @@ def main():
         # СТАДИЯ 0: SHOCK (Как модель реагирует сразу)
         # ==========================================
         t0_eval = time.perf_counter()
-        infer_times_shock = []
-        preds_shock = []
-        for q in queries:
-            t_start = time.perf_counter()
-            preds_shock.append(hybrid_est.predict(q))
-            infer_times_shock.append(time.perf_counter() - t_start)
-        y_pred_shock = np.maximum(np.array(preds_shock), 1.0)
+        preds_shock, infer_times_shock, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
+        y_pred_shock = np.maximum(preds_shock, 1.0)
         eval_time = time.perf_counter() - t0_eval
         
-        median_infer_shock = float(np.median(infer_times_shock))
-        avg_infer_shock = float(np.mean(infer_times_shock))
-        p95_infer_shock = float(np.percentile(infer_times_shock, 95))
-        
+        median_infer_shock = float(np.median(infer_times_shock[eval_idx]))
+        avg_infer_shock = float(np.mean(infer_times_shock[eval_idx]))
+        p95_infer_shock = float(np.percentile(infer_times_shock[eval_idx], 95))
+
         m_shock = summarize(
-            y_true_sel, y_pred_shock / current_N, f"Shock_{shift_pct:.1f}"
+            y_true_sel[eval_idx], y_pred_shock[eval_idx] / current_N, f"Shock_{shift_pct:.1f}"
         )
 
         m_ft, m_rb = m_shock, m_shock
@@ -271,28 +264,28 @@ def main():
             # СТАДИЯ 1: FINETUNE (Быстрая адаптация массы)
             # ==========================================
             t0 = time.perf_counter()
-            n_finetuned = hybrid_est.feedback_update(queries, y_true_counts, y_pred_shock, current_N)
+            n_finetuned = hybrid_est.feedback_update(
+                adapt_queries, y_true_counts[adapt_idx], y_pred_shock[adapt_idx], current_N
+            )
             t_ft = time.perf_counter() - t0
 
-            infer_times_ft = []
-            preds_ft = []
-            for q in queries:
-                t_start = time.perf_counter()
-                preds_ft.append(hybrid_est.predict(q))
-                infer_times_ft.append(time.perf_counter() - t_start)
-            y_pred_ft = np.maximum(np.array(preds_ft), 1.0)
+            preds_ft, infer_times_ft, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
+            y_pred_ft = np.maximum(preds_ft, 1.0)
 
-            median_infer_ft = float(np.median(infer_times_ft))
-            avg_infer_ft = float(np.mean(infer_times_ft))
-            p95_infer_ft = float(np.percentile(infer_times_ft, 95))
-            
-            m_ft = summarize(y_true_sel, y_pred_ft / current_N, f"FT_{shift_pct:.1f}")
+            median_infer_ft = float(np.median(infer_times_ft[eval_idx]))
+            avg_infer_ft = float(np.mean(infer_times_ft[eval_idx]))
+            p95_infer_ft = float(np.percentile(infer_times_ft[eval_idx], 95))
+
+            m_ft = summarize(y_true_sel[eval_idx], y_pred_ft[eval_idx] / current_N, f"FT_{shift_pct:.1f}")
+            # Без переобученных бакетов модель остаётся в состоянии после FT, а не Shock
+            m_rb = m_ft
+            median_infer_rb, avg_infer_rb, p95_infer_rb = median_infer_ft, avg_infer_ft, p95_infer_ft
 
             # ==========================================
             # СТАДИЯ 2: REBUILD (Фоновое переобучение сломанных бакетов)
             # ==========================================
             bad_indices = detect_bad_buckets(
-                hybrid_est, queries, y_true_counts, y_pred_ft
+                hybrid_est, adapt_queries, y_true_counts[adapt_idx], y_pred_ft[adapt_idx]
             )
             n_rebuilt = len(bad_indices)
 
@@ -310,20 +303,15 @@ def main():
                 )
 
                 t_rb = time.perf_counter() - t1
-                infer_times_rb = []
-                preds_rb = []
-                for q in queries:
-                    t_start = time.perf_counter()
-                    preds_rb.append(hybrid_est.predict(q))
-                    infer_times_rb.append(time.perf_counter() - t_start)
-                y_pred_rb = np.maximum(np.array(preds_rb), 1.0)
+                preds_rb, infer_times_rb, _ = run_queries(hybrid_est.predict, queries, y_true_counts)
+                y_pred_rb = np.maximum(preds_rb, 1.0)
 
-                median_infer_rb = float(np.median(infer_times_rb))
-                avg_infer_rb = float(np.mean(infer_times_rb))
-                p95_infer_rb = float(np.percentile(infer_times_rb, 95))
+                median_infer_rb = float(np.median(infer_times_rb[eval_idx]))
+                avg_infer_rb = float(np.mean(infer_times_rb[eval_idx]))
+                p95_infer_rb = float(np.percentile(infer_times_rb[eval_idx], 95))
 
                 m_rb = summarize(
-                    y_true_sel, y_pred_rb / current_N, f"RB_{shift_pct:.1f}"
+                    y_true_sel[eval_idx], y_pred_rb[eval_idx] / current_N, f"RB_{shift_pct:.1f}"
                 )
 
             hybrid_est.report_models(
@@ -360,6 +348,7 @@ def main():
                 "RB_Infer_Avg": avg_infer_rb,
                 "RB_Infer_P95": p95_infer_rb,
                 "Rebuilt_Count": n_rebuilt,
+                "Refresh_Time": t_refresh,
                 "FT_Time": t_ft,
                 "RB_Time": t_rb,
                 "Build_Time": build_time if step == 0 else 0.0,

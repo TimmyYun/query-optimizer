@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""
+EquiDepth (PostgreSQL) под дрейфом данных. Протокол как в
+run_equiwidth_drift.py: на каждом шаге статистика пересобирается по новой
+выборке (симуляция ANALYZE). В отличие от equi-width, сетки, фиксированной на
+шаге 0, нет: ANALYZE заново считает MCV, histogram_bounds и n_distinct.
+"""
+import time
+import pickle
+import argparse
+import re
+import numpy as np
+import pandas as pd
+from pathlib import Path
+from models import EquiDepthHistogram, summarize
+from benchmark_utils import load_and_filter_workload, setup_out_dir, exact_counts, run_queries, timing_stats, split_adapt_eval
+from data.datasets import DatasetManager
+
+
+def main():
+    parser = argparse.ArgumentParser(description="PostgreSQL Equi-Depth Analysis under Data Drift")
+    parser.add_argument("--dataset", type=str, default="60000000")
+    parser.add_argument("--workload", type=str, required=True)
+    parser.add_argument("--init-dist", type=str, default="normal")
+    parser.add_argument("--target-dist", type=str, default="zipf")
+    parser.add_argument("--statistics-target", type=int, default=100, help="PostgreSQL default_statistics_target")
+    parser.add_argument("--with-index", action="store_true", help="Simulate a B-tree index on the column (actual min/max for edge buckets)")
+    parser.add_argument("--out-dir", type=str, default="results")
+    parser.add_argument("--experiment-name", type=str, default=None)
+    parser.add_argument("--shift-workload", action="store_true", help="If set, uses step-wise workloads from shift directory instead of static workload.")
+    parser.add_argument("--shift-dir", type=str, required=False, help="Explicit path to shift dataset directory")
+    parser.add_argument("--static-workload-path", type=str, required=False, help="Explicit path to static workload")
+    args = parser.parse_args()
+
+    model_name = "EquiDepth-Idx" if args.with_index else "EquiDepth"
+    ds_out_name = f"gradual_{args.init_dist}_to_{args.target_dist}_{model_name}"
+    out_dir = setup_out_dir(args, ds_out_name)
+
+    dm = DatasetManager()
+
+    if args.shift_dir:
+        shift_dir = Path(args.shift_dir)
+    else:
+        shift_dir = dm.base_path / "generated" / args.dataset / f"shift_{args.init_dist}_to_{args.target_dist}_5%_dataset"
+
+    if not shift_dir.exists():
+        raise FileNotFoundError(f"Directory {shift_dir} not found. Run generate_shifts.py first.")
+
+    # ЗАГРУЗКА ШАГА 0 (Инициализация)
+    with open(shift_dir / "step_0.pkl", "rb") as f:
+        i_mn, i_mx, i_N, i_freq, i_sample, i_k = pickle.load(f)
+
+
+    # Ожидаем count в args.workload
+    workload_count_str = args.workload
+    if workload_count_str.endswith(".csv"):
+        match = re.search(r"\d+", args.workload)
+        if match:
+            workload_count_str = match.group(0)
+
+    # --- Определение статического ворклоада (Fallback) ---
+    if args.static_workload_path:
+        static_workload_path = Path(args.static_workload_path)
+    else:
+        static_workload_path = Path(args.workload)
+        if not static_workload_path.exists():
+            init_dist_dir = dm.base_path / "generated" / args.dataset / args.init_dist
+            static_workload_path = init_dist_dir / f"workload_driven_{workload_count_str}.csv"
+            if not static_workload_path.exists():
+                print(f"Warning: Static workload not found at {static_workload_path}")
+
+    if not args.shift_workload:
+        print(f"Using static workload: {static_workload_path}")
+        queries, _ = load_and_filter_workload(str(static_workload_path), i_mn, i_mx, i_freq)
+    else:
+        print(f"Using dynamic shift workloads with count: {workload_count_str}")
+
+    summary_records = []
+
+    step_files = list(shift_dir.glob("step_*.pkl"))
+    num_steps = len(step_files)
+    if num_steps == 0:
+        raise ValueError(f"No step_*.pkl files found in {shift_dir}")
+    divisor = max(1, num_steps - 1)
+
+    # ПРОГОН ПО ВСЕМ ШАГАМ ДРИФТА
+    for step in range(num_steps):
+        shift_pct = step / divisor
+        with open(shift_dir / f"step_{step}.pkl", "rb") as f:
+            step_mn, step_mx, current_N, current_freq, mixed_sample, step_k = pickle.load(f)
+
+        if args.shift_workload:
+            # Загружаем ворклоад для ТЕКУЩЕГО шага (динамический drift)
+            step_workload_path = shift_dir / f"step_{step}_workload_driven_{workload_count_str}.csv"
+            if not step_workload_path.exists():
+                raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
+
+            queries, _ = load_and_filter_workload(str(step_workload_path), step_mn, step_mx, current_freq)
+
+        # 1. Считаем реальность (Engine Truth)
+        y_true_counts = np.maximum(exact_counts(queries, current_freq, step_mn), 1.0)
+        y_true_sel = y_true_counts / current_N
+        # Метрики только на eval-половине (split_adapt_eval); ANALYZE-модель фидбэк не использует
+        _, eval_idx = split_adapt_eval(len(queries))
+        eval_queries = [queries[i] for i in eval_idx]
+        y_true_counts, y_true_sel = y_true_counts[eval_idx], y_true_sel[eval_idx]
+
+        # 2. Пересборка статистики по выборке шага (Симуляция ANALYZE)
+        t0_build = time.perf_counter()
+        ed_hist = EquiDepthHistogram.build_from_sample(
+            mixed_sample,
+            current_N,
+            statistics_target=args.statistics_target,
+            actual_min=step_mn if args.with_index else None,
+            actual_max=step_mx if args.with_index else None,
+        )
+        build_time = time.perf_counter() - t0_build
+
+        # 3. Оценка (Prediction)
+        y_pred_counts, infer_times, _ = run_queries(ed_hist.predict, eval_queries, y_true_counts)
+        y_pred_counts = np.maximum(y_pred_counts, 1.0)
+        t = timing_stats(infer_times)
+        infer_time, median_infer_time = t["infer_time"], t["median_infer_time"]
+        avg_infer_time, p95_infer_time = t["avg_infer_time"], t["p95_infer_time"]
+
+        m = summarize(y_true_sel, y_pred_counts / current_N, f"{model_name}_{shift_pct:.1f}")
+
+        print(f"Shift {shift_pct:>4.0%}: Median QErr = {m['QErr_median']:.2f}")
+
+        summary_records.append({
+            "Shift %": f"{shift_pct:.0%}",
+            "Median Q-Error": m["QErr_median"],
+            "P95 Q-Error": m["QErr_p95"],
+            "Avg Q-Error": m["QErr_avg"],
+            "Inference Time": infer_time,
+            "Median Inference Time": median_infer_time,
+            "Avg Inference Time": avg_infer_time,
+            "P95 Inference Time": p95_infer_time,
+            "Build Time": build_time
+        })
+
+    pd.DataFrame(summary_records).to_csv(out_dir / "equidepth_drift_analysis.csv", index=False)
+    print(f"\nExperiment completed. Results saved to {out_dir}")
+
+
+if __name__ == "__main__":
+    main()

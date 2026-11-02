@@ -25,8 +25,19 @@ def align_frequency(freq, mn):
 
 
 def generate_shift_sequence(
-    rows: str, init_dist: str, target_dist: str, steps: int = 20, seed: int = 42
+    rows: str,
+    init_dist: str,
+    target_dist: str,
+    steps: int = 20,
+    mode: str = "replace",
+    seed: int = 42,
 ):
+    """
+    mode="replace": (1 - a) * init + a * target  — N постоянно, init вытесняется target
+    mode="add":     init + a * target            — init остаётся, target дописывается (N растёт до 2x)
+    Имя каталога совпадает с тем, что ждёт run_drift_experiments.py:
+    shift_<init>_to_<target>_<100/steps>%  (+ "_dataset" для mode="add").
+    """
     dm = DatasetManager()
     rng = np.random.default_rng(seed)
 
@@ -51,7 +62,8 @@ def generate_shift_sequence(
 
     max_y_freq = np.max(f_init + f_target)
 
-    out_dir = dm.base_path / "generated" / rows / f"shift_{init_dist}_to_{target_dist}_5%_workload"
+    suffix = "_dataset" if mode == "add" else ""
+    out_dir = dm.base_path / "generated" / rows / f"shift_{init_dist}_to_{target_dist}_{100 // steps}%{suffix}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(
@@ -67,7 +79,10 @@ def generate_shift_sequence(
 
         # 1. Смешиваем частоты (Ground Truth)
         # Суммируем 100% начального и постепенно добавляем до 100% от целевого
-        mixed_freq_float = f_init + alpha * f_target
+        if mode == "add":
+            mixed_freq_float = f_init + alpha * f_target
+        else:
+            mixed_freq_float = (1.0 - alpha) * f_init + alpha * f_target
         mixed_freq = np.round(mixed_freq_float).astype(np.int64)
 
         active_indices = np.nonzero(mixed_freq)[0]
@@ -142,7 +157,7 @@ def generate_shift_sequence(
     frames[0].save(
         gif_path, save_all=True, append_images=frames[1:], duration=600, loop=0
     )
-    print(f"\nAwesome! Sequence and animation saved.")
+    print("\nAwesome! Sequence and animation saved.")
 
 
 if __name__ == "__main__":
@@ -150,11 +165,23 @@ if __name__ == "__main__":
     parser.add_argument(
         "--rows",
         type=str,
-        default="60000000",
-        help="Name of the folder inside data/generated/",
+        default="60000000_hard",
+        help="Name of the folder inside data/generated/ (e.g. 60000000_hard)",
     )
     parser.add_argument("--init", type=str, default="normal")
     parser.add_argument("--target", type=str, default="zipf")
+    parser.add_argument(
+        "--steps",
+        type=int,
+        default=20,
+        help="Number of drift steps; step size is 100/steps %% (20 -> 5%%, 10 -> 10%%).",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=["replace", "add"],
+        default="replace",
+        help="replace: init is gradually replaced by target; add: target is appended on top of init.",
+    )
     args = parser.parse_args()
 
-    generate_shift_sequence(args.rows, args.init, args.target)
+    generate_shift_sequence(args.rows, args.init, args.target, args.steps, args.mode)

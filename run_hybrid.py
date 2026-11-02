@@ -1,15 +1,46 @@
 #!/usr/bin/env python3
-import time
 import numpy as np
-from pathlib import Path
-from models import EquiWidthHistogram, HybridEstimator, summarize
+from models import EquiWidthHistogram, HybridEstimator
 from benchmark_utils import (
     get_common_parser,
     run_benchmark_suite,
+    resolve_workload_path,
     load_and_filter_workload,
-    save_benchmark_results,
+    evaluate_and_save,
 )
 import matplotlib.pyplot as plt
+from models.common import Bucket
+
+
+def build_equidepth_buckets(mn, mx, bins, sample, total_rows):
+    """
+    Бакеты равной глубины по квантилям выборки (границы — целые, без дублей),
+    покрывающие весь [mn, mx]. Счётчики — по выборке, масштаб N / len(sample).
+    """
+    sample_sorted = np.sort(sample)
+    scale = total_rows / len(sample)
+    qs = np.quantile(sample_sorted, np.linspace(0, 1, bins + 1)[1:-1])
+    edges = np.unique(np.concatenate([[mn], np.floor(qs).astype(np.int64) + 1]))
+    edges = edges[(edges >= mn) & (edges <= mx)]
+    buckets = []
+    for j, lo in enumerate(edges):
+        hi = int(edges[j + 1]) - 1 if j + 1 < len(edges) else mx
+        cnt = np.searchsorted(sample_sorted, hi, side="right") - np.searchsorted(
+            sample_sorted, lo, side="left"
+        )
+        buckets.append(Bucket(int(lo), int(hi), count=float(cnt * scale)))
+    return buckets
+
+
+def model_name_for(args):
+    name = "Hybrid"
+    if args.partition == "equidepth":
+        name += "-ED"
+    if args.parametric_only:
+        name += "-param"
+    if args.min_sample_points > 0:
+        name += f"-min{args.min_sample_points}"
+    return name
 
 
 def plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, output_path):
@@ -59,7 +90,7 @@ def plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, output_path
     ax2.set_ylabel("Median Q-Error (Log Scale)", color="red")
     ax2.set_yscale("log")  # Логарифмическая шкала важна для Zipf
 
-    plt.title(f"Bucket Analysis: Error vs. Density (Safe Mode)")
+    plt.title("Bucket Analysis: Error vs. Density (Safe Mode)")
     fig.tight_layout()
     plt.savefig(output_path, dpi=150)
     plt.close()
@@ -69,103 +100,53 @@ def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
     n_bins = args.buckets if args.buckets is not None else n_bins_data
     rng = np.random.default_rng(42)
+    workload_path = resolve_workload_path(args)
 
-    # --- NEW: Автоматическое определение пути к ворклоаду ---
-    workload_path = Path(args.workload)
-    if not workload_path.exists():
-        potential_path = Path(args.dataset) / f"workload_{args.workload}.csv"
-        if potential_path.exists():
-            workload_path = potential_path
-        else:
-            raise FileNotFoundError(
-                f"Workload not found at {args.workload} or {potential_path}"
-            )
-    # -------------------------------------------------------
-
-    obs_freq = np.bincount(sample - mn, minlength=len(freq))
+    # Плотность строится только из выборки; длина домена = mx - mn + 1 (freq не читаем)
+    obs_freq = np.bincount(sample - mn, minlength=mx - mn + 1)
 
     # Scale the sample back up to N (Crucial for Cardinality Estimation)
     scaling_factor = N / len(sample)
     estimated_freq = obs_freq * scaling_factor
-    # --------------------------------------------------
 
     # Build Initial Buckets using the ESTIMATED frequency
-    ew_hist = EquiWidthHistogram.build_from_sample(
-        mn=mn, mx=mx, bins=n_bins, sample=sample, total_rows=N
-    )
+    if args.partition == "equidepth":
+        init_buckets = build_equidepth_buckets(mn, mx, n_bins, sample, N)
+    else:
+        init_buckets = EquiWidthHistogram.build_from_sample(
+            mn=mn, mx=mx, bins=n_bins, sample=sample, total_rows=N
+        ).buckets
+    model_name = model_name_for(args)
 
     # Train Hybrid using the ESTIMATED frequency
-    print(f"Training Hybrid Model on 100000 Sample (Bins: {n_bins})...")
+    print(f"Training Hybrid Model on {len(sample)} Sample (Bins: {n_bins})...")
     hybrid_est = HybridEstimator(
-        ew_hist.buckets,
+        init_buckets,
         identity_threshold=args.ident,
         mlp_penalty=args.penalty,
         fourier_penalty=args.penalty,
+        min_train_count=args.min_sample_points * scaling_factor,
+        parametric_only=args.parametric_only,
     )
 
     t_train = hybrid_est.train(estimated_freq, mn, args.points, rng)
 
     # Report Model Selections
-    model_report_path = out_dir / "model_selection_Hybrid.txt"
+    model_report_path = out_dir / f"model_selection_{model_name}.txt"
     hybrid_est.report_models(file_path=model_report_path)
 
     queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
-
-    t0 = time.perf_counter()
-    y_pred_counts = []
-    infer_times = []
-    for q in queries:
-        st = time.perf_counter()
-        pred = hybrid_est.predict(q)
-        infer_times.append(time.perf_counter() - st)
-        y_pred_counts.append(pred)
-        
-    y_pred_counts = np.maximum(np.array(y_pred_counts), 1.0)
-    infer_time = time.perf_counter() - t0
-    
-    infer_times = np.array(infer_times)
-    median_infer_time = np.median(infer_times)
-    avg_infer_time = np.mean(infer_times)
-    p95_infer_time = np.percentile(infer_times, 95)
-
-    y_true_counts = np.maximum(y_true_sel * N, 1.0)
-    y_pred_safe = y_pred_counts / N
-    y_true_safe = y_true_counts / N
-    # -------------------------------------------
-
-    # --- VISUALIZATION & SUMMARY ---
-    debug_plot_path = out_dir / "initial_baseline_debug.png"
-    # Передаем безопасные значения
-    plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, debug_plot_path)
-
-    # Summarize
-    m = summarize(y_true_safe, y_pred_safe, "Hybrid")
-    metrics = {
-        "train_time": t_train,
-        "infer_time": infer_time,
-        "median_infer_time": median_infer_time,
-        "avg_infer_time": avg_infer_time,
-        "p95_infer_time": p95_infer_time,
-        "median_q_error": m["QErr_median"],
-        "p25_q_error": m["QErr_p25"],
-        "p75_q_error": m["QErr_p75"],
-        "p95_q_error": m["QErr_p95"],
-        "avg_q_error": m["QErr_avg"],
-    }
-
-    print(
-        f"Hybrid: Median QErr={metrics['median_q_error']:.4f}, Train={t_train:.4f}s, Inf={infer_time:.4f}s"
+    _, y_true_safe, y_pred_safe = evaluate_and_save(
+        out_dir, workload_path, model_name, hybrid_est.predict, queries, y_true_sel, N, t_train,
+        extra_metrics={
+            "n_buckets": len(hybrid_est.buckets),
+            "n_models": sum(1 for v in hybrid_est.models.values() if v is not None),
+            "n_floats": hybrid_est.param_count(),
+        },
     )
 
-    save_benchmark_results(
-        out_dir,
-        workload_path.stem,
-        "Hybrid",
-        queries,
-        y_true_safe,
-        y_pred_safe,
-        metrics,
-    )
+    if not args.no_debug_plot:
+        plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, out_dir / "initial_baseline_debug.png")
 
 
 def main():
@@ -173,6 +154,20 @@ def main():
     parser.add_argument("--points", type=int, default=200, help="Points per bucket")
     parser.add_argument("--ident", type=float, default=1e-4, help="Identity threshold")
     parser.add_argument("--penalty", type=float, default=1.5, help="Model penalty")
+    parser.add_argument(
+        "--min-sample-points",
+        type=int,
+        default=0,
+        help="Train a local model only if the bucket holds at least this many sample points (0 = always)",
+    )
+    parser.add_argument(
+        "--partition",
+        choices=["equiwidth", "equidepth"],
+        default="equiwidth",
+        help="Bucket boundaries: equal width (default) or equal depth by sample quantiles",
+    )
+    parser.add_argument("--parametric-only", action="store_true", help="Only linear/power/log/poly3 local models (2-4 floats each)")
+    parser.add_argument("--no-debug-plot", action="store_true", help="Skip the O(Q x B) per-bucket debug plot")
     args = parser.parse_args()
     run_benchmark_suite(args, run_logic)
 
