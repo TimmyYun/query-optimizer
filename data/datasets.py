@@ -847,7 +847,7 @@ def main():
             start = time.time()
             try:
                 # 1. Generate Data
-                ds_dir = dm.prepare_dataset(rows, dist, use_micro_dist=not args.simple)
+                dm.prepare_dataset(rows, dist, use_micro_dist=not args.simple)
 
             except Exception as e:
                 print(f"Failed to generate {rows} / {dist}: {e}")

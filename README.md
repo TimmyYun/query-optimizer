@@ -22,7 +22,20 @@ reported as median / p25 / p75 / p95 / mean, plus build and per-query inference 
 7. [Outputs](#7-outputs)
 8. [Merging, plotting, exporting](#8-merging-plotting-exporting)
 9. [Methodological guarantees](#9-methodological-guarantees)
-10. [Repository layout](#10-repository-layout)
+10. [Reproducing the reported results](#10-reproducing-the-reported-results)
+11. [Repository layout and documentation](#11-repository-layout-and-documentation)
+
+**Results in short** (details and explanations in [docs/SUPERVISOR_SUMMARY.md](docs/SUPERVISOR_SUMMARY.md)):
+
+- Hybrid is the most accurate sample-only method on narrow queries when the data
+  is non-uniform *inside* a bucket: median q-error 1.23 against ≥ 1.44 for every
+  other sample-only method on `hard/normal`. On the same distribution without
+  intra-bucket structure (`simple/normal`) it gives no gain, 1.078 against 1.075.
+- It does not help when the skew is a few heavy values (DSB: TKHist is best) or
+  when queries land in a sparse tail, where the sample itself is the limit (zipf: EntropyHist is best).
+- Under drift with a fixed workload, Hybrid with partial retraining (`Hybrid_RB`)
+  is the best line at every step from 0 to 95 %. Its bucket grid is fixed at
+  step 0, which limits it once the distribution has changed shape completely.
 
 ---
 
@@ -37,10 +50,10 @@ reported as median / p25 / p75 / p95 / mean, plus build and per-query inference 
 | `EntropyHist-MEA` | maximum-entropy bucket boundaries, the paper's continuous range estimator | `run_entropyhist.py` / `run_entropyhist_drift.py` | To, Chiang & Shahabi, CIKM 2013 |
 | `EntropyHist-MEA-Rng_discrete_linear` | the same histogram, range estimate over integer cells (`--range-estimator discrete_linear`, non-paper extension) | same runners | see below |
 | `Hybrid` | **proposed**: equal-width buckets + local CDF model per bucket | `run_hybrid.py` / `run_hybrid_drift.py` | this work |
-| `Equi-Hist` | online multiplicative bucket rescaling | `run_equihist.py` / `run_equihist_drift.py` | *excluded from the orchestrators (too slow); can be run by hand* |
+| `EquiHist` | online multiplicative bucket rescaling | `run_equihist.py` / `run_equihist_drift.py` | *not run by default (too slow); `--models EquiHist`* |
 
 How each method works, and how each paper's open points were resolved, is
-described in [METHODS_EXPLAINED.md](METHODS_EXPLAINED.md).
+described in [METHODS_EXPLAINED.md](docs/METHODS_EXPLAINED.md).
 
 Why EntropyHist is reported twice: the paper interpolates linearly over the
 continuous bucket span, `overlap / (max_b − min_b)`. A query that touches only a
@@ -73,12 +86,14 @@ cd query-optimizer
 3. **STATS-CEB** — downloads the official data and queries (pinned commit, ~6 MB)
    and converts them, see [§6.2](#62-stats-ceb).
 
-DSB is not built by default: it needs the official toolkit to be compiled and run
-once (hours), see [§6.1](#61-dsb).
+The DSB inputs are committed (`data/dsb/<column>/meta.pkl`, `workload_official.csv`,
+`drift/step_*.pkl`), so the DSB scenarios run on a fresh clone. The official DSB
+toolkit is needed only to regenerate those inputs (hours), see [§6.1](#61-dsb).
 
 You do **not** need to regenerate the 60M-row datasets: no runner reads
 `data.csv`. Runners read only `meta.pkl` / `step_N.pkl`, which are committed and
 already contain the ground truth and the sample (see [§9](#9-methodological-guarantees)).
+The committed files are the reference inputs of the reported results.
 
 | Flag | What it does |
 |---|---|
@@ -147,7 +162,18 @@ poetry run python data/datasets.py --rows 60000000 --all                  # all 
 | `--simple` | no micro-distributions; output goes to `<rows>_simple/` instead of `<rows>_hard/` |
 
 > This writes a ~500 MB `data.csv` per dataset and **overwrites the committed
-> `meta.pkl`**. With seed 42 the result should match; check with `git diff --stat data/generated`.
+> `meta.pkl`**. The data itself is reproduced exactly (seed 42). The sample is not
+> always reproduced: the generator now draws the sample from its own random stream
+> (`[42, 1]`). Before that fix, data and sample shared `default_rng(42)`, and the
+> sampling mask replayed the generator's uniforms. That made the `simple/zipf`
+> sample contain only values < 1000. The committed `simple/zipf` sample was rebuilt
+> with the fix. The other committed samples predate it; they were checked to be
+> representative (sample quantiles match the true ones), but regenerating them
+> gives a different, equally valid sample, and results can move in the third
+> decimal. Use the committed `meta.pkl` files to reproduce the reported numbers.
+>
+> `sparse_cluster` and `anti_zipf` have no separate simple variant in the
+> generator, so their `simple` and `hard` data are identical.
 
 ### 3.2 Drift sequences
 
@@ -334,9 +360,11 @@ poetry run python run_drift_experiments.py --scenario drift_5_ds_zipf_wl_normal
 | `all` | all of the above | |
 
 `--models` and `--dry-run` work as in [§4.1](#41-full-scenarios).
-Results go to `results/<scenario>/gradual_normal_to_zipf_<Model>/`.
+Results go to `results/<scenario>/gradual_normal_to_zipf_<Model>/` (synthetic) or
+`results/<scenario>/gradual_<column>_to_refresh_<Model>/` (DSB).
 
-**Long-running:** 11–21 steps × 1M queries × 6 models per scenario.
+**Long-running:** 11–21 steps × 1M queries × 7 model variants per synthetic scenario,
+40–100 minutes each (see [§10](#10-reproducing-the-reported-results)).
 
 ### 5.3 One model
 
@@ -389,6 +417,7 @@ different experiments and must be reported separately.
 | `--rngseed` | `42` | DSB: `dsqgen -rngseed` |
 | `--scale` | `1` | DSB: scale factor the data was generated with |
 | `--driven-count` | `100000` | STATS-CEB: size of the data-driven supplement |
+| `--sample-size` | `100000` (DSB) / `30000` (STATS-CEB) | rows in the model sample |
 
 ### 6.1 DSB
 
@@ -491,7 +520,7 @@ results/<experiment-name>/
 ├── <dataset>/                                   # static run
 │   ├── summary_<Model>.json                     # metrics: median/p25/p75/p95/avg q-error, timings
 │   └── <workload-stem>_<Model>.csv              # per query: Query_ID, Model, Prediction, Truth, Q_Error (selectivities)
-├── gradual_<init>_to_<target>_<Model>/          # synthetic drift run
+├── gradual_<init>_to_<target>_<Model>/          # drift run (DSB: gradual_<column>_to_refresh_<Model>)
 │   └── <model>_drift_analysis.csv               # one row per step (Hybrid: adaptation_ft_rb.csv)
 └── combined_<prefix>.csv, drift_chart_<prefix>.png   # written by merge_drift.py / plot_drift.py
 ```
@@ -547,7 +576,11 @@ poetry run python plot_drift.py  --experiment-name drift_5_ds_zipf_wl_normal
 | `plot_drift.py` | `--experiment-name E [E ...]` | plots every `combined_*.csv` of these experiments: median / p95 / mean q-error against drift % |
 | | `--labels L [L ...]` | only these lines. A line is `<Model>` for single-stage models and `<Model>_<Stage>` otherwise, e.g. `--labels EquiWidth Hybrid_RB STHist_Online` |
 
-`combined_<prefix>.csv` is a long table: `drift, step, model, stage, label, Median, P95, Avg, Infer_Med, Infer_Avg`.
+`combined_<prefix>.csv` is a long table, one row per step × model × stage:
+`drift, step, model, stage, label, Median, P95, Avg, Infer_Med, Infer_Avg, Adapt_Time, Rebuilt_Buckets, Initial_Build`.
+`Adapt_Time` is the seconds a model spent at this step to reach this stage,
+cumulative within the step (`Hybrid_RB` = sample refresh + FT + retraining).
+`Initial_Build` is the step-0 build and is not part of any stage.
 
 Static runs: box plots of the per-query q-error of several models:
 
@@ -594,30 +627,83 @@ poetry run python plot/plot_comparison.py \
 
 ---
 
-## 10. Repository layout
+## 10. Reproducing the reported results
+
+The numbers in [docs/](docs/) come from the commands below, run on the committed
+inputs. Model training and query generation are seeded, so q-error is
+reproduced exactly. Timings depend on the machine.
+
+```bash
+./setup_env.sh                                   # environment, synthetic workloads, STATS-CEB
+
+# static: 8 scenarios
+for s in simple_wide simple_narrow hard_wide hard_narrow hard_narrow_data_driven dsb stats_ceb stats_ceb_driven; do
+    poetry run python run_experiments.py --scenario $s
+done
+
+# drift: 6 scenarios
+DRIFT="drift_10_ds_zipf_wl_normal drift_5_ds_zipf_wl_normal drift_5_ds_zipf_wl_zipf \
+       drift_5_ds_add_zipf_wl_zipf dsb_drift_ws_wholesale_cost dsb_drift_ws_list_price"
+for s in $DRIFT; do poetry run python run_drift_experiments.py --scenario $s; done
+
+poetry run python merge_drift.py --experiment-name $DRIFT
+poetry run python plot_drift.py  --experiment-name $DRIFT
+poetry run python export_results.py              # -> results/all_results.xlsx
+```
+
+Wall-clock time of the reported run (12-core Linux machine, 32 GB RAM, five
+scenarios in parallel). Run them sequentially for clean timing measurements;
+parallel runs inflate the absolute timings, but q-error does not depend on them.
+
+| Scenario | Time |
+|---|---|
+| `simple_wide`, `hard_wide` | 21 min, 29 min |
+| `simple_narrow`, `hard_narrow` | 10 min, 15 min |
+| `hard_narrow_data_driven` | 21 min |
+| `dsb`, `stats_ceb`, `stats_ceb_driven` | under a minute each |
+| `drift_10_ds_zipf_wl_normal` | 38 min |
+| `drift_5_ds_zipf_wl_normal`, `drift_5_ds_zipf_wl_zipf`, `drift_5_ds_add_zipf_wl_zipf` | 75 min, 101 min, 92 min |
+| `dsb_drift_*` | under a minute each |
+
+Launch long runs under `nohup` or `tmux`: a dropped
+SSH session kills a foreground run, and `results/<experiment>/` would then be partial.
+Delete a partial experiment folder before re-running it.
+
+---
+
+## 11. Repository layout and documentation
 
 ```text
 models/                 estimators (one file per method) + common.py (Bucket, RangeQuery, q-error)
 registry.py             models + static/drift scenarios: the single list the orchestrators read
 benchmark_utils.py      shared CLI, dataset loop, truth, evaluation loop, result writing
 run_<model>.py          static runner per model
-run_<model>_drift.py    synthetic drift runner per model
+run_<model>_drift.py    drift runner per model (synthetic and DSB)
 run_experiments.py      static orchestrator (§4)
 run_drift_experiments.py drift orchestrator (§5)
 merge_drift.py, plot_drift.py  drift result tables and charts (§8)
 export_results.py       every result -> one xlsx, one sheet per benchmark (§8)
+run_hybrid_ablations.py Hybrid ablations: min sample points, partition, query width, equal memory
+run_sthist_paper.py, run_entropyhist_paper.py  the original papers' own setups (not this benchmark)
 data/datasets.py        synthetic dataset generator
 data/generate_shifts.py drift sequence generator
+data/generated/, data/dsb/, data/stats-ceb/  committed inputs: meta.pkl, step_N.pkl, official workloads
 workload/workload.py    workload generator
+plot/                   workload and per-query comparison plots
 prepare_benchmark.py    adapter: DSB / STATS-CEB -> meta.pkl, workload_official.csv, drift/step_N.pkl
 DSB benchmark/          setup_dsb.sh (official toolkit build + data), DSB_GENERATOR.ipynb (refresh replay)
 tests/                  pytest unit tests
 setup_env.sh            one-shot setup
+docs/                   documentation (below)
 ```
 
-Other documents:
+Documentation, in Russian:
 
-- [PROJECT_GUIDE.md](PROJECT_GUIDE.md): what the benchmark does, why each design decision was made, and how to run and read it (in Russian).
-- [RESULTS_GUIDE.md](RESULTS_GUIDE.md): how to read `results/all_results.xlsx` — every sheet, column, method and the reasons behind the data and query choices (in Russian).
-- [RESULTS_REPORT.md](RESULTS_REPORT.md): the current results, why each method wins or loses on each benchmark, threats to validity and anticipated reviewer questions (in Russian).
-- [METHODS_EXPLAINED.md](METHODS_EXPLAINED.md): how each method works (in Russian).
+| Document | Read it for |
+|---|---|
+| [docs/SUPERVISOR_SUMMARY.md](docs/SUPERVISOR_SUMMARY.md) | **start here**: the results in one minute, how the conclusions changed from the first experiment and why, every protocol change, the drift stage glossary |
+| [docs/RESULTS_EXPLAINED.md](docs/RESULTS_EXPLAINED.md) | how to read `all_results.xlsx`; for each method, why it wins or loses on each kind of data |
+| [docs/RESULTS_REPORT.md](docs/RESULTS_REPORT.md) | every number by benchmark, threats to validity, anticipated reviewer questions |
+| [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) | reference: every sheet and column of `all_results.xlsx`, and why these data and queries |
+| [docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md) | what the benchmark does, why each design decision was made, list of fixes |
+| [docs/METHODS_EXPLAINED.md](docs/METHODS_EXPLAINED.md) | how each method works and how the papers' open points were resolved |

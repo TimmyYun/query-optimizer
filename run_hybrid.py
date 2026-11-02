@@ -90,7 +90,7 @@ def plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, output_path
     ax2.set_ylabel("Median Q-Error (Log Scale)", color="red")
     ax2.set_yscale("log")  # Логарифмическая шкала важна для Zipf
 
-    plt.title(f"Bucket Analysis: Error vs. Density (Safe Mode)")
+    plt.title("Bucket Analysis: Error vs. Density (Safe Mode)")
     fig.tight_layout()
     plt.savefig(output_path, dpi=150)
     plt.close()

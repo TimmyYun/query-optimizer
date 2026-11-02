@@ -95,7 +95,7 @@ The drift scripts (`run_*_drift.py`) deliberately **do not** use `run_benchmark_
 
 ### Drift protocol
 
-Each drift step evaluates three stages against the same step's data, which is why the output CSV has `Shock_*`, `FT_*`, `RB_*` column families. A step's queries are split by `benchmark_utils.split_adapt_eval` (seed 42): feedback-driven adaptation (FT, RB bad-bucket detection, STHist, Equi-Hist) may use only the adapt half; every stage of every model is scored on the eval half. Never score on queries a model adapted to.
+Each drift step evaluates three stages against the same step's data, which is why the output CSV has `Shock_*`, `FT_*`, `RB_*` column families. A step's queries are split by `benchmark_utils.split_adapt_eval` (seed 42): feedback-driven adaptation (FT, RB bad-bucket detection, STHist, EquiHist) may use only the adapt half; every stage of every model is scored on the eval half. Never score on queries a model adapted to.
 
 1. **Shock** — predict with the stale model, no adaptation.
 2. **FT (finetune)** — `feedback_update()` on the adapt half rescales bucket mass, re-predict.
@@ -105,10 +105,11 @@ Each drift step evaluates three stages against the same step's data, which is wh
 
 ### Output layout
 
-`results/<experiment-name>/<dataset-name>/` where dataset-name is `<dist>` for static runs and `gradual_<init>_to_<target>_<Model>` (synthetic) / `dsb_<column>_<Model>` (DSB) for drift runs. Hybrid drift writes `adaptation_ft_rb.csv`; the histogram baselines write `<model>_drift_analysis.csv`. `merge_drift.py --experiment-name X` globs these into `combined_<prefix>.csv`; `plot_drift.py` charts them; `export_results.py` writes every experiment to one xlsx (one sheet per benchmark).
+`results/<experiment-name>/<dataset-name>/` where dataset-name is `<dist>` for static runs and `gradual_<init>_to_<target>_<Model>` (synthetic) / `gradual_<column>_to_refresh_<Model>` (DSB) for drift runs. Hybrid drift writes `adaptation_ft_rb.csv`; the histogram baselines write `<model>_drift_analysis.csv`. `merge_drift.py --experiment-name X` globs these into `combined_<prefix>.csv`; `plot_drift.py` charts them; `export_results.py` writes every experiment to one xlsx (one sheet per benchmark).
 
 ## Conventions
 
 - Comments and print statements are a mix of English and Russian; match the surrounding file rather than translating.
-- Random seeds are fixed at 42 throughout (dataset generation, workload generation, model training) — keep new code seeded the same way for reproducibility.
+- Random seeds are fixed at 42 throughout (dataset generation, workload generation, model training) — keep new code seeded the same way for reproducibility. Never draw two random processes over the same rows from separate `default_rng(42)` instances: `prepare_dataset` samples with `[42, 1]` because a sampling mask from the same stream replayed the generator's uniforms and biased the sample (`tests/test_datasets.py`).
+- Documentation lives in `docs/` (Russian); `README.md` is the English entry point.
 - Per-query inference is timed inside the loop (`time.perf_counter()` per `predict`), so `predict` stays scalar and Python-level on purpose; the numpy work is in the bake step, not the hot loop.

@@ -157,7 +157,7 @@ def generate_shift_sequence(
     frames[0].save(
         gif_path, save_all=True, append_images=frames[1:], duration=600, loop=0
     )
-    print(f"\nAwesome! Sequence and animation saved.")
+    print("\nAwesome! Sequence and animation saved.")
 
 
 if __name__ == "__main__":

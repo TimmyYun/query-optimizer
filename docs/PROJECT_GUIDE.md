@@ -4,7 +4,7 @@
 измеряет бенчмарк, почему он устроен именно так, как всё запустить с нуля
 и как читать результаты.
 
-- Полный список команд и параметров — в [README.md](README.md).
+- Полный список команд и параметров — в [README.md](../README.md).
 - Как работает каждый метод — в [METHODS_EXPLAINED.md](METHODS_EXPLAINED.md).
 - Как читать таблицу результатов `all_results.xlsx` — в [RESULTS_GUIDE.md](RESULTS_GUIDE.md).
 

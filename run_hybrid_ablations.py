@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Дополнительные эксперименты вокруг Hybrid (абляции, см. PROJECT_GUIDE.md):
+Дополнительные эксперименты вокруг Hybrid (абляции, см. docs/PROJECT_GUIDE.md):
 
   minpts    — модель в бакете обучается, только если в нём >= P точек выборки
   partition — Hybrid поверх equi-depth бакетов вместо equi-width

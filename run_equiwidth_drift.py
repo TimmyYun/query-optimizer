@@ -9,7 +9,6 @@ from pathlib import Path
 from models import EquiWidthHistogram, summarize
 from benchmark_utils import (
     load_and_filter_workload,
-    save_benchmark_results,
     setup_out_dir,
     exact_counts,
     run_queries,

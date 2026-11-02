@@ -9,7 +9,6 @@ from pathlib import Path
 from models import EquiWidthHistogram, HybridEstimator, summarize
 from benchmark_utils import (
     load_and_filter_workload,
-    save_benchmark_results,
     setup_out_dir,
     exact_counts,
     run_queries,
@@ -278,6 +277,9 @@ def main():
             p95_infer_ft = float(np.percentile(infer_times_ft[eval_idx], 95))
 
             m_ft = summarize(y_true_sel[eval_idx], y_pred_ft[eval_idx] / current_N, f"FT_{shift_pct:.1f}")
+            # Без переобученных бакетов модель остаётся в состоянии после FT, а не Shock
+            m_rb = m_ft
+            median_infer_rb, avg_infer_rb, p95_infer_rb = median_infer_ft, avg_infer_ft, p95_infer_ft
 
             # ==========================================
             # СТАДИЯ 2: REBUILD (Фоновое переобучение сломанных бакетов)

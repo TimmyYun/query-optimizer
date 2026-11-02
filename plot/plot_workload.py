@@ -15,7 +15,6 @@ def run_analysis_for_file(workload_path: Path, output_dir: Path, dist_name: str)
 
     # 1. Coverage Density (Как часто каждая точка домена попадает в запросы)
     print("  Generating Coverage Plot...")
-    domain_coverage = np.zeros(DOMAIN_MAX + 2, dtype=np.int32)
     lows = np.clip(df["low"].values, 0, DOMAIN_MAX)
     highs = np.clip(df["high"].values, 0, DOMAIN_MAX)
 

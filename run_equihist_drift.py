@@ -3,12 +3,10 @@ import pickle
 import argparse
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from pathlib import Path
 from models import EquiWidthHistogram, EquiHistLearner, summarize
 from benchmark_utils import (
     load_and_filter_workload,
-    save_benchmark_results,
     setup_out_dir,
     exact_counts,
     run_queries,
