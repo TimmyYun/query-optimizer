@@ -237,3 +237,5 @@ data/stats-ceb/source/
 # OS / IDE
 .DS_Store
 .idea/
+
+docs/
