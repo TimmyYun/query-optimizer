@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import numpy as np
+import pandas as pd
 from models import EquiWidthHistogram, HybridEstimator
 from benchmark_utils import (
     get_common_parser,
@@ -7,6 +8,8 @@ from benchmark_utils import (
     resolve_workload_path,
     load_and_filter_workload,
     evaluate_and_save,
+    resolve_buckets,
+    size_metrics,
 )
 import matplotlib.pyplot as plt
 from models.common import Bucket
@@ -98,7 +101,7 @@ def plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, output_path
 
 def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
-    n_bins = args.buckets if args.buckets is not None else n_bins_data
+    n_bins = resolve_buckets(args.buckets, n_bins_data)
     rng = np.random.default_rng(42)
     workload_path = resolve_workload_path(args)
 
@@ -134,6 +137,8 @@ def run_logic(args, out_dir, metadata):
     # Report Model Selections
     model_report_path = out_dir / f"model_selection_{model_name}.txt"
     hybrid_est.report_models(file_path=model_report_path)
+    # Per-bucket CDF table: boundaries, count, CDF, tier, validation error, memory share
+    pd.DataFrame(hybrid_est.bucket_table()).to_csv(out_dir / f"bucket_table_{model_name}.csv", index=False)
 
     queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
     _, y_true_safe, y_pred_safe = evaluate_and_save(
@@ -142,10 +147,14 @@ def run_logic(args, out_dir, metadata):
             "n_buckets": len(hybrid_est.buckets),
             "n_models": sum(1 for v in hybrid_est.models.values() if v is not None),
             "n_floats": hybrid_est.param_count(),
+            **size_metrics(hybrid_est.n_values()),
+            # Какую локальную CDF получил каждый бакет (число бакетов по типу)
+            "cdf_choice": hybrid_est.cdf_choice(),
+            "model_version": f"{model_name}:{HybridEstimator.SPEC_VERSION}",
         },
     )
 
-    if not args.no_debug_plot:
+    if args.debug_plot:
         plot_bucket_debug(hybrid_est, queries, y_true_safe, y_pred_safe, out_dir / "initial_baseline_debug.png")
 
 
@@ -167,7 +176,7 @@ def main():
         help="Bucket boundaries: equal width (default) or equal depth by sample quantiles",
     )
     parser.add_argument("--parametric-only", action="store_true", help="Only linear/power/log/poly3 local models (2-4 floats each)")
-    parser.add_argument("--no-debug-plot", action="store_true", help="Skip the O(Q x B) per-bucket debug plot")
+    parser.add_argument("--debug-plot", action="store_true", help="Per-bucket error plot (slow: O(queries x buckets) in Python)")
     args = parser.parse_args()
     run_benchmark_suite(args, run_logic)
 

@@ -17,6 +17,8 @@ from benchmark_utils import (
     get_common_parser,
     run_benchmark_suite,
     resolve_workload_path,
+    resolve_buckets,
+    size_metrics,
     load_and_filter_workload,
     evaluate_and_save,
 )
@@ -65,8 +67,7 @@ def model_name_for(config):
 
 def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
-    # Тот же бюджет бакетов, что у EquiWidth/STHist (FD), если не задан явно
-    n_bins = args.buckets if args.buckets is not None else n_bins_data
+    n_bins = resolve_buckets(args.buckets, n_bins_data)
     config = build_config(args, n_bins)
     model_name = model_name_for(config)
     workload_path = resolve_workload_path(args)
@@ -90,6 +91,7 @@ def run_logic(args, out_dir, metadata):
             "n_distinct_sample": e_hist.distinct_count,
             "config": e_hist.to_dict()["config"],
             "build_input_signature": e_hist.build_input_signature,
+            **size_metrics(e_hist.n_values()),
         },
     )
 

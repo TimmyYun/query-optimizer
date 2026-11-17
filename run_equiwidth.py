@@ -5,6 +5,8 @@ from benchmark_utils import (
     get_common_parser,
     run_benchmark_suite,
     resolve_workload_path,
+    resolve_buckets,
+    size_metrics,
     load_and_filter_workload,
     evaluate_and_save,
 )
@@ -12,7 +14,7 @@ from benchmark_utils import (
 
 def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
-    n_bins = args.buckets if args.buckets is not None else n_bins_data
+    n_bins = resolve_buckets(args.buckets, n_bins_data)
     workload_path = resolve_workload_path(args)
 
     # Build Histogram
@@ -25,7 +27,7 @@ def run_logic(args, out_dir, metadata):
     queries, y_true_sel = load_and_filter_workload(str(workload_path), mn, mx, freq)
     evaluate_and_save(
         out_dir, workload_path, "EquiWidth", ew_hist.predict, queries, y_true_sel, N, build_time,
-        extra_metrics={"n_buckets": len(ew_hist.buckets)},
+        extra_metrics={"n_buckets": len(ew_hist.buckets), **size_metrics(ew_hist.n_values())},
     )
 
 

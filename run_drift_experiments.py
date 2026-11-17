@@ -21,6 +21,10 @@ def main():
                         help="Subset of models to run (default: all except those marked default=False).")
     parser.add_argument('--dry-run', action='store_true',
                         help="Print the commands without running them.")
+    parser.add_argument('--out-dir', default='results',
+                        help="Results root passed to every runner (default: results).")
+    parser.add_argument('--buckets', default='100',
+                        help="Buckets for every model: a number (default 100), 'fd' (Freedman-Diaconis k of the data) or 'fd*<factor>'.")
     args = parser.parse_args()
 
     scenarios = list(DRIFT_SCENARIOS) if args.scenario == 'all' else [args.scenario]
@@ -43,6 +47,8 @@ def main():
                 "--experiment-name", sc,
                 "--shift-dir", shift_dir,
                 "--workload", cfg['workload_count'],
+                "--out-dir", args.out_dir,
+                "--buckets", args.buckets,
                 *MODELS[model].get('args', []),
             ]
             if cfg.get('labels'):

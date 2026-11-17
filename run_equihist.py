@@ -2,6 +2,7 @@
 import time
 from models import EquiWidthHistogram, EquiHistLearner
 from benchmark_utils import (
+    resolve_buckets,
     get_common_parser,
     run_benchmark_suite,
     resolve_workload_path,
@@ -12,7 +13,7 @@ from benchmark_utils import (
 
 def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
-    n_bins = args.buckets if args.buckets is not None else n_bins_data
+    n_bins = resolve_buckets(args.buckets, n_bins_data)
     workload_path = resolve_workload_path(args)
 
     t0 = time.perf_counter()

@@ -340,5 +340,9 @@ class EquiDepthHistogram:
             s = self.DEFAULT_RANGE_INEQ_SEL if s < -0.01 else 1.0e-10
         return min(max(s, 0.0), 1.0)
 
+    def n_values(self) -> int:
+        """Хранимые числа, как в pg_stats: histogram_bounds + MCV (значение, частота) + n_distinct."""
+        return len(self.hist_bounds) + 2 * self.num_mcv + 1
+
     def predict(self, q: RangeQuery) -> float:
         return self.selectivity(q) * self.total_rows

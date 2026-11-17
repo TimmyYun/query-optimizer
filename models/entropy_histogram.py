@@ -385,6 +385,10 @@ class EntropyHistogram1D:
         overlap = min(upper, hi_b) - max(lower, lo_b)
         return T_b * min(max(overlap / (hi_b - lo_b), 0.0), 1.0)
 
+    def n_values(self) -> int:
+        """Хранимые числа: min, max, число строк и число различных значений на бакет (между бакетами бывают щели)."""
+        return 4 * len(self.buckets)
+
     def predict(self, q: RangeQuery) -> float:
         """Интерфейс как у остальных моделей бенчмарка."""
         return self.estimate_range(q.low, q.high)

@@ -123,6 +123,10 @@ class TKHistogram:
                 est += count
         return est
 
+    def n_values(self) -> int:
+        """Хранимые числа: сетка (min, ширина) + счётчик на бакет + пара (значение, счётчик) на top-k запись."""
+        return 2 + len(self.buckets) + 2 * self.n_topk_entries
+
     def predict(self, q: RangeQuery) -> float:
         if not self.buckets:
             return 0.0

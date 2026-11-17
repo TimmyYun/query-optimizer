@@ -6,7 +6,6 @@
 
 - Полный список команд и параметров — в [README.md](../README.md).
 - Как работает каждый метод — в [METHODS_EXPLAINED.md](METHODS_EXPLAINED.md).
-- Как читать таблицу результатов `all_results.xlsx` — в [RESULTS_GUIDE.md](RESULTS_GUIDE.md).
 
 ---
 
@@ -254,27 +253,22 @@ registry.py ──► run_experiments.py / run_drift_experiments.py ──► ru
 ./setup_env.sh                       # окружение + синтетические workload + STATS-CEB   (~10 мин)
 poetry run pytest -q                 # всё должно быть зелёным
 
-# статические эксперименты
-poetry run python run_experiments.py --scenario all              # синтетика + STATS-CEB (+ DSB, если подготовлен)
+# два эксперимента: 100 бакетов у всех и правило Фридмана–Диакониса (долго: часы)
+for B in 100 fd; do
+    OUT=results/$([ $B = fd ] && echo exp2_freedman_diaconis || echo exp1_100_buckets)
+    poetry run python run_experiments.py       --scenario all --buckets $B --out-dir $OUT/static
+    poetry run python run_drift_experiments.py --scenario all --buckets $B --out-dir $OUT/drift
+    poetry run python export_results.py --results-dir $OUT       # таблицы + results.xlsx
+done
 
-# дрейф синтетики (долго: часы)
-poetry run python run_drift_experiments.py --scenario drift_5_ds_zipf_wl_normal
-
-# DSB: один раз собрать тулкит и данные (часы), потом эксперименты
+# DSB: один раз собрать тулкит и данные (часы) — до запуска выше
 "DSB benchmark/setup_dsb.sh"
 ./setup_env.sh --dsb
-poetry run python run_experiments.py --scenario dsb
-poetry run python run_drift_experiments.py --scenario dsb_drift_ws_wholesale_cost
-poetry run python run_drift_experiments.py --scenario dsb_drift_ws_list_price
-
-# результаты
-poetry run python merge_drift.py --experiment-name dsb_drift_ws_wholesale_cost dsb_drift_ws_list_price
-poetry run python plot_drift.py  --experiment-name dsb_drift_ws_wholesale_cost dsb_drift_ws_list_price
-poetry run python export_results.py          # results/all_results.xlsx
 ```
 
 Полезные флаги оркестраторов:
-- `--models EquiWidth Hybrid` — запустить только эти модели;
+- `--models EquiWidth Hybrid` — запустить только эти модели (по умолчанию — шесть основных);
+- `--buckets 100` / `--buckets fd` — число бакетов у всех моделей;
 - `--dry-run` — только напечатать команды.
 
 **Перед повторным прогоном эксперимента удаляй его папку в `results/`.**
@@ -285,25 +279,21 @@ poetry run python export_results.py          # results/all_results.xlsx
 
 ## 6. Как читать результаты
 
-`results/all_results.xlsx`:
+В каждой папке
+эксперимента (`results/exp1_100_buckets`, `results/exp2_freedman_diaconis`) лежат таблицы,
+которые собирает `export_results.py` (README §8): `static_median_qerror.csv`,
+`histogram_size.csv`, `hybrid_cdf_choice.csv`, `drift_summary.csv` и всё вместе в `results.xlsx`.
 
-- лист `index` — что лежит на каждом листе;
-- статический лист — строка на пару датасет × модель: q-error, время построения
-  и обучения, время одного `predict`, число бакетов; справа сводная таблица медиан;
-- лист дрейфа — строка на шаг × модель × стадию; справа медиана по шагам.
+Дрейф: на каждом шаге модель сначала оценивается как есть (`before_*`), затем делает
+одно действие (`action`, его реальное время — `action_time_s`) и оценивается снова:
 
-Стадии дрейфа:
-
-| Линия | Что это |
+| `action` | Что это |
 |---|---|
-| `EquiWidth`, `EquiDepth`, `TKHist` | после `ANALYZE` (пересборка по сэмплу шага) |
-| `Hybrid_Shock` | счётчики бакетов обновлены по сэмплу, модели внутри бакетов старые |
-| `Hybrid_FT` | плюс подстройка масс бакетов по фидбэку adapt-половины |
-| `Hybrid_RB` | плюс переобучение плохих бакетов |
-| `STHist_Shock` / `_Online` / `_Post` | до фидбэка шага / prequential по adapt-половине / после фидбэка |
-| `EntropyHist-*_Static` / `_Rebuild` | гистограмма шага 0 / пересобранная по сэмплу шага |
+| `rebuild` | с прошлой перестройки изменилось > 10 % строк (правило autovacuum PostgreSQL): EquiWidth, EquiDepth, TKHist, EntropyHist строятся заново по сэмплу шага |
+| `feedback update` | STHist всегда учится только по фидбэку (данные не читает) |
+| `none` | ничего: гистограмма ждёт следующей перестройки |
 
-Сравнивать нужно линии на одной eval-половине: все, кроме `STHist_Online`.
+Hybrid FD CDF делает на каждом шаге три этапа подряд: **Shock** (оценка как есть, счётчики не пересчитываются, `before_*`) → **FT** (EMA счётчиков по adapt-половине, CDF не меняется, `ft_*`; затем помечаются бакеты, которые FT не исправил) → **RB** (только на checkpoint ≥ 100 000 изменённых строк, проверка на границе шага: помеченные бакеты получают счётчик и CDF по сэмплу шага, остальные не трогаются, `rb_*`, `rebuilt_buckets`; без checkpoint RB = FT и `rebuilt_buckets = 0`). `action` у Hybrid — `FT` или `FT + rebuild`.
 
 ---
 
@@ -319,11 +309,10 @@ poetry run python export_results.py          # results/all_results.xlsx
    половины строк равны 0, межквартильный размах нулевой, и правило
    Фридмана–Диакониса возвращается к 10 бакетам. Отсюда q-error 16–20 у
    EquiWidth. Это свойство правила выбора `k`, а не метода.
-3. **Hybrid FT может ухудшать результат по сравнению с Shock** (подтверждено
-   и после разбиения adapt/eval): на DSB `ws_wholesale_cost` 1.008 → 1.015, на
-   последнем шаге дрейфа к zipf 22 → 66. Массы бакетов уже пересчитаны по
-   сэмплу, и масштабирование всего бакета по ошибке отдельных запросов сдвигает
-   верную массу. RB это исправляет. Подробно — `RESULTS_REPORT.md`, раздел 4.4.
+3. **Hybrid FT и пустые бакеты.** Бакет, пустой в сэмпле, FT «оживляет» по
+   плотности строк в запросах, задевших бакет. Раньше бралась сумма по всем
+   запросам, и масса такого бакета завышалась в десятки раз (медиана 37x на
+   последнем шаге дрейфа к zipf); исправлено.
 4. **Мало официальных запросов STATS-CEB** (раздел 3.5).
 
 ---

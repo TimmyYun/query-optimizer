@@ -11,20 +11,26 @@ run_experiments.py and run_drift_experiments.py only read these dicts.
 # "args": extra CLI arguments passed to both runners (a variant of the same method).
 # "default": False keeps a method out of the orchestrators unless asked for via --models.
 MODELS = {
+    # --- the six methods of the main comparison (run by default) ---
     "EquiWidth": {"static": "run_equiwidth.py", "drift": "run_equiwidth_drift.py"},
-    "Hybrid": {"static": "run_hybrid.py", "drift": "run_hybrid_drift.py"},
-    "TKHist": {"static": "run_tkhist.py", "drift": "run_tkhist_drift.py"},
     "EquiDepth": {"static": "run_equidepth.py", "drift": "run_equidepth_drift.py"},
-    "STHist": {"static": "run_sthist.py", "drift": "run_sthist_drift.py"},
+    "TKHist": {"static": "run_tkhist.py", "drift": "run_tkhist_drift.py"},
     "EntropyHist-MEA": {"static": "run_entropyhist.py", "drift": "run_entropyhist_drift.py"},
+    "STHist": {"static": "run_sthist.py", "drift": "run_sthist_drift.py"},
+    "Hybrid": {"static": "run_hybrid.py", "drift": "run_hybrid_drift.py"},
+    # --- variants and later additions: only via --models ---
     # Paper estimator interpolates continuously, so a point at a bucket edge gets zero mass;
-    # [EXTENSION] counting integer cells fixes that on discrete data. Reported next to the paper version.
+    # [EXTENSION] counting integer cells fixes that on discrete data.
     "EntropyHist-MEA-Rng_discrete_linear": {
         "static": "run_entropyhist.py",
         "drift": "run_entropyhist_drift.py",
         "args": ["--range-estimator", "discrete_linear"],
+        "default": False,
     },
-    # Исключён из дизайна эксперимента (слишком медленный); запускается через --models EquiHist
+    # Labelled MODIFICATION of Hybrid FD CDF (2026-11-10, user-approved): inclusive-interval fix of the
+    # Tier-0 estimate and of the waterfall validation (models/hybrid_corrected.py); not run by default.
+    "Hybrid-Corrected": {"static": "run_hybrid_corrected.py", "drift": "run_hybrid_corrected_drift.py", "default": False},
+    # Слишком медленный для 1M запросов
     "EquiHist": {"static": "run_equihist.py", "drift": "run_equihist_drift.py", "default": False},
 }
 

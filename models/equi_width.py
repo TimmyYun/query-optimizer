@@ -78,6 +78,10 @@ class EquiWidthHistogram:
 
         return EquiWidthHistogram(buckets)
 
+    def n_values(self) -> int:
+        """Хранимые числа: min и ширина бакета задают сетку + счётчик на бакет."""
+        return 2 + len(self.buckets)
+
     def predict(self, q: RangeQuery) -> float:
         if not self.buckets:
             return 0.0

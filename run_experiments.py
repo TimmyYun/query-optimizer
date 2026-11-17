@@ -50,6 +50,10 @@ def main():
                         help="Subset of models to run (default: all except those marked default=False).")
     parser.add_argument('--dry-run', action='store_true',
                         help="Print the commands without running them.")
+    parser.add_argument('--out-dir', default='results',
+                        help="Results root passed to every runner (default: results).")
+    parser.add_argument('--buckets', default='100',
+                        help="Buckets for every model: a number (default 100), 'fd' (Freedman-Diaconis k of the data) or 'fd*<factor>'.")
     args = parser.parse_args()
 
     scenarios_to_run = list(STATIC_SCENARIOS) if args.scenario == 'all' else [args.scenario]
@@ -61,7 +65,7 @@ def main():
         cfg = STATIC_SCENARIOS[sc]
         exp_name = cfg['experiment']
         print("\n" + "="*50)
-        print(f"Running Scenario: {sc} -> results/{exp_name}")
+        print(f"Running Scenario: {sc} -> {args.out_dir}/{exp_name}")
         print("="*50)
 
         if cfg.get('prepare') and not all(resolve_workload(cfg['workload'], ds) for ds in cfg['datasets']):
@@ -84,10 +88,12 @@ def main():
                          "--experiment-name", exp_name,
                          "--dataset", ds_path,
                          "--workload", workload,
+                         "--out-dir", args.out_dir,
+                         "--buckets", args.buckets,
                          *MODELS[model].get('args', [])], args.dry_run)
 
             ds_name = Path(ds_path).name
-            final_report.extend(collect_table(f"{ds_name}_{sc}", args.models, f"results/{exp_name}/{ds_name}"))
+            final_report.extend(collect_table(f"{ds_name}_{sc}", args.models, f"{args.out_dir}/{exp_name}/{ds_name}"))
 
     print("\n\n" + "="*80)
     print("FINAL EXPERIMENT RESULTS")

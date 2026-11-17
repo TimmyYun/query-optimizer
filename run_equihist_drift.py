@@ -6,6 +6,8 @@ import pandas as pd
 from pathlib import Path
 from models import EquiWidthHistogram, EquiHistLearner, summarize
 from benchmark_utils import (
+    add_buckets_arg,
+    resolve_buckets,
     load_and_filter_workload,
     setup_out_dir,
     exact_counts,
@@ -31,6 +33,7 @@ def main():
     parser.add_argument("--target-dist", type=str, default="zipf")
     parser.add_argument("--lr", type=float, default=0.5, help="Learning Rate for EquiHist")
     parser.add_argument("--out-dir", type=str, default="results")
+    add_buckets_arg(parser)
     parser.add_argument("--experiment-name", type=str, default=None)
     parser.add_argument("--shift-workload", action="store_true", help="If set, uses step-wise workloads from shift directory instead of static workload.")
     parser.add_argument("--shift-dir", type=str, required=False, help="Explicit path to shift dataset directory")
@@ -85,7 +88,7 @@ def main():
 
     # Строим начальную гистограмму и инициализируем Learner
     print(f"\n>>> PHASE 1: Initial Building on {args.init_dist} <<<")
-    ew_hist = EquiWidthHistogram.build_from_sample(i_mn, i_mx, i_k, i_sample, i_N)
+    ew_hist = EquiWidthHistogram.build_from_sample(i_mn, i_mx, resolve_buckets(args.buckets, i_k), i_sample, i_N)
     eh_learner = EquiHistLearner(ew_hist.buckets, learning_rate=args.lr)
 
     summary_records = []

@@ -1,189 +1,20 @@
 #!/usr/bin/env python3
-import time
-import pickle
-import argparse
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from pathlib import Path
-from models import EquiWidthHistogram, summarize
-from benchmark_utils import (
-    load_and_filter_workload,
-    setup_out_dir,
-    exact_counts,
-    run_queries,
-    timing_stats,
-    split_adapt_eval,
-)
-from data.datasets import DatasetManager
-
-
-def get_sampled_freq(sample, mn, total_n, target_len):
-    clipped_sample = np.clip(sample - mn, 0, target_len - 1)
-    counts = np.bincount(clipped_sample, minlength=target_len)
-    scaling_factor = total_n / len(sample)
-    return counts * scaling_factor
-
-
-def plot_shift_state(true_freq, est_freq, shift_pct, out_dir, init_name, target_name):
-    """Визуализация текущего состояния данных (аналогично гибридному скрипту)."""
-    plt.figure(figsize=(12, 5))
-    vis_bins = 500
-    chunk_size = max(1, len(true_freq) // vis_bins)
-
-    true_vis = np.array([np.sum(true_freq[i: i + chunk_size]) for i in range(0, len(true_freq), chunk_size)])
-    est_vis = np.array([np.sum(est_freq[i: i + chunk_size]) for i in range(0, len(est_freq), chunk_size)])
-    x_axis = np.linspace(0, len(true_freq), len(true_vis))
-
-    plt.fill_between(x_axis, true_vis, color="blue", alpha=0.3, label="True Distribution")
-    plt.step(x_axis, est_vis, color="red", alpha=0.7, label="Estimated (Sample)", where="mid")
-
-    plt.title(f"EquiWidth Drift: {init_name} -> {target_name} ({shift_pct:.0%})")
-    plt.yscale("log")
-    plt.legend()
-    plt.grid(True, which="both", ls="-", alpha=0.2)
-
-    plot_path = out_dir / "plots"
-    plot_path.mkdir(exist_ok=True)
-    plt.savefig(plot_path / f"shift_{shift_pct:.1f}.png", dpi=150)
-    plt.close()
+"""
+EquiWidth под дрейфом данных (общий цикл — drift_harness.py).
+Перестройка с нуля по выборке шага, когда с прошлой перестройки изменилось > 10 % строк
+(правило autovacuum PostgreSQL). Между перестройками гистограмма не меняется.
+"""
+from drift_harness import SampleHistogram, drift_parser, run_drift
+from models import EquiWidthHistogram
 
 
 def main():
-    parser = argparse.ArgumentParser(description="EquiWidth Adaptation Analysis under Data Drift")
-    parser.add_argument("--dataset", type=str, default="60000000")
-    parser.add_argument("--workload", type=str, required=True)
-    parser.add_argument("--init-dist", type=str, default="normal")
-    parser.add_argument("--target-dist", type=str, default="zipf")
-    parser.add_argument("--out-dir", type=str, default="results")
-    parser.add_argument("--experiment-name", type=str, default=None)
-    parser.add_argument("--shift-workload", action="store_true", help="If set, uses step-wise workloads from shift directory instead of static workload.")
-    parser.add_argument("--shift-dir", type=str, required=False, help="Explicit path to shift dataset directory")
-    parser.add_argument("--static-workload-path", type=str, required=False, help="Explicit path to static workload")
-    args = parser.parse_args()
-
-    ds_out_name = f"gradual_{args.init_dist}_to_{args.target_dist}_EquiWidth"
-    out_dir = setup_out_dir(args, ds_out_name)
-
-    dm = DatasetManager()
-    
-    if args.shift_dir:
-        shift_dir = Path(args.shift_dir)
-    else:
-        shift_dir = dm.base_path / "generated" / args.dataset / f"shift_{args.init_dist}_to_{args.target_dist}_5%_dataset"
-
-    if not shift_dir.exists():
-        raise FileNotFoundError(f"Directory {shift_dir} not found. Run generate_shifts.py first.")
-
-    # ЗАГРУЗКА ШАГА 0 (Инициализация)
-    with open(shift_dir / "step_0.pkl", "rb") as f:
-        i_mn, i_mx, i_N, i_freq, i_sample, i_k = pickle.load(f)
-
-
-    # Ожидаем count в args.workload
-    workload_count_str = args.workload
-    if workload_count_str.endswith('.csv'):
-        import re
-        match = re.search(r'\d+', args.workload)
-        if match:
-            workload_count_str = match.group(0)
-
-    # --- Определение статического ворклоада (Fallback) ---
-    if args.static_workload_path:
-        static_workload_path = Path(args.static_workload_path)
-    else:
-        static_workload_path = Path(args.workload)
-        if not static_workload_path.exists():
-            init_dist_dir = dm.base_path / "generated" / args.dataset / args.init_dist
-            static_workload_path = init_dist_dir / f"workload_driven_{workload_count_str}.csv"
-            if not static_workload_path.exists():
-                print(f"Warning: Static workload not found at {static_workload_path}")
-    
-    if not args.shift_workload:
-        print(f"Using static workload: {static_workload_path}")
-    else:
-        print(f"Using dynamic shift workloads with count: {workload_count_str}")
-    # --------------------------------------------------------------
-
-    if not args.shift_workload:
-        queries, _ = load_and_filter_workload(str(static_workload_path), i_mn, i_mx, i_freq)
-
-    # Строим начальную гистограмму
-    print(f"\n>>> PHASE 1: Initial Building on {args.init_dist} <<<")
-    ew_hist = EquiWidthHistogram.build_from_sample(i_mn, i_mx, i_k, i_sample, i_N)
-
-    summary_records = []
-
-    step_files = list(shift_dir.glob("step_*.pkl"))
-    num_steps = len(step_files)
-    if num_steps == 0:
-        raise ValueError(f"No step_*.pkl files found in {shift_dir}")
-    divisor = max(1, num_steps - 1)
-
-    # ПРОГОН ПО ВСЕМ ШАГАМ ДРИФТА
-    for step in range(num_steps):
-        shift_pct = step / divisor
-        with open(shift_dir / f"step_{step}.pkl", "rb") as f:
-            step_mn, step_mx, current_N, current_freq, mixed_sample, step_k = pickle.load(f)
-
-        if args.shift_workload:
-            # Загружаем ворклоад для ТЕКУЩЕГО шага (динамический drift)
-            step_workload_path = shift_dir / f"step_{step}_workload_driven_{workload_count_str}.csv"
-            if not step_workload_path.exists():
-                raise FileNotFoundError(f"Missing workload for step {step}: {step_workload_path}. Run workload.py generator first.")
-            
-            queries, _ = load_and_filter_workload(str(step_workload_path), step_mn, step_mx, current_freq)
-
-        # 1. Считаем реальность (Engine Truth)
-        y_true_counts = np.maximum(exact_counts(queries, current_freq, step_mn), 1.0)
-        y_true_sel = y_true_counts / current_N
-        # Метрики только на eval-половине (split_adapt_eval); ANALYZE-модель фидбэк не использует
-        _, eval_idx = split_adapt_eval(len(queries))
-        eval_queries = [queries[i] for i in eval_idx]
-        y_true_counts, y_true_sel = y_true_counts[eval_idx], y_true_sel[eval_idx]
-
-        # 2. Обновляем массу бакетов (Симуляция ANALYZE в БД)
-        t0_build = time.perf_counter()
-        current_est_freq = get_sampled_freq(mixed_sample, step_mn, current_N, len(current_freq))
-        ps_est = np.cumsum(current_est_freq)
-
-        for b in ew_hist.buckets:
-            b_lo_idx = max(0, min(len(ps_est) - 1, b.lo - step_mn))
-            b_hi_idx = max(0, min(len(ps_est) - 1, b.hi - step_mn))
-            new_count = ps_est[b_hi_idx] - (ps_est[b_lo_idx - 1] if b_lo_idx > 0 else 0)
-            b.count = max(0.0, new_count)
-        # predict читает закэшированные b_count / prefix_counts — без пересборки оценки идут по шагу 0
-        ew_hist._bake_vectorized_data()
-
-        build_time = time.perf_counter() - t0_build
-
-        plot_shift_state(current_freq, current_est_freq, shift_pct, out_dir, args.init_dist, args.target_dist)
-
-        # 3. Оценка (Prediction)
-        y_pred_counts, infer_times, _ = run_queries(ew_hist.predict, eval_queries, y_true_counts)
-        y_pred_counts = np.maximum(y_pred_counts, 1.0)
-        t = timing_stats(infer_times)
-        infer_time, median_infer_time = t["infer_time"], t["median_infer_time"]
-        avg_infer_time, p95_infer_time = t["avg_infer_time"], t["p95_infer_time"]
-
-        m = summarize(y_true_sel, y_pred_counts / current_N, f"EquiWidth_{shift_pct:.1f}")
-
-        print(f"Shift {shift_pct:>4.0%}: Median QErr = {m['QErr_median']:.2f}")
-
-        summary_records.append({
-            "Shift %": f"{shift_pct:.0%}",
-            "Median Q-Error": m["QErr_median"],
-            "P95 Q-Error": m["QErr_p95"],
-            "Avg Q-Error": m["QErr_avg"],
-            "Inference Time": infer_time,
-            "Median Inference Time": median_infer_time,
-            "Avg Inference Time": avg_infer_time,
-            "P95 Inference Time": p95_infer_time,
-            "Build Time": build_time
-        })
-
-    pd.DataFrame(summary_records).to_csv(out_dir / "equiwidth_drift_analysis.csv", index=False)
-    print(f"\nExperiment completed. Results saved to {out_dir}")
+    args = drift_parser("EquiWidth under data drift").parse_args()
+    model = SampleHistogram(
+        lambda s, B: EquiWidthHistogram.build_from_sample(s.mn, s.mx, B, s.sample, s.N),
+        lambda h: len(h.buckets),
+    )
+    run_drift(args, "EquiWidth", model)
 
 
 if __name__ == "__main__":

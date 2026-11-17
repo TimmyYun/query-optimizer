@@ -1,0 +1,84 @@
+{
+  "created_utc": "2026-11-10T13:06:56+00:00",
+  "seed": 42,
+  "git_commit": "c294e9a16d516c3d63bfb34a6aae512c9555a1f6",
+  "git_branch": "feature/hybrid_multiscale",
+  "git_dirty": true,
+  "worktree_sha256": "95bbc5306eaa1e79dffdc8fbbb0ebf25cf320cd619b1d7de265b1ba2ae6641f8",
+  "worktree_files_hashed": 82,
+  "source_sha256": {
+    "benchmark_utils.py": "86c3577def2c824473b6d03f8b9aeff8e84a5341af22d2c6975f29ce377bda03",
+    "drift_harness.py": "60590e70e4536cf7551fd57eb99ca28a93115b20d185602e961190e9b2cb90b1",
+    "models/common.py": "96516c7f1095f0941b9fdc8bde65a9717aafa1534278143cc47c05702d7347d6",
+    "models/entropy_histogram.py": "ac70244395c45b31253487baba3c08cbe459ca303ba3a6c10135c7bbf8cf420e",
+    "models/equi_depth.py": "9f44ae2653a081327aaff502049936a1da8ada70026b618eddf86e884dc0c8ef",
+    "models/equi_width.py": "b518726654c4e34cf1285c721794a9a58c10cae05f720527141b8be04bcd162c",
+    "models/hybrid.py": "35b6a3805ae537e028cae6edbbcccc1ab999e7711233e12221f9807a23bd524c",
+    "models/st_histogram.py": "f4f0d7b4aa85b1903c1a21d6f4673b501e277710abbab31afb07bb228e528038",
+    "models/tkhist.py": "a641ac1bc88dfbb1034bffafb9e87d061a0c5c7fe9f32dedd94b76830c4b5a63",
+    "run_hybrid.py": "4da063b72bd4585855cfb4965b91f14007c36e8a6b640de3e3950dc69e25868b",
+    "run_hybrid_drift.py": "6499b5b37c8ac9bcc09ea35e8d8cd24d1fb59f845927df82fb183aee73695fb6"
+  },
+  "model_versions": {
+    "EquiWidth": "EquiWidth:src:36b45073b0",
+    "EquiDepth": "EquiDepth:src:4103d9ac12",
+    "TKHist": "TKHist:src:13e8a291c1",
+    "EntropyHist-MEA": "EntropyHist-MEA:src:69cb11d593",
+    "STHist": "STHist:src:1719d79b37",
+    "Hybrid": "Hybrid:hybrid-fd-cdf-canonical:ae6e9a310e"
+  },
+  "packages": {
+    "python": "3.12.3",
+    "numpy": "2.3.4",
+    "scipy": "1.16.3",
+    "sklearn": "1.7.2",
+    "pandas": "2.3.3",
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "cpu_count": 12,
+    "omp_num_threads": "1",
+    "hostname": "lab-nbaktygali",
+    "loadavg_1_5_15": [
+      21.32275390625,
+      21.52734375,
+      19.111328125
+    ]
+  },
+  "config": {
+    "part": "dsb_expanded/drift-data",
+    "zipf_s": 1.0,
+    "sample_size": 100000,
+    "scenarios": {
+      "displacement": {
+        "code": 1,
+        "steps": 20,
+        "max_alpha": 1.0
+      },
+      "additive_200": {
+        "code": 2,
+        "steps": 40,
+        "max_alpha": 2.0
+      }
+    },
+    "streams": {
+      "rank_perm": [
+        42,
+        3
+      ],
+      "target": [
+        42,
+        4
+      ],
+      "sample": "[42, 5, scenario, step]",
+      "workload": "[42, 6, scenario, step]"
+    },
+    "columns": [
+      "catalog_returns.cr_returned_time_sk",
+      "web_sales.ws_item_sk",
+      "store_sales.ss_net_profit",
+      "store_sales.ss_sales_price",
+      "inventory.inv_quantity_on_hand",
+      "catalog_sales.cs_sold_date_sk",
+      "store_returns.sr_return_amt"
+    ]
+  }
+}

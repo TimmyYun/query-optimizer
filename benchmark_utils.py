@@ -29,13 +29,40 @@ def get_common_parser(description):
     parser.add_argument(
         "--experiment-name", type=str, default=None, help="Experiment ID or name"
     )
+    add_buckets_arg(parser)
+    return parser
+
+
+# Every stored number (count, boundary, model parameter) is a float64 / int64
+BYTES_PER_VALUE = 8
+DEFAULT_BUCKETS = 100
+
+
+def add_buckets_arg(parser):
     parser.add_argument(
         "--buckets",
-        type=int,
-        default=None,
-        help="Force a specific number of buckets (overrides FD binning)",
+        type=str,
+        default=str(DEFAULT_BUCKETS),
+        help=f"Number of buckets for the model (default {DEFAULT_BUCKETS}), 'fd' for the "
+        "Freedman-Diaconis count stored with the data (k in meta.pkl / step_0.pkl), or "
+        "'fd*<factor>' for round(factor * k), e.g. fd*1.2",
     )
-    return parser
+
+
+def resolve_buckets(arg, fd_k) -> int:
+    """--buckets value -> bucket count: an integer, 'fd' -> the Freedman-Diaconis k of the data,
+    'fd*<factor>' -> round(factor * k) (bucket-budget scaling around FD, at least 1)."""
+    a = str(arg).strip().lower()
+    if a == "fd":
+        return int(fd_k)
+    if a.startswith("fd*"):
+        return max(1, int(round(float(a[3:]) * int(fd_k))))
+    return int(a)
+
+
+def size_metrics(n_values) -> dict:
+    """Model size: stored numbers and bytes (8 per number)."""
+    return {"n_values": int(n_values), "size_bytes": int(n_values) * BYTES_PER_VALUE}
 
 
 def run_benchmark_suite(args, approach_fn):
@@ -262,6 +289,9 @@ def evaluate_and_save(
         "p75_q_error": m["QErr_p75"],
         "p95_q_error": m["QErr_p95"],
         "avg_q_error": m["QErr_avg"],
+        # MAE on the same clipped values the q-error uses (truth, estimate >= 1 row)
+        "mae_rows": float(np.mean(np.abs(np.maximum(pred_counts, 1.0) - true_counts))),
+        "mae_selectivity": float(np.mean(np.abs(y_pred_safe - y_true_safe))),
     }
     if callable(extra_metrics):
         extra_metrics = extra_metrics(true_counts, pred_counts)

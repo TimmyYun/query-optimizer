@@ -271,6 +271,10 @@ class STHistogram:
         right = (qr - self.lows[e] + 1) / self.widths[e] * self.freq[e]
         return float(left + right + prefix[e] - prefix[s + 1])
 
+    def n_values(self) -> int:
+        """Хранимые числа: левые границы бакетов + правый край домена + частота на бакет."""
+        return 2 * len(self.freq) + 1
+
     def predict(self, q: RangeQuery) -> float:
         """Интерфейс как у остальных моделей бенчмарка."""
         return self.estimate_range(q.low, q.high)

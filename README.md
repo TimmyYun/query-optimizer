@@ -25,17 +25,9 @@ reported as median / p25 / p75 / p95 / mean, plus build and per-query inference 
 10. [Reproducing the reported results](#10-reproducing-the-reported-results)
 11. [Repository layout and documentation](#11-repository-layout-and-documentation)
 
-**Results in short** (details and explanations in [docs/SUPERVISOR_SUMMARY.md](docs/SUPERVISOR_SUMMARY.md)):
-
-- Hybrid is the most accurate sample-only method on narrow queries when the data
-  is non-uniform *inside* a bucket: median q-error 1.23 against ≥ 1.44 for every
-  other sample-only method on `hard/normal`. On the same distribution without
-  intra-bucket structure (`simple/normal`) it gives no gain, 1.078 against 1.075.
-- It does not help when the skew is a few heavy values (DSB: TKHist is best) or
-  when queries land in a sparse tail, where the sample itself is the limit (zipf: EntropyHist is best).
-- Under drift with a fixed workload, Hybrid with partial retraining (`Hybrid_RB`)
-  is the best line at every step from 0 to 95 %. Its bucket grid is fixed at
-  step 0, which limits it once the distribution has changed shape completely.
+**Results:** the two experiments (100 buckets and Freedman–Diaconis) are written to
+`results/exp1_100_buckets/` and `results/exp2_freedman_diaconis/` (§8). Earlier results were
+deleted on 2026-11-10 because they used an older Hybrid model selection; rerun to regenerate them.
 
 ---
 
@@ -48,12 +40,16 @@ reported as median / p25 / p75 / p95 / mean, plus build and per-query inference 
 | `TKHist` | equal-width histogram + top-k exact values per bucket | `run_tkhist.py` / `run_tkhist_drift.py` | DHist-style |
 | `STHist` | self-tuning histogram learned from query feedback | `run_sthist.py` / `run_sthist_drift.py` | Aboulnaga & Chaudhuri, SIGMOD 1999 |
 | `EntropyHist-MEA` | maximum-entropy bucket boundaries, the paper's continuous range estimator | `run_entropyhist.py` / `run_entropyhist_drift.py` | To, Chiang & Shahabi, CIKM 2013 |
-| `EntropyHist-MEA-Rng_discrete_linear` | the same histogram, range estimate over integer cells (`--range-estimator discrete_linear`, non-paper extension) | same runners | see below |
-| `Hybrid` | **proposed**: equal-width buckets + local CDF model per bucket | `run_hybrid.py` / `run_hybrid_drift.py` | this work |
+| `EntropyHist-MEA-Rng_discrete_linear` | the same histogram, range estimate over integer cells (`--range-estimator discrete_linear`, non-paper extension) | same runners | *not run by default; `--models ...`* |
+| `Hybrid` | **proposed** (Hybrid FD CDF): equal-width buckets + local CDF per bucket, chosen by a Waterfall Uniform → Linear/Power/Log-linear → Isotonic/DecisionTree → Fourier-MLP | `run_hybrid.py` / `run_hybrid_drift.py` | this work |
 | `EquiHist` | online multiplicative bucket rescaling | `run_equihist.py` / `run_equihist_drift.py` | *not run by default (too slow); `--models EquiHist`* |
 
 How each method works, and how each paper's open points were resolved, is
 described in [METHODS_EXPLAINED.md](docs/METHODS_EXPLAINED.md).
+
+The orchestrators run the six main methods by default: `EquiWidth`, `EquiDepth`,
+`TKHist`, `EntropyHist-MEA`, `STHist`, `Hybrid`. Every model gets **100 buckets**
+unless `--buckets fd` asks for the Freedman–Diaconis count `k` of the data.
 
 Why EntropyHist is reported twice: the paper interpolates linearly over the
 continuous bucket span, `overlap / (max_b − min_b)`. A query that touches only a
@@ -240,13 +236,15 @@ All generators use seed 42.
 poetry run python run_experiments.py --scenario hard_narrow
 ```
 
-Each scenario runs every model in [§1](#1-methods) except Equi-Hist on every
+Each scenario runs the six main models of [§1](#1-methods) on every
 dataset of the scenario, then prints one results table.
 
 | Parameter | Default | Meaning |
 |---|---|---|
 | `--scenario` | required | one row of the table below, or `all` |
-| `--models M [M ...]` | all except `EquiHist` | run only these models, e.g. `--models EquiWidth Hybrid`; names as in [§1](#1-methods) |
+| `--models M [M ...]` | the six main models | run only these models, e.g. `--models EquiWidth Hybrid`; names as in [§1](#1-methods) |
+| `--buckets B` | `100` | bucket count of every model, or `fd`: the Freedman–Diaconis `k` stored in `meta.pkl` |
+| `--out-dir DIR` | `results` | results root passed to every runner |
 | `--dry-run` | off | print every command the scenario would run, without running anything |
 
 Scenarios, models and their runner scripts are defined in one place,
@@ -274,7 +272,7 @@ Every static runner shares these parameters:
 | `--workload PATH` | required | workload CSV |
 | `--experiment-name NAME` | timestamp | results go to `results/NAME/<dataset-folder>/` |
 | `--out-dir DIR` | `results` | root of the results tree |
-| `--buckets B` | Freedman–Diaconis `k` from `meta.pkl` | force the bucket count; use it to compare methods under the same budget |
+| `--buckets B` | `100` | bucket count, or `fd` for the Freedman–Diaconis `k` from `meta.pkl` (n = rows of the table, capped at 2000) |
 
 ```bash
 poetry run python run_hybrid.py --experiment-name my_exp \
@@ -291,9 +289,9 @@ Model-specific parameters:
 | | `--penalty` | `1.5` | complexity penalty when choosing between candidate local models |
 | | `--min-sample-points` | `0` | train a local model only if the bucket holds at least this many sample points |
 | | `--partition` | `equiwidth` | bucket boundaries: `equiwidth`, or `equidepth` (sample quantiles) |
-| | `--parametric-only` | off | only linear / power / log / poly3 local models (2–4 floats each); no trees or MLP |
-| | `--no-debug-plot` | off | skip the O(Q×B) per-bucket debug plot; recommended for 1M queries |
-| `run_equidepth.py` | `--statistics-target` | `100` | PostgreSQL `default_statistics_target`: number of MCVs and histogram buckets; the sample is 300× this |
+| | `--parametric-only` | off | Waterfall stops after Tier 1 (linear / power / log, 2 floats each); no trees or MLP |
+| | `--debug-plot` | off | per-bucket error plot; slow, O(queries × buckets) in Python |
+| `run_equidepth.py` | `--buckets` | `100` | is PostgreSQL `default_statistics_target`: number of MCVs and histogram buckets; the sample is 300× this |
 | | `--with-index` | off | emulate a B-tree on the column: edge buckets use the real min/max |
 | `run_tkhist.py` | `--topk` | `5` | most frequent values stored exactly per bucket |
 | | `--n-categorical` | `200` | below this many distinct values every value is stored exactly |
@@ -320,29 +318,38 @@ Run them with `--help` to see their parameters.
 
 ### 5.1 Protocol
 
-The estimator is built on step 0 and then carried through steps 1…S. At every
-step the step's own data provides the exact truth, and the workload is evaluated
-in several **stages**. These stages become the column families of the per-step CSV.
+One loop, [drift_harness.py](drift_harness.py), runs every model, so all models
+see the same steps, queries and rebuild rule. The model is built on step 0 and
+carried through steps 1…S. Every scenario changes an equal share of the initial
+table per step (synthetic: 5 % or 10 % of the rows; DSB: the official refresh
+streams, ~5 % churn per step).
 
 **Adapt / eval split.** The queries of a step are split once, with seed 42, into
 two halves (`benchmark_utils.split_adapt_eval`):
 
-- *adapt*: the only queries whose feedback a model may learn from (Hybrid FT/RB, STHist, Equi-Hist);
-- *eval*: the queries every stage of every model is scored on.
+- *adapt*: the only queries whose feedback a model may learn from (Hybrid, STHist);
+- *eval*: the queries every model is scored on.
 
-No model is ever scored on a query it adapted to. With a fixed workload the
-split is the same at every step, so an eval query is never learned at any
-step. All stages of all models share one eval set and can be compared directly.
-The only exception is STHist **Online**, which is prequential over the adapt half:
-each query is scored before the model learns from it.
+No model is ever scored on a query it adapted to.
 
-| Model | Stages (all scored on the eval half unless noted) |
-|---|---|
-| Hybrid | **Shock**: bucket counts refreshed from the step's sample (`ANALYZE`), local models stale · **FT**: `feedback_update()` on the adapt half · **RB**: retrain the buckets whose median q-error on the adapt half > 1.3 |
-| Equi-Width, EquiDepth, TKHist | simulated `ANALYZE`: rebuilt / refreshed from the step's sample, then evaluated |
-| Equi-Hist | `ANALYZE` refresh, online feedback on the adapt half, then evaluated frozen |
-| STHist | **Shock** (stale) · **Online** (prequential over the adapt half) · **Post** (frozen after the adapt half's feedback). No `ANALYZE`, since the model never sees data |
-| EntropyHist | **Static** (step-0 histogram, frozen) · **Rebuild** (rebuilt from the step's sample) |
+**Baselines: one action per step.** At every step the stale model is scored on the eval half
+(`before_*` columns). Then it takes at most one action, whose wall time is measured
+(`action_time_s`), and it is scored again (`median_qerror`, `p95_qerror`, ...):
+
+| Action | When | Who |
+|---|---|---|
+| `rebuild` | rows changed since the model's last (re)build exceed **10 %** of the table at that time (the PostgreSQL autovacuum rule, `autovacuum_analyze_scale_factor = 0.1`). With 5 % per step that is every 3rd step | EquiWidth, EquiDepth (as PostgreSQL), TKHist and EntropyHist (their papers give no update rule, so they follow EquiWidth/EquiDepth): built from scratch on the step's sample |
+| `feedback update` | every step without a rebuild | STHist: the paper's feedback rule on every adapt query, restructuring every 200 queries; it never reads data, so it is never rebuilt |
+| `none` | otherwise | the sample-based histograms between rebuilds |
+
+**Hybrid FD CDF: Shock → FT → Rebuild at every step.** The three are consecutive stages of one
+method, each scored on the eval half:
+
+| Stage | What happens | Columns |
+|---|---|---|
+| Shock | the model as it is; bucket counts are **not** refreshed, so the degradation after drift is visible | `before_*` |
+| FT | `feedback_update()` on the adapt half: EMA (alpha 0.15) on the counts of buckets hit by queries with q-error > 1.2; the CDF never changes. Then buckets whose median q-error on the adapt queries, re-estimated after FT, is still > 1.3 are marked | `ft_*`, `ft_time_s`, `marked_buckets`, `mark_time_s` |
+| RB | only at a checkpoint: ≥ 100 000 rows changed since the last rebuild, checked at the step boundary (one rebuild per step at most). Marked buckets get a new count and a new Waterfall CDF from the step's sample; the others are untouched. Without a checkpoint RB = FT and `rebuilt_buckets = 0` | `rb_*`, `rb_time_s`, `rebuilt_buckets`; `median_qerror` = RB |
 
 ### 5.2 Full scenarios
 
@@ -359,12 +366,12 @@ poetry run python run_drift_experiments.py --scenario drift_5_ds_zipf_wl_normal
 | `dsb_drift_ws_wholesale_cost`, `dsb_drift_ws_list_price` | `data/dsb/<column>/drift` (official refresh streams) | fixed: official DSB queries ([§6.1](#61-dsb)) |
 | `all` | all of the above | |
 
-`--models` and `--dry-run` work as in [§4.1](#41-full-scenarios).
-Results go to `results/<scenario>/gradual_normal_to_zipf_<Model>/` (synthetic) or
-`results/<scenario>/gradual_<column>_to_refresh_<Model>/` (DSB).
+`--models`, `--buckets`, `--out-dir` and `--dry-run` work as in [§4.1](#41-full-scenarios);
+with `--buckets fd` the bucket count is the Freedman–Diaconis `k` of step 0 and stays fixed.
+Results go to `<out-dir>/<scenario>/gradual_normal_to_zipf_<Model>/drift_steps.csv` (synthetic) or
+`<out-dir>/<scenario>/gradual_<column>_to_refresh_<Model>/drift_steps.csv` (DSB).
 
-**Long-running:** 11–21 steps × 1M queries × 7 model variants per synthetic scenario,
-40–100 minutes each (see [§10](#10-reproducing-the-reported-results)).
+**Long-running:** 11–21 steps × 1M queries per synthetic scenario.
 
 ### 5.3 One model
 
@@ -377,15 +384,15 @@ poetry run python run_hybrid_drift.py --experiment-name my_drift \
 
 | Parameter | Meaning |
 |---|---|
-| `--shift-dir PATH` | folder with `step_*.pkl`. Always pass it explicitly; the fallback built from `--dataset/--init-dist/--target-dist` points to `..._5%_dataset` |
+| `--shift-dir PATH` | folder with `step_*.pkl` (required) |
 | `--workload COUNT` | query count, used to find `*_workload_driven_<COUNT>.csv` files |
 | `--static-workload-path PATH` | the fixed workload evaluated at every step |
 | `--shift-workload` | use `step_N_workload_driven_<COUNT>.csv` from `--shift-dir` at step N instead; drop `--static-workload-path` |
 | `--init-dist`, `--target-dist` | default `normal`, `zipf`. They only label the output folder `gradual_<init>_to_<target>_<Model>` |
-| `--experiment-name`, `--out-dir` | as in the static runners |
+| `--experiment-name`, `--out-dir`, `--buckets` | as in the static runners |
 
-The model-specific parameters from [§4.2](#42-one-model-one-dataset) apply too
-(e.g. `--points`, `--topk`, `--statistics-target`, `--buckets`).
+Model-specific parameters: `--points` (Hybrid), `--topk` (TKHist), the STHist and
+EntropyHist parameters of [§4.2](#42-one-model-one-dataset).
 
 ---
 
@@ -515,16 +522,28 @@ so the two `run_experiments.py` commands also work on a fresh clone with network
 ## 7. Outputs
 
 ```text
-results/<experiment-name>/
-├── summary.csv                                  # all models × datasets, one row each
-├── <dataset>/                                   # static run
-│   ├── summary_<Model>.json                     # metrics: median/p25/p75/p95/avg q-error, timings
-│   └── <workload-stem>_<Model>.csv              # per query: Query_ID, Model, Prediction, Truth, Q_Error (selectivities)
-├── gradual_<init>_to_<target>_<Model>/          # drift run (DSB: gradual_<column>_to_refresh_<Model>)
-│   └── <model>_drift_analysis.csv               # one row per step (Hybrid: adaptation_ft_rb.csv)
-└── combined_<prefix>.csv, drift_chart_<prefix>.png   # written by merge_drift.py / plot_drift.py
+<out-dir>/                                       # e.g. results/exp1_100_buckets
+├── static/<benchmark>/                          # run_experiments.py --out-dir <out-dir>/static
+│   ├── summary.csv                              # all models × datasets, one row each
+│   └── <dataset>/
+│       ├── summary_<Model>.json                 # q-error, timings, n_buckets, n_values, size_bytes (+ Hybrid: cdf_choice)
+│       ├── <workload-stem>_<Model>.csv          # per query: Query_ID, Model, Prediction, Truth, Q_Error (selectivities)
+│       └── model_selection_Hybrid.txt           # Hybrid: range, count and chosen local CDF of every bucket
+├── drift/<scenario>/                            # run_drift_experiments.py --out-dir <out-dir>/drift
+│   ├── gradual_<init>_to_<target>_<Model>/drift_steps.csv   # one row per step (Hybrid: + model_reports/step_<k>.txt)
+│   └── combined.csv, drift_chart.png            # written by export_results.py
+└── static_*.csv, histogram_size.csv, hybrid_cdf_choice.csv, drift_*.csv, results.xlsx   # export_results.py (§8)
 ```
 
+`drift_steps.csv` columns: `step`, `drift_pct` (rows changed since step 0), `changed_since_rebuild_pct`,
+`changed_since_rebuild_rows`, `action` (`initial build` / `rebuild` / `feedback update` / `none`; Hybrid: `FT` / `FT + rebuild`), `action_time_s` (measured wall time),
+`median_qerror`, `p95_qerror`, `avg_qerror` (after the action), `before_*` (before it), `infer_us_median`,
+`n_buckets`, `n_values`, `size_bytes`; Hybrid adds the stage columns above, `ft_n_values` / `ft_size_bytes` and `cdf_choice`, STHist `restructures`.
+
+- **Model size** = stored numbers × 8 bytes (`n_values`, `size_bytes`). EquiWidth: min, bucket width,
+  a count per bucket. EquiDepth: histogram bounds, MCV values and frequencies, n_distinct. TKHist: grid,
+  counts, (value, count) per top-k entry. EntropyHist: min, max, count, distinct per bucket. STHist:
+  bucket bounds and frequencies. Hybrid: grid, counts, the parameters of every local CDF and its type code.
 - **Zero-truth queries are dropped** before scoring, since q-error is undefined for them.
   The query count can therefore differ between datasets and is logged.
 - Timing fields in `summary_<Model>.json`, the same for every method:
@@ -532,12 +551,11 @@ results/<experiment-name>/
   | Field | Meaning |
   |---|---|
   | `build_time` | seconds to build the model before the first query |
-  | `update_time_total` | seconds spent learning from query feedback (STHist, Equi-Hist; 0 otherwise) |
+  | `update_time_total` | seconds spent learning from query feedback (STHist; 0 otherwise) |
   | `train_time` | `build_time + update_time_total` |
   | `infer_time` | sum over queries of the time of one `predict()` call; feedback is not included |
   | `avg_infer_time`, `median_infer_time`, `p95_infer_time` | statistics of one `predict()` call |
 
-- Small floats are written with 9 decimals instead of scientific notation.
 - A runner that gets a parent `--dataset` folder catches each dataset's error,
   prints it and continues. **Check the log**: a run can finish with some outputs missing.
 
@@ -545,50 +563,32 @@ results/<experiment-name>/
 
 ## 8. Merging, plotting, exporting
 
-All results in one Excel workbook, one sheet per logical benchmark:
-
 ```bash
-poetry run python export_results.py                # -> results/all_results.xlsx
+poetry run python export_results.py --results-dir results/exp1_100_buckets
 ```
 
-| Parameter | Default | Meaning |
-|---|---|---|
-| `--out` | `results/all_results.xlsx` | output file |
-| `--results-dir` | `results` | where to look |
-| `--all` | off | also export folders that are not scenarios in `registry.py`, e.g. `smoke` |
+writes into that folder:
 
-The first sheet, `index`, lists each sheet: whether it is static or drift, its
-data, its workload, the row count and the models. A static sheet has one row per
-dataset × model with every metric. A drift sheet has one row per step × model × stage.
-To the right of each table there is a pivot of the median q-error.
+| File | Content |
+|---|---|
+| `static_results.csv` | one row per benchmark × dataset × model, every metric |
+| `static_median_qerror.csv`, `static_p95_qerror.csv` | rows = benchmark / dataset, columns = models |
+| `static_ranking.csv` | per benchmark × model: mean place by median q-error (1 = best), wins |
+| `histogram_size.csv` | bytes of every model, and its bucket count |
+| `hybrid_cdf_choice.csv` | how many buckets got each local CDF in Hybrid (static, and drift at step 0 and every rebuild) |
+| `drift_results.csv` | one row per scenario × model × step |
+| `drift_summary.csv` | per scenario × model: mean / worst / last median q-error, mean Shock (before) error, rebuilds, their total and mean real time; Hybrid also mean FT / RB error and rebuilt buckets |
+| `results.xlsx` | all of the above, one sheet each |
 
-Drift runs, synthetic or DSB, any set of models:
-
-```bash
-poetry run python merge_drift.py --experiment-name drift_5_ds_zipf_wl_normal
-poetry run python plot_drift.py  --experiment-name drift_5_ds_zipf_wl_normal
-```
-
-| Script | Parameter | Meaning |
-|---|---|---|
-| `merge_drift.py` | `--experiment-name E [E ...]` | folders under `results/` to merge. Every `<prefix>_<Model>/` folder inside is read, and one `combined_<prefix>.csv` is written per prefix (e.g. `gradual_normal_to_zipf`, `gradual_ws_list_price_to_refresh`) |
-| | `--out-dir` | root of the results tree, default `results` |
-| `plot_drift.py` | `--experiment-name E [E ...]` | plots every `combined_*.csv` of these experiments: median / p95 / mean q-error against drift % |
-| | `--labels L [L ...]` | only these lines. A line is `<Model>` for single-stage models and `<Model>_<Stage>` otherwise, e.g. `--labels EquiWidth Hybrid_RB STHist_Online` |
-
-`combined_<prefix>.csv` is a long table, one row per step × model × stage:
-`drift, step, model, stage, label, Median, P95, Avg, Infer_Med, Infer_Avg, Adapt_Time, Rebuilt_Buckets, Initial_Build`.
-`Adapt_Time` is the seconds a model spent at this step to reach this stage,
-cumulative within the step (`Hybrid_RB` = sample refresh + FT + retraining).
-`Initial_Build` is the step-0 build and is not part of any stage.
+and `drift/<scenario>/combined.csv` + `drift_chart.png` (median and P95 per step, squares mark rebuilds).
+`merge_drift.py` and `plot_drift.py` do the last two for single scenario folders.
 
 Static runs: box plots of the per-query q-error of several models:
 
 ```bash
 poetry run python plot/plot_comparison.py \
-    --experiments results/synth_hard_narrow/normal/*_*.csv \
-    --output results/synth_hard_narrow/normal/comparison.png \
-    --title "Q-Error: normal"
+    --experiments results/exp1_100_buckets/static/synth_hard_narrow/normal/*_*.csv \
+    --output comparison.png --title "Q-Error: normal"
 ```
 
 ---
@@ -602,12 +602,10 @@ poetry run python plot/plot_comparison.py \
   (100 k rows for synthetic data and DSB; 30 k for STATS-CEB, see §6.2), scaled by `N / len(sample)`. The only other input
   is query feedback, for the feedback-driven methods. Code that lets a model
   read `freq` invalidates the results.
-- **Same budget.** By default EquiWidth, TKHist, STHist, EntropyHist, Equi-Hist and Hybrid
-  get the same bucket count `k` (the Freedman–Diaconis rule on the sample).
-  EquiDepth follows PostgreSQL and uses `--statistics-target` (100) instead.
-  Pass the same `--buckets B` to every runner to compare all of them at one budget.
-  Buckets alone are not memory: TKHist also stores top-k values, and Hybrid stores
-  a local model per bucket (`n_floats` in its summary).
+- **Same bucket count.** Every model gets 100 buckets (EquiDepth: `default_statistics_target`
+  = 100, as in PostgreSQL), or with `--buckets fd` the Freedman–Diaconis `k` of the data.
+  Buckets alone are not memory: EquiDepth also stores MCVs, TKHist top-k values, and Hybrid
+  a local model per bucket, so every summary reports `size_bytes`.
 - **Fixed seeds.** Data, samples, workloads and model training all use seed 42.
   Hybrid seeds each bucket's models from a fixed per-bucket seed, so results
   do not depend on thread scheduling.
@@ -622,52 +620,30 @@ poetry run python plot/plot_comparison.py \
 
 1. `models/<name>.py`: build only from `sample`, `predict(q)` returns a row count. Export it in `models/__init__.py`.
 2. `run_<name>.py`: copy [run_tkhist.py](run_tkhist.py). `run_logic` builds the model and calls `evaluate_and_save`.
-3. `run_<name>_drift.py`: copy [run_tkhist_drift.py](run_tkhist_drift.py). If you change bucket counts, call `_bake_vectorized_data()` afterwards.
+3. `run_<name>_drift.py`: copy [run_tkhist_drift.py](run_tkhist_drift.py): a build function for `drift_harness.SampleHistogram`, or a `DriftModel` subclass for feedback methods.
 4. One line in `MODELS` in [registry.py](registry.py). Both orchestrators pick it up.
 
 ---
 
 ## 10. Reproducing the reported results
 
-The numbers in [docs/](docs/) come from the commands below, run on the committed
-inputs. Model training and query generation are seeded, so q-error is
-reproduced exactly. Timings depend on the machine.
+Two experiments, same scenarios, only the bucket count differs. Model training and
+query generation are seeded, so q-error is reproduced exactly; timings depend on the machine.
 
 ```bash
 ./setup_env.sh                                   # environment, synthetic workloads, STATS-CEB
 
-# static: 8 scenarios
-for s in simple_wide simple_narrow hard_wide hard_narrow hard_narrow_data_driven dsb stats_ceb stats_ceb_driven; do
-    poetry run python run_experiments.py --scenario $s
+for B in 100 fd; do
+    OUT=results/$([ $B = fd ] && echo exp2_freedman_diaconis || echo exp1_100_buckets)
+    poetry run python run_experiments.py       --scenario all --buckets $B --out-dir $OUT/static
+    poetry run python run_drift_experiments.py --scenario all --buckets $B --out-dir $OUT/drift
+    poetry run python export_results.py --results-dir $OUT
 done
-
-# drift: 6 scenarios
-DRIFT="drift_10_ds_zipf_wl_normal drift_5_ds_zipf_wl_normal drift_5_ds_zipf_wl_zipf \
-       drift_5_ds_add_zipf_wl_zipf dsb_drift_ws_wholesale_cost dsb_drift_ws_list_price"
-for s in $DRIFT; do poetry run python run_drift_experiments.py --scenario $s; done
-
-poetry run python merge_drift.py --experiment-name $DRIFT
-poetry run python plot_drift.py  --experiment-name $DRIFT
-poetry run python export_results.py              # -> results/all_results.xlsx
 ```
 
-Wall-clock time of the reported run (12-core Linux machine, 32 GB RAM, five
-scenarios in parallel). Run them sequentially for clean timing measurements;
-parallel runs inflate the absolute timings, but q-error does not depend on them.
-
-| Scenario | Time |
-|---|---|
-| `simple_wide`, `hard_wide` | 21 min, 29 min |
-| `simple_narrow`, `hard_narrow` | 10 min, 15 min |
-| `hard_narrow_data_driven` | 21 min |
-| `dsb`, `stats_ceb`, `stats_ceb_driven` | under a minute each |
-| `drift_10_ds_zipf_wl_normal` | 38 min |
-| `drift_5_ds_zipf_wl_normal`, `drift_5_ds_zipf_wl_zipf`, `drift_5_ds_add_zipf_wl_zipf` | 75 min, 101 min, 92 min |
-| `dsb_drift_*` | under a minute each |
-
-Launch long runs under `nohup` or `tmux`: a dropped
-SSH session kills a foreground run, and `results/<experiment>/` would then be partial.
-Delete a partial experiment folder before re-running it.
+Launch long runs under `nohup` or `tmux`: a dropped SSH session kills a foreground
+run. Delete a partial experiment folder before re-running it. Running scenarios in
+parallel inflates the absolute timings; q-error does not depend on them.
 
 ---
 
@@ -678,11 +654,13 @@ models/                 estimators (one file per method) + common.py (Bucket, Ra
 registry.py             models + static/drift scenarios: the single list the orchestrators read
 benchmark_utils.py      shared CLI, dataset loop, truth, evaluation loop, result writing
 run_<model>.py          static runner per model
-run_<model>_drift.py    drift runner per model (synthetic and DSB)
+run_<model>_drift.py    drift runner per model (synthetic and DSB): what the model does, on drift_harness.py
+plot_drift_figures.py   per drift scenario: median / P95 / avg q-error, inference time, cumulative adaptation time, memory (one PNG each; Hybrid = Hybrid_RB)
+drift_harness.py        the one drift loop: steps, adapt/eval split, 10 % rule (baselines), Hybrid Shock → FT → RB, drift_steps.csv
 run_experiments.py      static orchestrator (§4)
 run_drift_experiments.py drift orchestrator (§5)
 merge_drift.py, plot_drift.py  drift result tables and charts (§8)
-export_results.py       every result -> one xlsx, one sheet per benchmark (§8)
+export_results.py       readable tables + xlsx for one experiment folder (§8)
 run_hybrid_ablations.py Hybrid ablations: min sample points, partition, query width, equal memory
 run_sthist_paper.py, run_entropyhist_paper.py  the original papers' own setups (not this benchmark)
 data/datasets.py        synthetic dataset generator
@@ -701,9 +679,5 @@ Documentation, in Russian:
 
 | Document | Read it for |
 |---|---|
-| [docs/SUPERVISOR_SUMMARY.md](docs/SUPERVISOR_SUMMARY.md) | **start here**: the results in one minute, how the conclusions changed from the first experiment and why, every protocol change, the drift stage glossary |
-| [docs/RESULTS_EXPLAINED.md](docs/RESULTS_EXPLAINED.md) | how to read `all_results.xlsx`; for each method, why it wins or loses on each kind of data |
-| [docs/RESULTS_REPORT.md](docs/RESULTS_REPORT.md) | every number by benchmark, threats to validity, anticipated reviewer questions |
-| [docs/RESULTS_GUIDE.md](docs/RESULTS_GUIDE.md) | reference: every sheet and column of `all_results.xlsx`, and why these data and queries |
 | [docs/PROJECT_GUIDE.md](docs/PROJECT_GUIDE.md) | what the benchmark does, why each design decision was made, list of fixes |
 | [docs/METHODS_EXPLAINED.md](docs/METHODS_EXPLAINED.md) | how each method works and how the papers' open points were resolved |

@@ -31,7 +31,7 @@ WIDTH_QUERIES = 100_000
 
 ALL_MODELS = {
     "EquiWidth": "run_equiwidth.py",
-    "Hybrid": "run_hybrid.py --no-debug-plot",
+    "Hybrid": "run_hybrid.py",
     "TKHist": "run_tkhist.py",
     "EquiDepth": "run_equidepth.py",
     "STHist": "run_sthist.py",
@@ -61,7 +61,7 @@ def part_minpts():
     for sc, ds, wl in static_targets():
         for p in MIN_POINTS:
             run_cmd(
-                f"poetry run python run_hybrid.py --no-debug-plot --min-sample-points {p} "
+                f"poetry run python run_hybrid.py --min-sample-points {p} "
                 f"--experiment-name abl_minpts_{sc} --dataset {ds} --workload {wl}"
             )
 
@@ -70,7 +70,7 @@ def part_partition():
     for sc, ds, wl in static_targets():
         for extra in ["", "--min-sample-points 30"]:
             run_cmd(
-                f"poetry run python run_hybrid.py --no-debug-plot --partition equidepth {extra} "
+                f"poetry run python run_hybrid.py --partition equidepth {extra} "
                 f"--experiment-name abl_partition_{sc} --dataset {ds} --workload {wl}"
             )
 
@@ -181,7 +181,7 @@ def part_variants():
     for sc, ds, wl in static_targets():
         for flags in VARIANTS:
             run_cmd(
-                f"poetry run python run_hybrid.py --no-debug-plot {flags} "
+                f"poetry run python run_hybrid.py {flags} "
                 f"--experiment-name abl_variants_{sc} --dataset {ds} --workload {wl}"
             )
 

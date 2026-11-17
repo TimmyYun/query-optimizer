@@ -12,6 +12,8 @@ from benchmark_utils import (
     get_common_parser,
     run_benchmark_suite,
     resolve_workload_path,
+    resolve_buckets,
+    size_metrics,
     load_and_filter_workload,
     evaluate_and_save,
 )
@@ -57,8 +59,7 @@ def model_name_for(args):
 
 def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
-    # Тот же бюджет бакетов, что у EquiWidth/EquiHist (FD), если не задан явно
-    n_bins = args.buckets if args.buckets is not None else n_bins_data
+    n_bins = resolve_buckets(args.buckets, n_bins_data)
     model_name = model_name_for(args)
     workload_path = resolve_workload_path(args)
 
@@ -83,6 +84,7 @@ def run_logic(args, out_dir, metadata):
             # Fig. 2 не нормирует массу — фиксируем, насколько она ушла от N
             "final_mass_ratio": st_hist.total_mass / N,
             "events": dict(st_hist.events),
+            **size_metrics(st_hist.n_values()),
         },
     )
     print(f"  Events: {dict(st_hist.events)}")

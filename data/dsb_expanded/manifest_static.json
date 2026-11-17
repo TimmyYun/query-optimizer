@@ -1,0 +1,232 @@
+{
+  "created_utc": "2026-11-10T12:38:15+00:00",
+  "seed": 42,
+  "git_commit": "c294e9a16d516c3d63bfb34a6aae512c9555a1f6",
+  "git_branch": "feature/hybrid_multiscale",
+  "git_dirty": true,
+  "worktree_sha256": "677152171cb6a2f61c28368ffb2943bc5f51ec75bccd8754fe41e983b5f6eb0b",
+  "worktree_files_hashed": 66,
+  "source_sha256": {
+    "benchmark_utils.py": "86c3577def2c824473b6d03f8b9aeff8e84a5341af22d2c6975f29ce377bda03",
+    "drift_harness.py": "60590e70e4536cf7551fd57eb99ca28a93115b20d185602e961190e9b2cb90b1",
+    "models/common.py": "96516c7f1095f0941b9fdc8bde65a9717aafa1534278143cc47c05702d7347d6",
+    "models/entropy_histogram.py": "ac70244395c45b31253487baba3c08cbe459ca303ba3a6c10135c7bbf8cf420e",
+    "models/equi_depth.py": "9f44ae2653a081327aaff502049936a1da8ada70026b618eddf86e884dc0c8ef",
+    "models/equi_width.py": "b518726654c4e34cf1285c721794a9a58c10cae05f720527141b8be04bcd162c",
+    "models/hybrid.py": "35b6a3805ae537e028cae6edbbcccc1ab999e7711233e12221f9807a23bd524c",
+    "models/st_histogram.py": "f4f0d7b4aa85b1903c1a21d6f4673b501e277710abbab31afb07bb228e528038",
+    "models/tkhist.py": "a641ac1bc88dfbb1034bffafb9e87d061a0c5c7fe9f32dedd94b76830c4b5a63",
+    "run_hybrid.py": "4da063b72bd4585855cfb4965b91f14007c36e8a6b640de3e3950dc69e25868b",
+    "run_hybrid_drift.py": "6499b5b37c8ac9bcc09ea35e8d8cd24d1fb59f845927df82fb183aee73695fb6"
+  },
+  "model_versions": {
+    "EquiWidth": "EquiWidth:src:36b45073b0",
+    "EquiDepth": "EquiDepth:src:4103d9ac12",
+    "TKHist": "TKHist:src:13e8a291c1",
+    "EntropyHist-MEA": "EntropyHist-MEA:src:69cb11d593",
+    "STHist": "STHist:src:1719d79b37",
+    "Hybrid": "Hybrid:hybrid-fd-cdf-canonical:ae6e9a310e"
+  },
+  "packages": {
+    "python": "3.12.3",
+    "numpy": "2.3.4",
+    "scipy": "1.16.3",
+    "sklearn": "1.7.2",
+    "pandas": "2.3.3",
+    "platform": "Linux-7.0.0-38-generic-x86_64-with-glibc2.39",
+    "cpu_count": 12,
+    "omp_num_threads": "1",
+    "hostname": "lab-nbaktygali",
+    "loadavg_1_5_15": [
+      8.67431640625,
+      7.42626953125,
+      6.1484375
+    ]
+  },
+  "config": {
+    "part": "dsb_expanded/static-data",
+    "columns": {
+      "catalog_returns.cr_item_sk": {
+        "dataset_dir": "data/dsb_expanded/catalog_returns.cr_item_sk",
+        "meta_sha256": "a6788f17602fde29251271be26db4548c7c3ec5624febad6e35472047ff57d36",
+        "workloads": {
+          "dd_narrow": {
+            "path": "data/dsb_expanded/catalog_returns.cr_item_sk/workload_dd_narrow.csv",
+            "sha256": "c36a7079dac4f790858421e7d152101a23e7f5c0860c017abe414b74a0dd03f2"
+          },
+          "uniform_narrow": {
+            "path": "data/dsb_expanded/catalog_returns.cr_item_sk/workload_uniform_narrow.csv",
+            "sha256": "0c5eb3fdf88a5fd2e7ce4cc3957a198c673e1ef25036af125239f3175ddffe2b"
+          },
+          "uniform_wide": {
+            "path": "data/dsb_expanded/catalog_returns.cr_item_sk/workload_uniform_wide.csv",
+            "sha256": "04e56a83979ac10b45d3c135a636405b41aba8de52a2b3a7c28b81cb58e9a4f6"
+          }
+        },
+        "main_workload": "data/dsb_expanded/catalog_returns.cr_item_sk/workload_dd_narrow.csv"
+      },
+      "catalog_returns.cr_returned_time_sk": {
+        "dataset_dir": "data/dsb_expanded/catalog_returns.cr_returned_time_sk",
+        "meta_sha256": "49ff49a40d286b4796181322061237d489e87bff2ac959e98514d2b9d7082046",
+        "workloads": {
+          "dd_narrow": {
+            "path": "data/dsb_expanded/catalog_returns.cr_returned_time_sk/workload_dd_narrow.csv",
+            "sha256": "0b6fab11620b22aa0d2709b7baff8a89b21de5d6142e688f6189a8835a71c2fb"
+          },
+          "uniform_narrow": {
+            "path": "data/dsb_expanded/catalog_returns.cr_returned_time_sk/workload_uniform_narrow.csv",
+            "sha256": "9c48a614cf68971bc2c5d3d7d9cbfaff6029f0d51b3ec91de6e8a4546cf8a541"
+          },
+          "uniform_wide": {
+            "path": "data/dsb_expanded/catalog_returns.cr_returned_time_sk/workload_uniform_wide.csv",
+            "sha256": "32e2caa043a39e20e63b4da6cc1e2e3fccf27d28db6170700efdc4f8e345e4d1"
+          }
+        },
+        "main_workload": "data/dsb_expanded/catalog_returns.cr_returned_time_sk/workload_dd_narrow.csv"
+      },
+      "web_sales.ws_item_sk": {
+        "dataset_dir": "data/dsb_expanded/web_sales.ws_item_sk",
+        "meta_sha256": "dcc11c30c018f141166ee27c893ba7dab4cea0069996fa7667408ac108bd2f0b",
+        "workloads": {
+          "dd_narrow": {
+            "path": "data/dsb_expanded/web_sales.ws_item_sk/workload_dd_narrow.csv",
+            "sha256": "a7ce1a5795c4e0e2dff4b674fc229fdb9f5c0694217800786b11a0bc75236c32"
+          },
+          "uniform_narrow": {
+            "path": "data/dsb_expanded/web_sales.ws_item_sk/workload_uniform_narrow.csv",
+            "sha256": "0c5eb3fdf88a5fd2e7ce4cc3957a198c673e1ef25036af125239f3175ddffe2b"
+          },
+          "uniform_wide": {
+            "path": "data/dsb_expanded/web_sales.ws_item_sk/workload_uniform_wide.csv",
+            "sha256": "04e56a83979ac10b45d3c135a636405b41aba8de52a2b3a7c28b81cb58e9a4f6"
+          }
+        },
+        "main_workload": "data/dsb_expanded/web_sales.ws_item_sk/workload_dd_narrow.csv"
+      },
+      "store_sales.ss_net_profit": {
+        "dataset_dir": "data/dsb_expanded/store_sales.ss_net_profit",
+        "meta_sha256": "aad531f66a56bbf1efd41a17118b2f11072d2ef71c13ffb27ebe3ab12e85cf03",
+        "workloads": {
+          "dd_narrow": {
+            "path": "data/dsb_expanded/store_sales.ss_net_profit/workload_dd_narrow.csv",
+            "sha256": "4303b864d0ddf350cae5d728dfc188907933bd2eeedc225e35c8d75f788c95dd"
+          },
+          "uniform_narrow": {
+            "path": "data/dsb_expanded/store_sales.ss_net_profit/workload_uniform_narrow.csv",
+            "sha256": "1eb3ac2b7480226ad9bf32a48cda783215662c89898c17dea8dc4f661cfc4087"
+          },
+          "uniform_wide": {
+            "path": "data/dsb_expanded/store_sales.ss_net_profit/workload_uniform_wide.csv",
+            "sha256": "881a1cfec0010e5f6737c1497cdd56175889c5a7f3824081d1c9adc2a4fd5723"
+          },
+          "official": {
+            "path": "data/dsb_expanded/store_sales.ss_net_profit/workload_official.csv",
+            "sha256": "507bc22be2de6b951a48b8ea81140329b3462cc0a9187cd1a1c46a6f2070dadd"
+          }
+        },
+        "main_workload": "data/dsb_expanded/store_sales.ss_net_profit/workload_dd_narrow.csv"
+      },
+      "store_sales.ss_sales_price": {
+        "dataset_dir": "data/dsb_expanded/store_sales.ss_sales_price",
+        "meta_sha256": "ccd2d1ba48279b1b0c54f82b2d278864dd59abed5efb21aaea4ddb32ff52d8cd",
+        "workloads": {
+          "dd_narrow": {
+            "path": "data/dsb_expanded/store_sales.ss_sales_price/workload_dd_narrow.csv",
+            "sha256": "dd062a00298b7a38dbb257d710b10460ba7c1d55294b0908f198f9e994b8e71c"
+          },
+          "uniform_narrow": {
+            "path": "data/dsb_expanded/store_sales.ss_sales_price/workload_uniform_narrow.csv",
+            "sha256": "cc47f16e6869b08f72bc227af5b68f3f923fcfbcaad9b3e2ae690f96de03c464"
+          },
+          "uniform_wide": {
+            "path": "data/dsb_expanded/store_sales.ss_sales_price/workload_uniform_wide.csv",
+            "sha256": "662eb739307c965638420bea6aa162429223b145be70ff63d40b5e0ac5a9d59c"
+          },
+          "official": {
+            "path": "data/dsb_expanded/store_sales.ss_sales_price/workload_official.csv",
+            "sha256": "4e892fd2e9fb08e3df7a1248223f6be9cdfb5b7195487444eca6c4afd47aa9f2"
+          }
+        },
+        "main_workload": "data/dsb_expanded/store_sales.ss_sales_price/workload_dd_narrow.csv"
+      },
+      "inventory.inv_quantity_on_hand": {
+        "dataset_dir": "data/dsb_expanded/inventory.inv_quantity_on_hand",
+        "meta_sha256": "86e9dbd95b8eaf02f5c3b152c7777620e3665e06d6443e17bb1f18aff797e8b7",
+        "workloads": {
+          "dd_narrow": {
+            "path": "data/dsb_expanded/inventory.inv_quantity_on_hand/workload_dd_narrow.csv",
+            "sha256": "81292948655a18009d445eeb3f103a290b160174d1f6e1d5d91303fd4f4e2cc0"
+          },
+          "uniform_narrow": {
+            "path": "data/dsb_expanded/inventory.inv_quantity_on_hand/workload_uniform_narrow.csv",
+            "sha256": "ffc8b9cb36e0e51be9dae47ac49a9c74104b18c3ee0aa00e06c41f0513acb96d"
+          },
+          "uniform_wide": {
+            "path": "data/dsb_expanded/inventory.inv_quantity_on_hand/workload_uniform_wide.csv",
+            "sha256": "570374fc47443cfab3926350a876c5404c4ebdf12faf6787256fc9e2d4fed426"
+          },
+          "official": {
+            "path": "data/dsb_expanded/inventory.inv_quantity_on_hand/workload_official.csv",
+            "sha256": "439d3b6f65709922d9425c91a1368cfedf1e203895f751364c6b10eb2ba3e31a"
+          }
+        },
+        "main_workload": "data/dsb_expanded/inventory.inv_quantity_on_hand/workload_dd_narrow.csv"
+      },
+      "catalog_sales.cs_sold_date_sk": {
+        "dataset_dir": "data/dsb_expanded/catalog_sales.cs_sold_date_sk",
+        "meta_sha256": "d79ce51c5886666359a2feb8bf71e93b5c6bb900d2f8c5372f6ae453e776c732",
+        "workloads": {
+          "dd_narrow": {
+            "path": "data/dsb_expanded/catalog_sales.cs_sold_date_sk/workload_dd_narrow.csv",
+            "sha256": "b816d96017c46ba620cde9246eaa8db601377193054116ad517aeeb4b811c849"
+          },
+          "uniform_narrow": {
+            "path": "data/dsb_expanded/catalog_sales.cs_sold_date_sk/workload_uniform_narrow.csv",
+            "sha256": "826b38c6de576eb5af899cc1204b10395486d0175f61cfeb874476fe42f69a8b"
+          },
+          "uniform_wide": {
+            "path": "data/dsb_expanded/catalog_sales.cs_sold_date_sk/workload_uniform_wide.csv",
+            "sha256": "734dfbe44f9d5495e002c757a39618bc6972b424ac62edf1e9ef9cda6f210893"
+          }
+        },
+        "main_workload": "data/dsb_expanded/catalog_sales.cs_sold_date_sk/workload_dd_narrow.csv"
+      },
+      "store_returns.sr_return_amt": {
+        "dataset_dir": "data/dsb_expanded/store_returns.sr_return_amt",
+        "meta_sha256": "71a2e03d9d43c589a3a9cfb95ce1dff5ca23afe0dbc056809c91b36e5ac5f923",
+        "workloads": {
+          "dd_narrow": {
+            "path": "data/dsb_expanded/store_returns.sr_return_amt/workload_dd_narrow.csv",
+            "sha256": "d3aa761e88cd10e668597255c23e75e563a90ad51a7b09e3c46420d8fcdee65f"
+          },
+          "uniform_narrow": {
+            "path": "data/dsb_expanded/store_returns.sr_return_amt/workload_uniform_narrow.csv",
+            "sha256": "3a18956262d28169d9b01e48bf44aa3ea3f9032e865223b24bc021de0d442b37"
+          },
+          "uniform_wide": {
+            "path": "data/dsb_expanded/store_returns.sr_return_amt/workload_uniform_wide.csv",
+            "sha256": "7de375ef3f2805fddcced3f3223308b6b1ee812fc2a4e04b34684591dc380f6f"
+          }
+        },
+        "main_workload": "data/dsb_expanded/store_returns.sr_return_amt/workload_dd_narrow.csv"
+      }
+    },
+    "n_queries": 1000000,
+    "sample_size": 100000,
+    "workload_streams": {
+      "dd_narrow": [
+        42,
+        10
+      ],
+      "uniform_narrow": [
+        42,
+        11
+      ],
+      "uniform_wide": [
+        42,
+        12
+      ]
+    },
+    "width_rule": "w ~ U{1..100}"
+  }
+}

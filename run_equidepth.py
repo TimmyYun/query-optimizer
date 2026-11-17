@@ -5,6 +5,8 @@ from benchmark_utils import (
     get_common_parser,
     run_benchmark_suite,
     resolve_workload_path,
+    resolve_buckets,
+    size_metrics,
     load_and_filter_workload,
     evaluate_and_save,
 )
@@ -12,8 +14,8 @@ from benchmark_utils import (
 
 def run_logic(args, out_dir, metadata):
     mn, mx, N, freq, sample, n_bins_data, skew, kurt = metadata
-    # В PostgreSQL число бакетов = default_statistics_target, а не FD
-    target = args.buckets if args.buckets is not None else args.statistics_target
+    # В PostgreSQL число бакетов = default_statistics_target (по умолчанию 100)
+    target = resolve_buckets(args.buckets, n_bins_data)
     workload_path = resolve_workload_path(args)
 
     model_name = "EquiDepth-Idx" if args.with_index else "EquiDepth"
@@ -39,19 +41,15 @@ def run_logic(args, out_dir, metadata):
             "num_mcv": ed_hist.num_mcv,
             "n_distinct": ed_hist.n_distinct,
             "with_index": args.with_index,
+            **size_metrics(ed_hist.n_values()),
         },
     )
 
 
 def main():
+    # --buckets = PostgreSQL default_statistics_target: max MCVs and histogram buckets;
+    # ANALYZE samples 300x this many rows
     parser = get_common_parser("Run PostgreSQL-style Equi-Depth Histogram Benchmark")
-    parser.add_argument(
-        "--statistics-target",
-        type=int,
-        default=100,
-        help="PostgreSQL default_statistics_target: max MCVs and histogram buckets; "
-        "ANALYZE samples 300x this many rows (--buckets overrides it)",
-    )
     parser.add_argument(
         "--with-index",
         action="store_true",

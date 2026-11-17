@@ -221,6 +221,7 @@ __marimo__/
 
 # Experiment outputs (results/<experiment>/..., all_results.xlsx) and run logs
 /results/
+/results_new/
 /logs/
 *.xlsx
 
